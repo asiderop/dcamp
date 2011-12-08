@@ -3,18 +3,18 @@
 # Description:	dCAMP configuration file
 #
 # Details:		This file provides the configuration for a dCAMP system. Each
-#					node can be initialized with a custom configuration file, but
-#					sensible defaults are used in case no file is present.
+#				node can be initialized with a custom configuration file, but
+#				sensible defaults are used in case no file is present.
 #
-#					The file is split into sections, one per service as well as an
-#					additional section for common dCAMP settings. Each service,
-#					except the base service which is always enabled, is disabled
-#					by default.
+#				The file is split into sections, one per service as well as an
+#				additional section for common dCAMP settings. Each service,
+#				except the base service which is always enabled, is disabled
+#				by default.
 #
-#					This configuration file is given to show the default values of
-#					each setting and is NOT given to show a sample configuration
-#					of a dCAMP node. For sample configuration files, see the dCAMP
-#					documentation.
+#				This configuration file is given to show the default values of
+#				each setting and is NOT given to show a sample configuration
+#				of a dCAMP node. For sample configuration files, see the dCAMP
+#				documentation.
 # #############################################################################
 
 # ######
@@ -22,11 +22,9 @@
 #
 # loglevel ::= debug | info | warning | error | critical
 # logfile ::= <filename>.<extension>
-
 [dcamp]
 loglevel=warning
 logfile=dcamp.log
-root=
 
 # #####
 # Base Service Settings
@@ -71,6 +69,7 @@ dumpfile=dcamp.out
 dumptofile=false
 
 [metrics]
+enabled=false
 sensors=
 level_leaf=GetPercentProcessorTime,GetFreePhysicalMemory;sample=5,report=60
 level_root=GetPercentProcessorTime,GetFreePhysicalMemory;report=120

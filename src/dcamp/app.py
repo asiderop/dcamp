@@ -30,39 +30,45 @@ class App:
 		
 		# while the base server is running
 		while self.__servers.has_key('base') and self.__servers['base'].isAlive():
-			# if metrics are configured, we should try to collect them
-			if self.__config.ismetrics:
-				# if configuration settings have changed, start over
-				if not timestamp == self.__config.timestamp: 
-					leaf_sample_rate = float(self.__config.sample_rate(level='leaf'))
-					leaf_report_rate = float(self.__config.report_rate(level='leaf'))
-					root_report_rate = float(self.__config.report_rate(level='root'))
-					
-					t = time.time()
-					
-					events = list() # create initial list of events to be scheduled
-					if self.__config.isbase:
+			try:
+				# if metrics are configured, we should try to collect them
+				if self.__config.ismetrics:
+					# if configuration settings have changed, start over
+					if not timestamp == self.__config.timestamp: 
+						leaf_sample_rate = float(self.__config.sample_rate(level='leaf'))
+						leaf_report_rate = float(self.__config.report_rate(level='leaf'))
+						root_report_rate = float(self.__config.report_rate(level='root'))
+						
+						t = time.time()
+						
+						events = list() # create initial list of events to be scheduled
 						events.append((self.__servers['base'].server.sample,
 										leaf_sample_rate, t + leaf_sample_rate))
 						events.append((self.__servers['base'].server.report,
 										leaf_report_rate, t + leaf_report_rate))
-					if self.__config.isroot:
-						events.append((self.__servers['root'].server.report,
-										root_report_rate, t + root_report_rate))
+						if self.__config.isroot:
+							events.append((self.__servers['root'].server.report,
+											root_report_rate, t + root_report_rate))
+						events.sort(lambda x, y: cmp(x[2], y[2]))
+						
+						timestamp = self.__config.timestamp
+	
+					# schedule and run the next event
+					next_event = events.pop(0)
+					scheduler.enterabs(next_event[2], 1, next_event[0], ())
+					scheduler.run()
+					
+					# add the event back onto the list
+					events.append((next_event[0], next_event[1],
+									time.time() + next_event[1]))
 					events.sort(lambda x, y: cmp(x[2], y[2]))
 					
-					timestamp = self.__config.timestamp
-
-				# schedule and run the next event
-				next_event = events.pop(0)
-				scheduler.enterabs(next_event[2], 1, next_event[0], ())
-				scheduler.run()
-				
-				# add the event back onto the list
-				events.append((next_event[0], next_event[1],
-								time.time() + next_event[1]))
-				events.sort(lambda x, y: cmp(x[2], y[2]))
-				
+			# if Ctrl-C'ed, we shall quit working
+			except KeyboardInterrupt:
+				self.logger.debug('caught interrupt; quitting')
+				self.__servers['base'].stop()
+				break
+			
 		# base server is no longer active, so quit
 		self.__servers['base'].join()
 		self.__servers.pop('base', None)
@@ -92,49 +98,32 @@ class App:
 		'''
 		starts up servers based on the current config
 		'''
-		from service.basesrvc import BaseThread
-		from service.campsrvc import CAMPThread
-		from service.rootsrvc import RootThread
-		from service.aggrsrvc import AggregateThread
+		import dcamp.service.basesrvc
+		import dcamp.service.campsrvc
+		import dcamp.service.rootsrvc
+		import dcamp.service.aggrsrvc
 		
-		# base service is always running
-		if not self.__servers.has_key('base'):
-			self.logger.info('starting base service')
-			base = BaseThread(self.__config, self)
-			base.start()
-			self.__servers['base'] = base
+		services = [
+				( 'base', dcamp.service.basesrvc.BaseThread ),
+				( 'camp', dcamp.service.campsrvc.CAMPThread ),
+				( 'root', dcamp.service.rootsrvc.RootThread ),
+				( 'aggregate', dcamp.service.aggrsrvc.AggregateThread ),
+			]
 		
-		# camp server is configured and is not started
-		if self.__config.iscamp and not self.__servers.has_key('camp'): 
-			self.logger.info('starting camp service')
-			camp = CAMPService(self.__config, self)
-			camp.start()
-			self.__servers['camp'] = camp
-		# camp server is not configured
-		elif not self.__config.iscamp:
-			self.stop_server('camp')
+		for (name, thread) in services:
+			# service is configured, but not started as a server
+			if self.__config.is_service(name) and not self.__servers.has_key(name):
+				self.logger.info('starting %s service' % (name))
+				self.__servers[name] = thread(self.__config, self)
+				self.__servers[name].start()
+				if 'root' == name:
+					# @todo: can we do this if we have not fully initialized? maybe do this after?
+					self.__servers['root'].server.config_nodes()
+			# service is not configured, need to stop the server
+			elif not self.__config.is_service(name):
+				self.logger.info('stopping %s service' % (name))
+				self.stop_server(name)
 		
-		# aggregate server is configured and is not started
-		if self.__config.isaggregate and not self.__servers.has_key('aggregate'):
-			self.logger.info('starting aggregate service')
-			aggr = AggregateThread(self.__config, self)
-			aggr.start()
-			self.__servers['aggregate'] = aggr
-		# aggregate server is not configured
-		elif not self.__config.isaggregate:
-			self.stop_server('aggregate')
-		
-		# root server is configured and is not started
-		if self.__config.isroot and not self.__servers.has_key('root'):
-			self.logger.info('starting root service')
-			root = RootThread(self.__config, self)
-			root.start()
-			self.__servers['root'] = root
-			root.server.config_nodes()
-		# root server is not configured
-		elif not self.__config.isroot:
-			self.stop_server('root')
-	
 	def reconfig(self, config):
 		self.__config.reconfig(config)
 		self.__setup_logging()
@@ -146,17 +135,15 @@ class App:
 		self.__init_servers()
 	
 	def stop_server(self, server='all'):
-		for k, v in self.__servers.iteritems():
+		for k, v in self.__servers.items():
 			if k == server or server == 'all':
 				self.logger.info('stopping ' + v.getName())
 				v.stop()
 				v.join()
 				self.__servers.pop(k, None)
-	stop_service = stop_server
 	
 	def active_servers(self):
 		names = []
 		for v in self.__servers.values():
 			names.append(v.getName())
 		return names
-	active_services = active_servers
