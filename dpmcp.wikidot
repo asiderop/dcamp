@@ -1,0 +1,40 @@
+The Distributed Performance Monitoring and Collection Protocol (DPMCP) defines configuration distribution and data collection mechanisms for use in distributed performance monitoring applications.
+
+* Name: rfc.zeromq.org/spec:[nbr]/DPMCP
+* Editor: Alexander Sideropoulos <alexander@thequery.net>
+
+++ License
+
+Copyright (c) 2012 Alexander Sideropoulos
+
+This Specification is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 3 of the License, or (at your option) any later version.
+
+This Specification is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program; if not, see <http://www.gnu.org/licenses>.
+
+++ Change Process
+
+This Specification is a free and open standard[((bibcite fandos))] and is governed by the Digital Standards Organization's Consensus-Oriented Specification System (COSS)[((bibcite coss))].
+
+++ Language
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119[((bibcite rfc2119))].
+
+++ Goals
+
+[list the goals of this specification]
+
+++ Architecture
+
+[describe the architecture of the specification]
+
+[describe other relevant aspects]
+
+++ References
+
+[[bibliography]]
+: rfc2119 : "Key words for use in RFCs to Indicate Requirement Levels" - [http://tools.ietf.org/html/rfc2119 ietf.org]
+: fandos : "Definition of a Free and Open Standard" - [http://www.digistan.org/open-standard:definition digistan.org]
+: coss : "Consensus Oriented Specification System" - [http://www.digistan.org/spec:1/COSS digistan.org]
+[[/bibliography]]
