@@ -27,7 +27,7 @@ def dump(msg_or_socket):
         print("[%03d]" % len(part), end=' ')
         is_text = True
         for c in part:
-            if ord(c) < 32 or ord(c) > 128:
+            if c < 32 or c > 128:
                 is_text = False
                 break
         if is_text:
@@ -52,9 +52,9 @@ def socket_set_hwm(socket, hwm=-1):
 
 def zpipe(ctx):
     """build inproc pipe for talking to threads
-    
+
     mimic pipe used in czmq zthread_fork.
-    
+
     Returns a pair of PAIRs connected via inproc
     """
     a = ctx.socket(zmq.PAIR)
@@ -67,4 +67,3 @@ def zpipe(ctx):
     a.bind(iface)
     b.connect(iface)
     return a,b
-    
