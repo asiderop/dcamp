@@ -32,7 +32,6 @@ class App:
 		if self.__args.root_port:
 			bind_endpoint = 'tcp://*:%s' % self.__args.root_port
 			root_endpoint = 'tcp://localhost:%s' % self.__args.root_port
-			base_endpoint = "tcp://localhost:%d" % self.__args.base_port
 
 			rep = ctx.socket(zmq.REP)
 			rep.bind(bind_endpoint)
@@ -41,7 +40,10 @@ class App:
 			repcnt = 0
 
 			pub = ctx.socket(zmq.PUB)
-			pub.connect(base_endpoint)
+
+			for b in self.__args.base_ports:
+				base_endpoint = "tcp://localhost:%d" % b
+				pub.connect(base_endpoint)
 
 			pubmsg = dcmsg.MARCO(root_endpoint.encode())
 			pubint = 5.0 # seconds
@@ -77,9 +79,10 @@ class App:
 					self.logger.info("S:ASSIGN")
 					repcnt = repcnt + 1
 
-		elif self.__args.base_port:
-			bind_endpoint = "tcp://*:%d" % self.__args.base_port
-			base_endpoint = "tcp://localhost:%d" % self.__args.base_port
+		elif self.__args.base_ports:
+			assert len(self.__args.base_ports) == 1
+			bind_endpoint = "tcp://*:%d" % self.__args.base_ports[0]
+			base_endpoint = "tcp://localhost:%d" % self.__args.base_ports[0]
 
 			sub = ctx.socket(zmq.SUB)
 			sub.setsockopt_string(zmq.SUBSCRIBE, '')

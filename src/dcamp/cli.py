@@ -32,7 +32,8 @@ def main():
 			dest="root_port",
 			type=int)
 	parser.add_argument('-b', '--base',
-			dest="base_port",
+			dest="base_ports",
+			action='append',
 			type=int)
 
 	parser.set_defaults(verbose=False)
