@@ -62,7 +62,7 @@ class App:
 
 				try:
 					items = dict(poller.poll(poller_timer))
-				except KeyboardInterrupt:
+				except:
 					print("keyboard interrupt; root exiting\n%d pubs\n%d reqs\n%d reps" %
 							(pubcnt, reqcnt, repcnt))
 					return
