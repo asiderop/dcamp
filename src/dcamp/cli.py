@@ -18,19 +18,21 @@ def main():
 			dest="input",
 			help="use FILE as configuration",
 			metavar="FILE")
+
+	parser.add_argument("-d", "--debug",
+			dest="debug",
+			help="make dCAMP uber verbose",
+			action="store_true")
 	parser.add_argument("-v", "--verbose",
 			dest="verbose",
 			help="make dCAMP verbose",
 			action="store_true")
 
 	parser.add_argument('-r', '--root',
-			dest="is_root",
-			action="store_true")
+			dest="root_port",
+			type=int)
 	parser.add_argument('-b', '--base',
-			dest="is_base",
-			action="store_true")
-	parser.add_argument('-p', '--port',
-			dest="port",
+			dest="base_port",
 			type=int)
 
 	parser.set_defaults(verbose=False)
