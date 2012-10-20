@@ -2,6 +2,8 @@
 dCAMP message module
 '''
 import logging
+# zmq.jsonapi ensures bytes, instead of unicode:
+import zmq.utils.jsonapi as json
 
 class DCMsg(object):
 	'''
@@ -78,9 +80,6 @@ class POLO(DCMsg):
 		return cls(msg[1])
 
 class ASSIGN(DCMsg):
-	# zmq.jsonapi ensures bytes, instead of unicode:
-	import zmq.utils.jsonapi as json
-
 	def __init__(self, parent_endpoint, properties=None):
 		assert isinstance(parent_endpoint, bytes)
 		assert properties is None or isinstance(properties, dict)
