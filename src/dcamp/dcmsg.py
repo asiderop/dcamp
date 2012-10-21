@@ -84,7 +84,7 @@ class ASSIGN(DCMsg):
 		assert isinstance(parent_endpoint, bytes)
 		assert properties is None or isinstance(properties, dict)
 		self.parent_endpoint = parent_endpoint
-		self.properties = dict() if properties is None else properties
+		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
 	def __getitem__(self, k):
