@@ -1,5 +1,6 @@
-import logging
+import logging, zmq
 
+from dcamp.role.role import Role
 from dcamp.service.management import Management
 
 class Root(Role):

@@ -1,3 +1,5 @@
+import logging
+
 class Service(object):
 	logger = logging.getLogger('dcamp.service')
 	ctx = None

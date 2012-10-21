@@ -1,6 +1,7 @@
-import logging
+import logging, zmq
 
-from dcamp.service.management import Node
+from dcamp.role.role import Role
+from dcamp.service.node import Node
 
 class Base(Role):
 	'''

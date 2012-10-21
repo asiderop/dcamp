@@ -2,7 +2,8 @@
 @author: Alexander
 '''
 import logging
-from dcamp.role.root import Root, Base
+from dcamp.role.root import Root
+from dcamp.role.base import Base
 
 class App:
 	'''

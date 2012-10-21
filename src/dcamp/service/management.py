@@ -32,6 +32,10 @@ class Management(Service):
 		@todo does this need to be a separate method?
 			why not do it as part of __init__()?
 		'''
+
+		assert 0 != self.port
+		assert self.ctx is not None
+
 		self.bind_endpoint = 'tcp://*:%d' % self.port
 		self.root_endpoint = 'tcp://localhost:%d' % self.port
 
