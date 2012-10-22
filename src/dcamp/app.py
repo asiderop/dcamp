@@ -17,9 +17,16 @@ class App:
 		self.args = args
 
 		self.__setup_logging()
-		self.__run()
 
-	def __run(self):
+	def __setup_logging(self):
+		if (self.args.verbose):
+			self.logger.setLevel(logging.INFO)
+			self.logger.debug('set logging level to verbose')
+		elif (self.args.debug):
+			self.logger.setLevel(logging.DEBUG)
+			self.logger.debug('set logging level to debug')
+
+	def run(self):
 		roles = []
 		if self.args.root:
 			roles.append(Root(self.args.root, self.args.bases))
@@ -29,11 +36,3 @@ class App:
 
 		for r in roles:
 			r.play()
-
-	def __setup_logging(self):
-		if (self.args.verbose):
-			self.logger.setLevel(logging.INFO)
-			self.logger.debug('set logging level to verbose')
-		elif (self.args.debug):
-			self.logger.setLevel(logging.DEBUG)
-			self.logger.debug('set logging level to debug')

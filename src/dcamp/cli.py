@@ -2,7 +2,8 @@
 '''
 @author: Alexander
 '''
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser, ArgumentTypeError, FileType
+from collections import namedtuple
 import dcamp.app
 
 def endpoint(string):
@@ -18,7 +19,8 @@ def endpoint(string):
 	if errmsg:
 		raise ArgumentTypeError(errmsg)
 
-	return (parts[0], int(parts[1]))
+	Endpoint = namedtuple('Endpoint', ['host', 'port'])
+	return Endpoint(parts[0], int(parts[1]))
 
 def main():
 	# setup CLI parser and parse arguments
@@ -26,14 +28,7 @@ def main():
 	parser = ArgumentParser(prog='dcamp', description='the dcamp app')
 	parser.add_argument('--version', action='version', version='%(prog)s 0.1')
 
-	parser.add_argument("-c", "--command",
-			dest="command",
-			help="run COMMAND")
-	parser.add_argument("-i", "--input",
-			dest="input",
-			help="use FILE as configuration",
-			metavar="FILE")
-
+	# output verbosity arguments
 	parser.add_argument("-d", "--debug",
 			dest="debug",
 			help="make dCAMP uber verbose",
@@ -43,6 +38,14 @@ def main():
 			help="make dCAMP verbose",
 			action="store_true")
 
+	# configuration file
+	parser.add_argument("-f", "--file",
+			dest="configfile",
+			help="use FILE as configuration",
+			type=FileType('r'),
+			metavar="FILE")
+
+	# commands
 	parser.add_argument('-r', '--root',
 			dest="root",
 			type=endpoint)
@@ -51,10 +54,11 @@ def main():
 			action='append',
 			type=endpoint)
 
-	parser.set_defaults(verbose=False)
+	parser.set_defaults(verbose=False, debug=False)
 	args = parser.parse_args()
 
-	dcamp.app.App(args)
+	dapp = dcamp.app.App(args)
+	dapp.run()
 
 if __name__ == '__main__':
 	main()
