@@ -2,8 +2,23 @@
 '''
 @author: Alexander
 '''
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 import dcamp.app
+
+def endpoint(string):
+	errmsg = None
+	parts = string.split(':')
+	if len(parts) != 2:
+		errmsg = 'endpoint must be "host:port"'
+	elif len(parts[0]) == 0:
+		errmsg = 'must provide host name or address'
+	elif not parts[1].isdecimal():
+		errmsg = 'port must be an integer'
+
+	if errmsg:
+		raise ArgumentTypeError(errmsg)
+
+	return (parts[0], int(parts[1]))
 
 def main():
 	# setup CLI parser and parse arguments
@@ -29,12 +44,12 @@ def main():
 			action="store_true")
 
 	parser.add_argument('-r', '--root',
-			dest="root_port",
-			type=int)
+			dest="root",
+			type=endpoint)
 	parser.add_argument('-b', '--base',
-			dest="base_ports",
+			dest="bases",
 			action='append',
-			type=int)
+			type=endpoint)
 
 	parser.set_defaults(verbose=False)
 	args = parser.parse_args()

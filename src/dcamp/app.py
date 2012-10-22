@@ -21,11 +21,11 @@ class App:
 
 	def __run(self):
 		roles = []
-		if self.args.root_port:
-			roles.append(Root(self.args.root_port, self.args.base_ports))
-		elif self.args.base_ports:
-			assert len(self.args.base_ports) == 1
-			roles.append(Base(self.args.base_ports[0]))
+		if self.args.root:
+			roles.append(Root(self.args.root, self.args.bases))
+		elif self.args.bases:
+			assert len(self.args.bases) == 1
+			roles.append(Base(self.args.bases[0]))
 
 		for r in roles:
 			r.play()

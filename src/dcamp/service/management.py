@@ -16,12 +16,12 @@ class Management(Service):
 
 	def __init__(self,
 			context=None,
-			port=None,
+			address=None,
 			nodes=None,
 			subnets=None):
 		super().__init__(context)
 
-		self.port = 0 if port is None else port
+		(self.host, self.port) = ('', 0) if address is None else address
 		self.nodes = [] if nodes is None else nodes
 		self.subnets = [] if subnets is None else subnets
 
@@ -33,19 +33,20 @@ class Management(Service):
 			why not do it as part of __init__()?
 		'''
 
+		assert 0 != len(self.host)
 		assert 0 != self.port
 		assert self.ctx is not None
 
-		self.bind_endpoint = 'tcp://*:%d' % self.port
-		self.root_endpoint = 'tcp://localhost:%d' % self.port
+		self.bind_endpoint = 'tcp://*:%d' % (self.port)
+		self.root_endpoint = 'tcp://%s:%d' % (self.host, self.port)
 
 		self.rep = self.ctx.socket(zmq.REP)
 		self.rep.bind(self.bind_endpoint)
 
 		self.pub = self.ctx.socket(zmq.PUB)
 
-		for b in self.nodes:
-			base_endpoint = "tcp://localhost:%d" % b
+		for (h, p) in self.nodes:
+			base_endpoint = "tcp://%s:%d" % (h, p)
 			self.pub.connect(base_endpoint)
 
 		self.reqcnt = 0
