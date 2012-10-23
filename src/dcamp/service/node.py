@@ -13,11 +13,11 @@ class Node(Service):
 
 	def __init__(self,
 			context=None,
-			address=None,
+			port=None,
 			topics=None):
 		super().__init__(context)
 
-		(self.host, self.port) = ('', 0) if address is None else address
+		self.port = 0 if port is None else port
 		self.topics = [] if topics is None else topics
 
 	def setup(self):
@@ -28,12 +28,11 @@ class Node(Service):
 			why not do it as part of __init__()?
 		'''
 
-		assert 0 != len(self.host)
 		assert 0 != self.port
 		assert self.ctx is not None
 
 		self.bind_endpoint = "tcp://*:%d" % (self.port)
-		self.base_endpoint = "tcp://%s:%d" % (self.host, self.port)
+		self.base_endpoint = "tcp://localhost:%d" % (self.port)
 
 		self.sub = self.ctx.socket(zmq.SUB)
 

@@ -9,11 +9,11 @@ class Base(Role):
 	'''
 
 	def __init__(self,
-			address=None,
+			port=None,
 			topics=None):
 		super().__init__()
 
 		self.ctx = zmq.Context.instance()
 		self.services = [
-				Node(self.ctx, address, topics)
+				Node(self.ctx, port, topics)
 		]
