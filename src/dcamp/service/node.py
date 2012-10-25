@@ -12,7 +12,7 @@ class Node(Service):
 	'''
 
 	def __init__(self,
-			context=None,
+			context,
 			port=None,
 			topics=None):
 		super().__init__(context)
@@ -71,7 +71,7 @@ class Node(Service):
 			if self.sub in items:
 				submsg = dcmsg.DCMsg.recv(self.sub)
 				self.logger.info("S:MARCO")
-				self.subcnt = self.subcnt + 1
+				self.subcnt += 1
 				assert submsg.name == b'MARCO'
 
 				if BASE == self.state:
@@ -80,7 +80,7 @@ class Node(Service):
 					reqmsg = dcmsg.POLO(self.base_endpoint.encode())
 					reqmsg.send(self.req)
 					self.logger.info("C:POLO")
-					self.reqcnt = self.reqcnt + 1
+					self.reqcnt += 1
 					self.state = JOIN
 
 			elif self.req in items:
@@ -89,6 +89,6 @@ class Node(Service):
 				self.logger.info("S:ASSIGN")
 				del(self.req)
 				self.req = None
-				self.repcnt = self.repcnt + 1
+				self.repcnt += 1
 				self.state = BASE
 				assert repmsg.name == b'ASSIGN'

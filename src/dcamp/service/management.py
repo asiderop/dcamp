@@ -3,27 +3,22 @@ import logging, time, zmq
 import dcamp.dcmsg as dcmsg
 from dcamp.service.service import Service
 
-HEARTBEAT_INTERVAL = 5.0 # seconds
-
 class Management(Service):
 	'''
 	Management Service -- provides functionality for interacting with and controlling
 	dCAMP.
 
-	@todo need to actually take in node _endpoints_, not port numbers
 	@todo figure out how the multicast/subnets work
 	'''
 
-	def __init__(self,
-			context=None,
-			address=None,
-			nodes=None,
-			subnets=None):
+	def __init__(self, context, config):
 		super().__init__(context)
 
-		(self.host, self.port) = ('', 0) if address is None else address
-		self.nodes = [] if nodes is None else nodes
-		self.subnets = [] if subnets is None else subnets
+		self.config = config
+		(self.host, self.port) = self.config.kvdict['/root/endpoint']
+		self.nodes = []
+		for (group, spec) in self.config.groups.items():
+			self.nodes.extend(spec.endpoints)
 
 	def setup(self):
 		'''
@@ -32,7 +27,6 @@ class Management(Service):
 		@todo does this need to be a separate method?
 			why not do it as part of __init__()?
 		'''
-
 		assert 0 != len(self.host)
 		assert 0 != self.port
 		assert self.ctx is not None
@@ -45,14 +39,14 @@ class Management(Service):
 
 		self.pub = self.ctx.socket(zmq.PUB)
 
-		for (h, p) in self.nodes:
-			base_endpoint = "tcp://%s:%d" % (h, p)
+		for n in self.nodes:
+			base_endpoint = "tcp://%s:%d" % (n.host, n.port)
 			self.pub.connect(base_endpoint)
 
 		self.reqcnt = 0
 		self.repcnt = 0
 
-		self.pubint = HEARTBEAT_INTERVAL
+		self.pubint = self.config.kvdict['/root/heartbeat']
 		self.pubcnt = 0
 
 	def poll(self):
@@ -68,7 +62,7 @@ class Management(Service):
 				pubmsg.send(self.pub)
 				self.logger.info("S:MARCO")
 				pubnext = time.time() + self.pubint
-				self.pubcnt = self.pubcnt + 1
+				self.pubcnt += 1
 
 			poller_timer = 1e3 * max(0, pubnext - time.time())
 
@@ -82,10 +76,10 @@ class Management(Service):
 			if self.rep in items:
 				reqmsg = dcmsg.DCMsg.recv(self.rep)
 				self.logger.info("C:POLO")
-				self.reqcnt = self.reqcnt + 1
+				self.reqcnt += 1
 				assert reqmsg.name == b'POLO'
 
 				repmsg = dcmsg.ASSIGN(reqmsg.base_endpoint)
 				repmsg.send(self.rep)
 				self.logger.info("S:ASSIGN")
-				self.repcnt = self.repcnt + 1
+				self.repcnt += 1

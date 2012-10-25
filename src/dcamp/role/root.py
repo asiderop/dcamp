@@ -8,10 +8,10 @@ class Root(Role):
 	Root Role
 	'''
 
-	def __init__(self, config=None):
+	def __init__(self, config):
 		super().__init__()
 
 		self.ctx = zmq.Context.instance()
 		self.services = [
-				Management(self.ctx, address, nodes, subnets)
+				Management(self.ctx, config)
 		]
