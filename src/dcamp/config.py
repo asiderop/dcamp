@@ -48,7 +48,8 @@ class DCConfig(configparser.ConfigParser):
 		self.__create_groups()
 		self.__create_kvdict()
 
-	def get_seconds(self, string):
+	@staticmethod
+	def get_seconds(string):
 		'''
 		Method determines how given time is specified and return int value in seconds;
 		e.g. get_seconds('90s') == 90
@@ -63,7 +64,8 @@ class DCConfig(configparser.ConfigParser):
 		else:
 			raise DCParsingError('invalid time unit given--valid units: s')
 
-	def get_endpoint(self, string):
+	@staticmethod
+	def get_endpoint(string):
 		errmsg = None
 
 		parts = string.split(':')

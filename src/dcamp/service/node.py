@@ -13,11 +13,11 @@ class Node(Service):
 
 	def __init__(self,
 			context,
-			port=None,
+			address,
 			topics=None):
 		super().__init__(context)
 
-		self.port = 0 if port is None else port
+		(self.host, self.port) = address
 		self.topics = [] if topics is None else topics
 
 	def setup(self):
@@ -32,7 +32,7 @@ class Node(Service):
 		assert self.ctx is not None
 
 		self.bind_endpoint = "tcp://*:%d" % (self.port)
-		self.base_endpoint = "tcp://localhost:%d" % (self.port)
+		self.base_endpoint = "tcp://%s:%d" % (self.host, self.port)
 
 		self.sub = self.ctx.socket(zmq.SUB)
 

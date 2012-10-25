@@ -56,7 +56,7 @@ class MARCO(DCMsg):
 
 	@classmethod
 	def from_msg(cls, msg):
-		# assert we have at two frames and correct key
+		# assert we have two frames and correct key
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
@@ -73,7 +73,7 @@ class POLO(DCMsg):
 
 	@classmethod
 	def from_msg(cls, msg):
-		# assert we have at two frames and correct key
+		# assert we have two frames and correct key
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
@@ -104,7 +104,7 @@ class ASSIGN(DCMsg):
 
 	@classmethod
 	def from_msg(cls, msg):
-		# assert we have at three frames and correct key
+		# assert we have three frames and correct key
 		assert isinstance(msg, list)
 		assert 3 == len(msg)
 		assert cls.__name__.encode() == msg[0]
@@ -124,7 +124,7 @@ class WTF(DCMsg):
 
 	@classmethod
 	def from_msg(cls, msg):
-		# assert we have at two frames and correct key
+		# assert we have two frames and correct key
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]

@@ -24,7 +24,7 @@ class App:
 			config.read_file(self.args.configfile)
 			roles.append(Root(config))
 		elif 'base' == self.args.cmd:
-			roles.append(Base(self.args.port))
+			roles.append(Base(self.args.address))
 
 		for r in roles:
 			r.play()

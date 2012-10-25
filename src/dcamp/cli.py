@@ -3,10 +3,16 @@
 @author: Alexander
 '''
 import logging
-from argparse import ArgumentParser, FileType
+from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
 from dcamp.config import DCParsingError, DCConfig
+
+def Address(string):
+	try:
+		return DCConfig.get_endpoint(string)
+	except DCParsingError as e:
+		raise ArgumentTypeError(e)
 
 def main():
 	# setup CLI parser and parse arguments
@@ -45,9 +51,9 @@ def main():
 	parser_base = subparsers.add_parser('base',
 			parents=[parser_logging],
 			help='run base command')
-	parser_base.add_argument('-p', '--port',
-			dest='port',
-			type=int,
+	parser_base.add_argument('-a', '--address',
+			dest='address',
+			type=Address,
 			required=True)
 	parser_base.set_defaults(func=do_app, cmd='base')
 
