@@ -15,38 +15,21 @@ class DCConfig(configparser.ConfigParser):
 		self.logger = logging.getLogger('dcamp.config')
 		super().__init__(allow_no_value=True, delimiters=('='))
 
+		self.isvalid = False
+
+		self.root = {}
+		self.metrics = {}
+		self.groups = {}
+
 		self.__prefix = []
-		self.__delimiter = '/'
+		self.delimiter = '/'
+
+		self.kvdict = {}
 
 	@staticmethod
 	def validate(file):
 		config = DCConfig()
 		config.read_file(file)
-
-	def read_file(self, f, source=None):
-		super().read_file(f, source)
-
-		sections = list(self)
-		sections.remove('DEFAULT')
-		if 'root' in self: # not validated yet
-			sections.remove('root')
-
-		# find all metric specifications
-		self.metric_sections = {}
-		for s in sections:
-			section = dict(self[s])
-			if 'rate' in section or 'metric' in section:
-				self.metric_sections[s] = section
-
-		# find all group specifications
-		self.group_sections = {}
-		for s in sections:
-			if s not in self.metric_sections:
-				self.group_sections[s] = dict(self[s])
-
-		self.__validate()
-		self.__create_groups()
-		self.__create_kvdict()
 
 	@staticmethod
 	def get_seconds(string):
@@ -81,36 +64,91 @@ class DCConfig(configparser.ConfigParser):
 
 		return EndpntSpec(parts[0], int(parts[1]))
 
-	def __create_groups(self):
-		self.groups = {}
+	def read_file(self, f, source=None):
+		super().read_file(f, source)
 
-		# add group specs
-		for group in self.group_sections:
+		sections = list(self)
+		sections.remove('DEFAULT')
+		if 'root' in self: # not validated yet
+			sections.remove('root')
+
+		# find all metric specifications
+		self.metric_sections = {}
+		for s in sections:
+			section = dict(self[s])
+			if 'rate' in section or 'metric' in section:
+				self.metric_sections[s] = section
+
+		# find all group specifications
+		self.group_sections = {}
+		for s in sections:
+			if s not in self.metric_sections:
+				self.group_sections[s] = dict(self[s])
+
+		# the order of these calls matters
+
+		self.__validate()
+
+		self.__create_root()
+		self.__create_metrics()
+		self.__create_groups()
+
+		self.__create_kvdict()
+
+	def __create_root(self):
+		assert self.isvalid
+
+		result = {}
+		result['endpoint'] = self.get_endpoint(self['root']['endpoint'])
+		result['heartbeat'] = self.get_seconds(self['root']['heartbeat'])
+		self.root = result
+
+	def __create_metrics(self):
+		assert self.isvalid
+
+		result = {}
+
+		# process all metric specifications
+		for name in self.metric_sections:
+			rate = self.get_seconds(self[name]['rate'])
+			threshold = self[name]['threshold'] if 'threshold' in self[name] else None
+			metric = self[name]['metric']
+			result[name] = MetricSpec(rate, threshold, metric)
+
+		self.metrics = result
+
+	def __create_groups(self):
+		assert self.isvalid
+		assert len(self.metrics) > 0
+
+		result = {}
+
+		# process all group sepcifications
+		for name in self.group_sections:
 			endpoints = []
 			metrics = []
 			filters = []
 
-			for key in self[group]:
-				if key in self.metric_sections:
-					# create metric spec
-					rate = self.get_seconds(self[key]['rate'])
-					threshold = self[key]['threshold'] if 'threshold' in self[key] else None
-					metric = self[key]['metric']
-					metrics.append(MetricSpec(rate, threshold, metric))
+			for key in self[name]:
+				if key in self.metrics:
+					# add metric spec
+					metrics.append(self.metrics[key])
 				elif key.startswith(('+', '-')):
-					# create filter spec
+					# create/add filter spec
 					filters.append(FilterSpec(key[0], key[1:]))
 				else:
 					# create endpoint spec
 					endpoints.append(self.get_endpoint(key))
 
-			self.groups[group] = GroupSpec(endpoints, filters, metrics)
+			result[name] = GroupSpec(endpoints, filters, metrics)
+
+		self.groups = result
 
 	# get/pop/push prefix--always ensure a trailing delimiter
 	def __get_pre(self):
-		result = self.__delimiter
+		result = self.delimiter
 		for pre in self.__prefix:
-			result += pre + self.__delimiter
+			result += pre + self.delimiter
 		return result
 	def __pop_pre(self):
 		# check for sole delimiter
@@ -118,29 +156,33 @@ class DCConfig(configparser.ConfigParser):
 			self.__prefix.pop()
 		return self.__get_pre()
 	def __push_pre(self, pre):
-		if self.__delimiter in pre:
+		if self.delimiter in pre:
 			self.logger.error('delimiter in pushed prefix')
-		if pre.endswith(self.__delimiter):
-			pre = pre.rstrip(self.__delimiter)
+		if pre.endswith(self.delimiter):
+			pre = pre.rstrip(self.delimiter)
 		self.__prefix.append(pre)
 		return self.__get_pre()
 
 	def __create_kvdict(self):
-		self.kvdict = {}
+		assert self.isvalid
+		assert len(self.root) > 0
+		assert len(self.metrics) > 0
+
+		result = {}
 
 		# add root specs
 		prefix = self.__push_pre('root')
-		self.kvdict[prefix+'endpoint'] = self.get_endpoint(self['root']['endpoint'])
-		self.kvdict[prefix+'heartbeat'] = self.get_seconds(self['root']['heartbeat'])
+		result[prefix+'endpoint'] = self.root['endpoint']
+		result[prefix+'heartbeat'] = self.root['heartbeat']
 		prefix = self.__pop_pre()
 
 		for (group, spec) in self.groups.items():
 			# add group name to prefix
 			prefix = self.__push_pre(group)
 
-			self.kvdict[prefix+'endpoints'] = spec.endpoints
-			self.kvdict[prefix+'filters'] = spec.filters
-			self.kvdict[prefix+'metrics'] = spec.metrics
+			result[prefix+'endpoints'] = spec.endpoints
+			result[prefix+'filters'] = spec.filters
+			result[prefix+'metrics'] = spec.metrics
 
 			# remove name from prefix
 			prefix = self.__pop_pre()
@@ -148,23 +190,26 @@ class DCConfig(configparser.ConfigParser):
 		# verify we popped as many times as we pushed
 		assert len(self.__get_pre()) == 1
 
+		self.kvdict = result
+
 	#####
 	# validation methods
 
 	def __eprint(self, *objects):
 		import sys
-		self.isvalid = False
+		self.__num_errors += 1
 		print('Error:', *objects, file=sys.stderr)
 	def __wprint(self, *objects):
 		import sys
+		self.__num_warns += 1
 		print('Warning:', *objects, file=sys.stderr)
 
 	def __validate(self):
 		'''
 		@todo turn each of these checks into a test routine
 		'''
-
-		self.isvalid = True
+		self.__num_errors = 0
+		self.__num_warns = 0
 
 		# check root specification
 		if 'root' not in self:
@@ -216,6 +261,8 @@ class DCConfig(configparser.ConfigParser):
 		if len(unused_metrics) > 0:
 			self.__wprint('unused metric specification:', unused_metrics)
 
-		if not self.isvalid:
-			raise DCParsingError('parsing errors in dcamp config file; '
-					'see above error messages for details')
+		if self.__num_errors > 0:
+			raise DCParsingError('%d parsing errors in dcamp config file; '
+					'see above error messages for details' % (self.__num_errors))
+		else:
+			self.isvalid = True

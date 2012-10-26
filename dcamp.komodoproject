@@ -23,11 +23,237 @@
   <string id="userEnvironment"></string>
 </preference-set>
 </preference-set>
+  <long id="caretStyle">1</long>
+  <long id="caretWidth">1</long>
+  <boolean id="checkDiskFile">1</boolean>
+  <boolean id="checkNetworkDiskFile">1</boolean>
+  <long id="codeintel_highlight_variables_auto_delay">250</long>
+  <boolean id="codeintel_highlight_variables_auto_keyboard">1</boolean>
+  <boolean id="codeintel_highlight_variables_auto_mouse">1</boolean>
+  <boolean id="codeintel_highlight_variables_match_prefix">0</boolean>
+  <long id="codeintel_highlight_variables_min_auto_length">2</long>
+  <boolean id="codeintel_highlight_variables_use_scope">1</boolean>
   <string id="currentInvocationLanguage">Python</string>
+  <string id="defaultDateFormat">%25a %25b %25d %25H:%25M:%25S %25Y</string>
+  <string id="donotask_action_close_deleted_files"></string>
+  <string id="donotask_action_dragdrop_uri"></string>
+  <string id="donotask_action_reload_changed_files"></string>
+  <boolean id="donotask_buffer_conflicts_with_file_on_disk">0</boolean>
+  <boolean id="donotask_close_deleted_files">0</boolean>
+  <boolean id="donotask_dragdrop_uri">0</boolean>
+  <boolean id="donotask_reload_changed_files">0</boolean>
+  <boolean id="donotask_revert_buffer">0</boolean>
+  <boolean id="donotask_treat_large_documents_as_text">0</boolean>
+  <long id="editAutoWrapColumn">90</long>
+  <boolean id="editFoldLines">1</boolean>
+  <string id="editFoldStyle">curvytree</string>
+  <boolean id="editRestoreFoldPoints">1</boolean>
+  <boolean id="editSmartCutCopyWithoutSelection">1</boolean>
+  <boolean id="editSmartSoftCharacters">1</boolean>
+  <boolean id="editTabCompletes">1</boolean>
+  <boolean id="editUseEdge">1</boolean>
+  <long id="editWordWrapIndentation">2</long>
+  <long id="editWordWrapMarker">0</long>
+  <long id="editWrapType">1</long>
+  <boolean id="enableSmartSoftCharactersInsideLine">0</boolean>
+  <boolean id="encodingAutoDetect">1</boolean>
+  <string id="encodingDefault">mac-roman</string>
+  <boolean id="encodingEnvironment">1</boolean>
+  <boolean id="encodingHTML">0</boolean>
+  <boolean id="encodingModeline">1</boolean>
+  <boolean id="encodingXMLDec">1</boolean>
+  <boolean id="foldSeparateBlockParts">0</boolean>
+  <boolean id="hyperlinksEnableGotoDefinition">1</boolean>
+  <boolean id="hyperlinksEnabled">1</boolean>
   <string relative="path" id="import_dirname"></string>
   <string id="import_exclude_matches">*.*~;*.bak;*.tmp;CVS;.#*;*.pyo;*.pyc;.svn;.git;.hg;.bzr;*%25*;tmp*.html;.DS_Store;*.swp;*.kpf;*.komodoproject;.komodotools;__pycache__</string>
   <string id="import_include_matches"></string>
   <string id="language">Python</string>
+<preference-set id="languages">
+<preference-set id="languages/Ada">
+  <boolean id="Ada/newBOM">0</boolean>
+  <string id="Ada/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Apache">
+  <boolean id="Apache/newBOM">0</boolean>
+  <string id="Apache/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Baan">
+  <boolean id="Baan/newBOM">0</boolean>
+  <string id="Baan/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Batch">
+  <boolean id="Batch/newBOM">0</boolean>
+  <string id="Batch/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Bullant">
+  <boolean id="Bullant/newBOM">0</boolean>
+  <string id="Bullant/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/C#">
+  <boolean id="C#/newBOM">0</boolean>
+  <string id="C#/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/C++">
+  <boolean id="C++/newBOM">0</boolean>
+  <string id="C++/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/CSS">
+  <boolean id="CSS/newBOM">0</boolean>
+  <string id="CSS/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Diff">
+  <boolean id="Diff/newBOM">0</boolean>
+  <string id="Diff/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Eiffel">
+  <boolean id="Eiffel/newBOM">0</boolean>
+  <string id="Eiffel/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Errors">
+  <boolean id="C++/newBOM">0</boolean>
+  <string id="C++/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Fortran">
+  <boolean id="Fortran/newBOM">0</boolean>
+  <string id="Fortran/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Fortran 77">
+  <boolean id="Fortran 77/newBOM">0</boolean>
+  <string id="Fortran 77/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/HTML">
+  <boolean id="HTML/newBOM">0</boolean>
+  <string id="HTML/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/IDL">
+  <boolean id="IDL/newBOM">0</boolean>
+  <string id="IDL/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Java">
+  <boolean id="Java/newBOM">0</boolean>
+  <string id="Java/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/JavaScript">
+  <boolean id="JavaScript/newBOM">0</boolean>
+  <string id="JavaScript/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/LaTeX">
+  <boolean id="LaTeX/newBOM">0</boolean>
+  <string id="LaTeX/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Lisp">
+  <boolean id="Lisp/newBOM">0</boolean>
+  <string id="Lisp/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Lua">
+  <boolean id="Lua/newBOM">0</boolean>
+  <string id="Lua/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Makefile">
+  <boolean id="Makefile/newBOM">0</boolean>
+  <string id="Makefile/newEncoding">Default Encoding</string>
+  <boolean id="useTabs">1</boolean>
+</preference-set>
+<preference-set id="languages/Matlab">
+  <boolean id="Matlab/newBOM">0</boolean>
+  <string id="Matlab/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Node.js">
+  <boolean id="Node.js/newBOM">0</boolean>
+  <string id="Node.js/newEncoding">utf-8</string>
+</preference-set>
+<preference-set id="languages/PHP">
+  <boolean id="PHP/newBOM">0</boolean>
+  <string id="PHP/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Pascal">
+  <boolean id="Pascal/newBOM">0</boolean>
+  <string id="Pascal/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Perl">
+  <boolean id="Perl/newBOM">0</boolean>
+  <string id="Perl/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Python">
+  <boolean id="Python/newBOM">0</boolean>
+  <string id="Python/newEncoding">ascii</string>
+  <long id="tabWidth">4</long>
+  <boolean id="useTabs">1</boolean>
+</preference-set>
+<preference-set id="languages/Python3">
+  <boolean id="Python3/newBOM">0</boolean>
+  <string id="Python3/newEncoding">utf-8</string>
+  <long id="tabWidth">4</long>
+  <boolean id="useTabs">1</boolean>
+</preference-set>
+<preference-set id="languages/RHTML">
+  <boolean id="RHTML/newBOM">0</boolean>
+  <string id="RHTML/newEncoding">Default Encoding</string>
+  <long id="indentWidth">2</long>
+</preference-set>
+<preference-set id="languages/Ruby">
+  <boolean id="Ruby/newBOM">0</boolean>
+  <string id="Ruby/newEncoding">Default Encoding</string>
+  <long id="indentWidth">2</long>
+</preference-set>
+<preference-set id="languages/SQL">
+  <boolean id="SQL/newBOM">0</boolean>
+  <string id="SQL/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Tcl">
+  <boolean id="Tcl/newBOM">0</boolean>
+  <string id="Tcl/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/Text">
+  <boolean id="Text/newBOM">0</boolean>
+  <string id="Text/newEncoding">Default Encoding</string>
+</preference-set>
+<preference-set id="languages/VisualBasic">
+  <boolean id="VisualBasic/newBOM">0</boolean>
+  <string id="VisualBasic/newEncoding">utf-8</string>
+</preference-set>
+<preference-set id="languages/XML">
+  <boolean id="XML/newBOM">0</boolean>
+  <string id="XML/newEncoding">utf-8</string>
+</preference-set>
+<preference-set id="languages/XSLT">
+  <boolean id="XSLT/newBOM">0</boolean>
+  <string id="XSLT/newEncoding">utf-8</string>
+</preference-set>
+<preference-set id="languages/nnCrontab">
+  <boolean id="nnCrontab/newBOM">0</boolean>
+  <string id="nnCrontab/newEncoding">Default Encoding</string>
+</preference-set>
+</preference-set>
   <string id="lastInvocation">Project</string>
+  <string id="lastTestPlanName_pref">New test plan #1</string>
+  <string id="mappedPaths"></string>
+  <string id="perlExtraPaths"></string>
+  <boolean id="perl_debuggerlogenabled">0</boolean>
+  <string id="perl_debuggerlogpath"></string>
+  <string id="phpCommentStyle">//,#</string>
+  <string id="phpConfigFile"></string>
+  <string id="phpExtraPaths"></string>
+  <string id="python3DefaultInterpreter"></string>
+  <string relative="path" id="python3ExtraPaths">src</string>
+  <string id="python3_debuggerLogLevel">WARN</string>
+  <string id="python3_debuggerLogPath"></string>
+  <boolean id="scrollEndAtLastLine">1</boolean>
+  <long id="scrollWidth">2000</long>
+  <boolean id="scrollWidthTracking">0</boolean>
+  <boolean id="select_most_recent_buffer_on_buffer_close">0</boolean>
+  <boolean id="showEOL">0</boolean>
+  <boolean id="showLineNumbers">1</boolean>
+  <boolean id="showWhitespace">1</boolean>
+<preference-set id="testPlans">
+<preference-set id="New test plan #1">
+  <string id="command_line"></string>
+  <string relative="url" id="directory">src/</string>
+  <string id="language">Python - unittest</string>
+</preference-set>
+</preference-set>
+  <string id="userEnvironmentStartupOverride"></string>
+  <long id="ySlop">2</long>
 </preference-set>
 </project>

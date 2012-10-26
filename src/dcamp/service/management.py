@@ -15,10 +15,10 @@ class Management(Service):
 		super().__init__(context)
 
 		self.config = config
-		(self.host, self.port) = self.config.kvdict['/root/endpoint']
+		(self.host, self.port) = self.config.root['endpoint']
 		self.nodes = []
-		for (group, spec) in self.config.groups.items():
-			self.nodes.extend(spec.endpoints)
+		for group in self.config.groups.values():
+			self.nodes.extend(group.endpoints)
 
 	def setup(self):
 		'''
@@ -46,7 +46,7 @@ class Management(Service):
 		self.reqcnt = 0
 		self.repcnt = 0
 
-		self.pubint = self.config.kvdict['/root/heartbeat']
+		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
 	def poll(self):
