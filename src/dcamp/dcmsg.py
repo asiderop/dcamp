@@ -6,6 +6,8 @@ import struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as json
 
+from dcamp.config import EndpntSpec, str_to_ep, DCParsingError
+
 class DCMsg(object):
 	'''
 	Base dCAMP message
@@ -22,6 +24,7 @@ class DCMsg(object):
 		return self.__class__.__name__.encode()
 
 	def send(self, socket):
+		self.logger.debug('S:%s' % self.__class__.__name__)
 		socket.send_multipart(self.frames)
 
 	def __iter__(self):
@@ -40,6 +43,7 @@ class DCMsg(object):
 		key = msg[0]
 		for c in cls.__subclasses__():
 			if c.__name__.encode() == key:
+				c.logger.debug('R:%s' % c.__name__)
 				return c.from_msg(msg) # class found, so return it
 
 		cls.logger.fatal("no subclass matches found")
@@ -47,14 +51,13 @@ class DCMsg(object):
 
 class MARCO(DCMsg):
 	def __init__(self, root_endpoint):
-		if isinstance(root_endpoint, str):
-			root_endpoint = root_endpoint.encode()
-		assert isinstance(root_endpoint, bytes)
+		assert isinstance(root_endpoint, EndpntSpec)
 		self.root_endpoint = root_endpoint
 
 	@property
 	def frames(self):
-		return [self.name, self.root_endpoint]
+		return [self.name,
+				self.root_endpoint.encode()]
 
 	@classmethod
 	def from_msg(cls, msg):
@@ -62,18 +65,17 @@ class MARCO(DCMsg):
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1])
+		return cls(str_to_ep(msg[1].decode()))
 
 class POLO(DCMsg):
 	def __init__(self, base_endpoint):
-		if isinstance(base_endpoint, str):
-			base_endpoint = base_endpoint.encode()
-		assert isinstance(base_endpoint, bytes)
+		assert isinstance(base_endpoint, EndpntSpec)
 		self.base_endpoint = base_endpoint
 
 	@property
 	def frames(self):
-		return [self.name, self.base_endpoint]
+		return [self.name,
+				self.base_endpoint.encode()]
 
 	@classmethod
 	def from_msg(cls, msg):
@@ -81,16 +83,13 @@ class POLO(DCMsg):
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1])
+		return cls(str_to_ep(msg[1].decode()))
 
 class ASSIGN(DCMsg):
 	def __init__(self, parent_endpoint, properties=None):
-		if isinstance(parent_endpoint, str):
-			parent_endpoint = parent_endpoint.encode()
-		assert isinstance(parent_endpoint, bytes)
-		self.parent_endpoint = parent_endpoint
-
+		assert isinstance(parent_endpoint, EndpntSpec)
 		assert properties is None or isinstance(properties, dict)
+		self.parent_endpoint = parent_endpoint
 		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
@@ -106,7 +105,7 @@ class ASSIGN(DCMsg):
 	@property
 	def frames(self):
 		return [self.name,
-				self.parent_endpoint,
+				self.parent_endpoint.encode(),
 				json.dumps(self.properties)]
 
 	@classmethod
@@ -115,24 +114,21 @@ class ASSIGN(DCMsg):
 		assert isinstance(msg, list)
 		assert 3 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-
-		return cls(msg[1], properties=json.loads(msg[2]))
+		ep = str_to_ep(msg[1].decode())
+		return cls(ep, properties=json.loads(msg[2]))
 
 class WTF(DCMsg):
 	def __init__(self, errcode, errstr=''):
 		assert isinstance(errcode, int)
+		assert isinstance(errstr, str)
 		self.errcode = errcode
-
-		if isinstance(errstr, str):
-			errstr = errstr.encode()
-		assert isinstance(errstr, bytes)
 		self.errstr = errstr
 
 	@property
 	def frames(self):
 		return [self.name,
 				struct.pack('!i', self.errcode),
-				self.errstr]
+				self.errstr.encode()]
 
 	@classmethod
 	def from_msg(cls, msg):
@@ -144,5 +140,5 @@ class WTF(DCMsg):
 		code = struct.unpack('!i', msg[1])[0]
 		errstr = ''
 		if len(msg) == 3:
-			errstr = msg[2]
+			errstr = msg[2].decode()
 		return cls(code, errstr)

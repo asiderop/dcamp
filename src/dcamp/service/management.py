@@ -37,7 +37,6 @@ class Management(Service):
 		assert self.ctx is not None
 
 		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port)
-		self.root_endpoint = 'tcp://%s:%d' % (self.endpoint.host, self.endpoint.port)
 
 		self.rep = self.ctx.socket(zmq.REP)
 		self.rep.bind(self.bind_endpoint)
@@ -56,7 +55,7 @@ class Management(Service):
 
 	def poll(self):
 
-		pubmsg = dcmsg.MARCO(self.root_endpoint.encode())
+		pubmsg = dcmsg.MARCO(self.endpoint)
 		pubnext = time.time()
 
 		while True:
@@ -65,7 +64,6 @@ class Management(Service):
 
 			if pubnext < time.time():
 				pubmsg.send(self.pub)
-				self.logger.info("S:MARCO")
 				pubnext = time.time() + self.pubint
 				self.pubcnt += 1
 
@@ -79,12 +77,16 @@ class Management(Service):
 				return
 
 			if self.rep in items:
-				reqmsg = dcmsg.DCMsg.recv(self.rep)
-				self.logger.info("C:POLO")
-				self.reqcnt += 1
-				assert reqmsg.name == b'POLO'
+				try:
+					reqmsg = dcmsg.DCMsg.recv(self.rep)
+					self.reqcnt += 1
+					assert reqmsg.name == b'POLO'
+					repmsg = self.__assign(reqmsg.base_endpoint)
+				except DCParsingError as e:
+					errstr = 'invalid base endpoint received: %s' % e
+					self.logger.error(errstr)
+					repmsg = dcmsg.WTF(0, errstr)
 
-				repmsg = self.__assign(reqmsg.base_endpoint.decode())
 				if repmsg is not None:
 					repmsg.send(self.rep)
 					self.repcnt += 1
@@ -96,40 +98,29 @@ class Management(Service):
 		* promote to collector (if first in group)
 		* assign its parent node
 
-		Returns ASSIGN or WTF or None
+		Returns ASSIGN or None
 		'''
-		try:
-			base_endpoint = str_to_ep(given_endpoint)
-		except DCParsingError as e:
-			errstr = 'invalid base endpoint received: %s' % e
-			self.logger.error(errstr)
-			self.logger.info("S:WTF")
-			return dcmsg.WTF(0, errstr)
-
 		parent_endpoint = None
 		level = ''
 
 		# lookup node group
 		for (group, spec) in self.config.groups.items():
-			if base_endpoint in spec.endpoints:
+			if given_endpoint in spec.endpoints:
 				self.logger.debug('found base group: %s' % group)
 				if group in self.collectors:
 					parent_endpoint = self.collectors[group]
 					level = 'leaf'
 				else:
-					self.collectors[group] = base_endpoint
+					self.collectors[group] = given_endpoint
 					parent_endpoint = self.endpoint
 					level = 'branch'
 
 		if parent_endpoint is None:
 			# silently ignore unknown base endpoints
-			self.logger.debug('no base group found for %s' % str(base_endpoint))
-			self.logger.debug(base_endpoint)
+			self.logger.debug('no base group found for %s' % str(given_endpoint))
 			return None
 
 		# create reply message
-		repmsg = dcmsg.ASSIGN(parent_endpoint.encode())
-		repmsg['parent'] = parent_endpoint
+		repmsg = dcmsg.ASSIGN(parent_endpoint)
 		repmsg['level'] = level
-		self.logger.info("S:ASSIGN")
 		return repmsg

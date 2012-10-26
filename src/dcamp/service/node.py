@@ -69,23 +69,20 @@ class Node(Service):
 
 			if self.sub in items:
 				submsg = dcmsg.DCMsg.recv(self.sub)
-				self.logger.info("S:MARCO")
 				self.subcnt += 1
 				assert submsg.name == b'MARCO'
 
 				if BASE == self.state:
 					self.req = self.ctx.socket(zmq.REQ)
-					self.req.connect(submsg.root_endpoint)
-					reqmsg = dcmsg.POLO(self.endpoint.encode())
+					self.req.connect("tcp://"+str(submsg.root_endpoint))
+					reqmsg = dcmsg.POLO(self.endpoint)
 					reqmsg.send(self.req)
-					self.logger.info("C:POLO")
 					self.reqcnt += 1
 					self.state = JOIN
 
 			elif self.req in items:
 				assert self.state == JOIN
 				repmsg = dcmsg.DCMsg.recv(self.req)
-				self.logger.info("S:ASSIGN")
 				del(self.req)
 				self.req = None
 				self.repcnt += 1
