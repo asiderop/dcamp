@@ -2,6 +2,7 @@
 dCAMP message module
 '''
 import logging
+import struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as json
 
@@ -39,14 +40,15 @@ class DCMsg(object):
 		key = msg[0]
 		for c in cls.__subclasses__():
 			if c.__name__.encode() == key:
-				cls.logger.debug("found subclass match: %s", c.__name__)
 				return c.from_msg(msg) # class found, so return it
 
-		cls.logger.debug("no subclass matches found")
+		cls.logger.fatal("no subclass matches found")
 		return cls() # if class not found, return generic
 
 class MARCO(DCMsg):
 	def __init__(self, root_endpoint):
+		if isinstance(root_endpoint, str):
+			root_endpoint = root_endpoint.encode()
 		assert isinstance(root_endpoint, bytes)
 		self.root_endpoint = root_endpoint
 
@@ -64,6 +66,8 @@ class MARCO(DCMsg):
 
 class POLO(DCMsg):
 	def __init__(self, base_endpoint):
+		if isinstance(base_endpoint, str):
+			base_endpoint = base_endpoint.encode()
 		assert isinstance(base_endpoint, bytes)
 		self.base_endpoint = base_endpoint
 
@@ -81,9 +85,12 @@ class POLO(DCMsg):
 
 class ASSIGN(DCMsg):
 	def __init__(self, parent_endpoint, properties=None):
+		if isinstance(parent_endpoint, str):
+			parent_endpoint = parent_endpoint.encode()
 		assert isinstance(parent_endpoint, bytes)
-		assert properties is None or isinstance(properties, dict)
 		self.parent_endpoint = parent_endpoint
+
+		assert properties is None or isinstance(properties, dict)
 		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
@@ -112,20 +119,30 @@ class ASSIGN(DCMsg):
 		return cls(msg[1], properties=json.loads(msg[2]))
 
 class WTF(DCMsg):
-	def __init__(self, errcode, errstr=None):
+	def __init__(self, errcode, errstr=''):
 		assert isinstance(errcode, int)
-		assert errstr is None or isinstance(errstr, bytes)
 		self.errcode = errcode
-		self.errstr = '' if errstr is None else errstr
+
+		if isinstance(errstr, str):
+			errstr = errstr.encode()
+		assert isinstance(errstr, bytes)
+		self.errstr = errstr
 
 	@property
 	def frames(self):
-		return [self.name, errcode, errstr]
+		return [self.name,
+				struct.pack('!i', self.errcode),
+				self.errstr]
 
 	@classmethod
 	def from_msg(cls, msg):
-		# assert we have two frames and correct key
+		# assert we have either two or three frames and correct key
 		assert isinstance(msg, list)
-		assert 2 == len(msg)
+		assert len(msg) in [2, 3]
 		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1])
+
+		code = struct.unpack('!i', msg[1])[0]
+		errstr = ''
+		if len(msg) == 3:
+			errstr = msg[2]
+		return cls(code, errstr)

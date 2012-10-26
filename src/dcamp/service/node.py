@@ -9,15 +9,17 @@ JOIN = 1
 class Node(Service):
 	'''
 	Node Service -- provides functionality for boot strapping into dCAMP system.
+
+	@todo: need to timeout if the req fails
 	'''
 
 	def __init__(self,
 			context,
-			address,
+			endpoint,
 			topics=None):
 		super().__init__(context)
 
-		(self.host, self.port) = address
+		self.endpoint = endpoint
 		self.topics = [] if topics is None else topics
 
 	def setup(self):
@@ -27,12 +29,9 @@ class Node(Service):
 		@todo does this need to be a separate method?
 			why not do it as part of __init__()?
 		'''
-
-		assert 0 != self.port
 		assert self.ctx is not None
 
-		self.bind_endpoint = "tcp://*:%d" % (self.port)
-		self.base_endpoint = "tcp://%s:%d" % (self.host, self.port)
+		self.bind_endpoint = "tcp://*:%d" % (self.endpoint.port)
 
 		self.sub = self.ctx.socket(zmq.SUB)
 
@@ -77,7 +76,7 @@ class Node(Service):
 				if BASE == self.state:
 					self.req = self.ctx.socket(zmq.REQ)
 					self.req.connect(submsg.root_endpoint)
-					reqmsg = dcmsg.POLO(self.base_endpoint.encode())
+					reqmsg = dcmsg.POLO(self.endpoint.encode())
 					reqmsg.send(self.req)
 					self.logger.info("C:POLO")
 					self.reqcnt += 1
@@ -91,4 +90,4 @@ class Node(Service):
 				self.req = None
 				self.repcnt += 1
 				self.state = BASE
-				assert repmsg.name == b'ASSIGN'
+				assert repmsg.name in [b'ASSIGN', b'WTF']

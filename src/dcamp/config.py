@@ -2,10 +2,49 @@ import logging, configparser
 from collections import namedtuple
 
 EndpntSpec = namedtuple('EndpntSpec', ['host', 'port'])
+def ep_to_str(self):
+	return "%s:%s" % (self.host, self.port)
+def ep_encode(self):
+	return str(self).encode()
+EndpntSpec.__str__ = ep_to_str
+EndpntSpec.encode = ep_encode
+
 MetricSpec = namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])
 FilterSpec = namedtuple('FilterSpec', ['action', 'match'])
 
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
+
+# helper methods
+def to_seconds(given):
+	'''
+	Method determines how given time is specified and return int value in seconds;
+	e.g. to_seconds('90s') == 90
+
+	valid time units:
+		s -- seconds
+
+	@todo add this to validation routine
+	'''
+	if given.endswith('s'):
+		return int(given[:len(given)-1])
+	else:
+		raise DCParsingError('invalid time unit given--valid units: s')
+
+def str_to_ep(given):
+	errmsg = None
+
+	parts = given.split(':')
+	if len(parts) != 2:
+		errmsg = 'endpoint specification must be "host:port"'
+	elif len(parts[0]) == 0:
+		errmsg = 'endpoint specification must provide host name or ip address'
+	elif not parts[1].isdecimal():
+		errmsg = 'endpoint port must be an integer'
+
+	if errmsg:
+		raise DCParsingError('%s: [%s]' % (errmsg, given))
+
+	return EndpntSpec(parts[0], int(parts[1]))
 
 class DCParsingError(configparser.Error):
 	pass
@@ -30,39 +69,6 @@ class DCConfig(configparser.ConfigParser):
 	def validate(file):
 		config = DCConfig()
 		config.read_file(file)
-
-	@staticmethod
-	def get_seconds(string):
-		'''
-		Method determines how given time is specified and return int value in seconds;
-		e.g. get_seconds('90s') == 90
-
-		valid time units:
-			s -- seconds
-
-		@todo add this to validation routine
-		'''
-		if string.endswith('s'):
-			return int(string[:len(string)-1])
-		else:
-			raise DCParsingError('invalid time unit given--valid units: s')
-
-	@staticmethod
-	def get_endpoint(string):
-		errmsg = None
-
-		parts = string.split(':')
-		if len(parts) != 2:
-			errmsg = 'endpoint specification must be "host:port"'
-		elif len(parts[0]) == 0:
-			errmsg = 'endpoint specification must provide host name or ip address'
-		elif not parts[1].isdecimal():
-			errmsg = 'endpoint port must be an integer'
-
-		if errmsg:
-			raise DCParsingError(errmsg)
-
-		return EndpntSpec(parts[0], int(parts[1]))
 
 	def read_file(self, f, source=None):
 		super().read_file(f, source)
@@ -99,8 +105,8 @@ class DCConfig(configparser.ConfigParser):
 		assert self.isvalid
 
 		result = {}
-		result['endpoint'] = self.get_endpoint(self['root']['endpoint'])
-		result['heartbeat'] = self.get_seconds(self['root']['heartbeat'])
+		result['endpoint'] = str_to_ep(self['root']['endpoint'])
+		result['heartbeat'] = to_seconds(self['root']['heartbeat'])
 		self.root = result
 
 	def __create_metrics(self):
@@ -110,7 +116,7 @@ class DCConfig(configparser.ConfigParser):
 
 		# process all metric specifications
 		for name in self.metric_sections:
-			rate = self.get_seconds(self[name]['rate'])
+			rate = to_seconds(self[name]['rate'])
 			threshold = self[name]['threshold'] if 'threshold' in self[name] else None
 			metric = self[name]['metric']
 			result[name] = MetricSpec(rate, threshold, metric)
@@ -138,7 +144,7 @@ class DCConfig(configparser.ConfigParser):
 					filters.append(FilterSpec(key[0], key[1:]))
 				else:
 					# create endpoint spec
-					endpoints.append(self.get_endpoint(key))
+					endpoints.append(str_to_ep(key))
 
 			result[name] = GroupSpec(endpoints, filters, metrics)
 
@@ -216,7 +222,7 @@ class DCConfig(configparser.ConfigParser):
 			self.__eprint("missing [root] section")
 		else:
 			try:
-				self.get_endpoint(self['root']['endpoint'])
+				str_to_ep(self['root']['endpoint'])
 			except DCParsingError as e:
 				self.__eprint('[root]endpoint', e)
 			except KeyError as e:
@@ -248,7 +254,7 @@ class DCConfig(configparser.ConfigParser):
 					continue
 				try:
 					nodecnt += 1
-					self.get_endpoint(key)
+					str_to_ep(key)
 				except DCParsingError as e:
 					self.__eprint('[%s]%s' % (group, key), e)
 

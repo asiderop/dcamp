@@ -6,11 +6,11 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.config import DCParsingError, DCConfig
+from dcamp.config import DCParsingError, DCConfig, str_to_ep
 
 def Address(string):
 	try:
-		return DCConfig.get_endpoint(string)
+		return str_to_ep(string)
 	except DCParsingError as e:
 		raise ArgumentTypeError(e)
 

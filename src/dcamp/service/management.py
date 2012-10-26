@@ -2,23 +2,30 @@ import logging, time, zmq
 
 import dcamp.dcmsg as dcmsg
 from dcamp.service.service import Service
+from dcamp.config import DCParsingError, str_to_ep
 
 class Management(Service):
 	'''
 	Management Service -- provides functionality for interacting with and controlling
 	dCAMP.
 
-	@todo figure out how the multicast/subnets work
+	@todo: figure out how the multicast/subnets work
+	@todo: how to handle joining nodes not part of config
 	'''
 
 	def __init__(self, context, config):
 		super().__init__(context)
 
 		self.config = config
-		(self.host, self.port) = self.config.root['endpoint']
+		self.endpoint = self.config.root['endpoint']
+
+		# [endpoint]
 		self.nodes = []
 		for group in self.config.groups.values():
 			self.nodes.extend(group.endpoints)
+
+		# {group: collector}
+		self.collectors = {}
 
 	def setup(self):
 		'''
@@ -27,12 +34,10 @@ class Management(Service):
 		@todo does this need to be a separate method?
 			why not do it as part of __init__()?
 		'''
-		assert 0 != len(self.host)
-		assert 0 != self.port
 		assert self.ctx is not None
 
-		self.bind_endpoint = 'tcp://*:%d' % (self.port)
-		self.root_endpoint = 'tcp://%s:%d' % (self.host, self.port)
+		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port)
+		self.root_endpoint = 'tcp://%s:%d' % (self.endpoint.host, self.endpoint.port)
 
 		self.rep = self.ctx.socket(zmq.REP)
 		self.rep.bind(self.bind_endpoint)
@@ -79,7 +84,52 @@ class Management(Service):
 				self.reqcnt += 1
 				assert reqmsg.name == b'POLO'
 
-				repmsg = dcmsg.ASSIGN(reqmsg.base_endpoint)
-				repmsg.send(self.rep)
-				self.logger.info("S:ASSIGN")
-				self.repcnt += 1
+				repmsg = self.__assign(reqmsg.base_endpoint.decode())
+				if repmsg is not None:
+					repmsg.send(self.rep)
+					self.repcnt += 1
+
+	def __assign(self, given_endpoint):
+		'''
+		Method to handle assigning joining node to topology:
+		* lookup node's group
+		* promote to collector (if first in group)
+		* assign its parent node
+
+		Returns ASSIGN or WTF or None
+		'''
+		try:
+			base_endpoint = str_to_ep(given_endpoint)
+		except DCParsingError as e:
+			errstr = 'invalid base endpoint received: %s' % e
+			self.logger.error(errstr)
+			self.logger.info("S:WTF")
+			return dcmsg.WTF(0, errstr)
+
+		parent_endpoint = None
+		level = ''
+
+		# lookup node group
+		for (group, spec) in self.config.groups.items():
+			if base_endpoint in spec.endpoints:
+				self.logger.debug('found base group: %s' % group)
+				if group in self.collectors:
+					parent_endpoint = self.collectors[group]
+					level = 'leaf'
+				else:
+					self.collectors[group] = base_endpoint
+					parent_endpoint = self.endpoint
+					level = 'branch'
+
+		if parent_endpoint is None:
+			# silently ignore unknown base endpoints
+			self.logger.debug('no base group found for %s' % str(base_endpoint))
+			self.logger.debug(base_endpoint)
+			return None
+
+		# create reply message
+		repmsg = dcmsg.ASSIGN(parent_endpoint.encode())
+		repmsg['parent'] = parent_endpoint
+		repmsg['level'] = level
+		self.logger.info("S:ASSIGN")
+		return repmsg
