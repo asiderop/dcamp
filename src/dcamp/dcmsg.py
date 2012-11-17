@@ -6,7 +6,7 @@ import struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as json
 
-from dcamp.config import EndpntSpec, str_to_ep, DCParsingError
+from dcamp.data import EndpntSpec
 
 class DCMsg(object):
 	'''
@@ -51,7 +51,9 @@ class DCMsg(object):
 
 class MARCO(DCMsg):
 	def __init__(self, root_endpoint):
-		assert isinstance(root_endpoint, EndpntSpec)
+		if not isinstance(root_endpoint, EndpntSpec):
+			assert isinstance(root_endpoint, str)
+			root_endpoint = EndpntSpec.from_str(root_endpoint)
 		self.root_endpoint = root_endpoint
 
 	@property
@@ -65,11 +67,13 @@ class MARCO(DCMsg):
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-		return cls(str_to_ep(msg[1].decode()))
+		return cls(msg[1].decode())
 
 class POLO(DCMsg):
 	def __init__(self, base_endpoint):
-		assert isinstance(base_endpoint, EndpntSpec)
+		if not isinstance(base_endpoint, EndpntSpec):
+			assert isinstance(base_endpoint, str)
+			base_endpoint = EndpntSpec.from_str(base_endpoint)
 		self.base_endpoint = base_endpoint
 
 	@property
@@ -83,13 +87,15 @@ class POLO(DCMsg):
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-		return cls(str_to_ep(msg[1].decode()))
+		return cls(msg[1].decode())
 
 class ASSIGN(DCMsg):
 	def __init__(self, parent_endpoint, properties=None):
-		assert isinstance(parent_endpoint, EndpntSpec)
-		assert properties is None or isinstance(properties, dict)
+		if not isinstance(parent_endpoint, EndpntSpec):
+			assert isinstance(parent_endpoint, str)
+			parent_endpoint = EndpntSpec.from_str(parent_endpoint)
 		self.parent_endpoint = parent_endpoint
+		assert properties is None or isinstance(properties, dict)
 		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
@@ -114,8 +120,7 @@ class ASSIGN(DCMsg):
 		assert isinstance(msg, list)
 		assert 3 == len(msg)
 		assert cls.__name__.encode() == msg[0]
-		ep = str_to_ep(msg[1].decode())
-		return cls(ep, properties=json.loads(msg[2]))
+		return cls(msg[1].decode(), properties=json.loads(msg[2]))
 
 class WTF(DCMsg):
 	def __init__(self, errcode, errstr=''):

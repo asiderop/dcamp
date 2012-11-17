@@ -1,16 +1,7 @@
 import logging, configparser
 from collections import namedtuple
 
-'''
-@todo: this EndpntSpec named tuple is sad; make it a full class with some real names. / issue #22
-'''
-EndpntSpec = namedtuple('EndpntSpec', ['host', 'port'])
-def ep_to_str(self):
-	return "%s:%s" % (self.host, self.port)
-def ep_encode(self):
-	return str(self).encode()
-EndpntSpec.__str__ = ep_to_str
-EndpntSpec.encode = ep_encode
+from dcamp.data import EndpntSpec
 
 MetricSpec = namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])
 FilterSpec = namedtuple('FilterSpec', ['action', 'match'])
@@ -34,20 +25,7 @@ def to_seconds(given):
 		raise DCParsingError('invalid time unit given--valid units: s')
 
 def str_to_ep(given):
-	errmsg = None
-
-	parts = given.split(':')
-	if len(parts) != 2:
-		errmsg = 'endpoint specification must be "host:port"'
-	elif len(parts[0]) == 0:
-		errmsg = 'endpoint specification must provide host name or ip address'
-	elif not parts[1].isdecimal():
-		errmsg = 'endpoint port must be an integer'
-
-	if errmsg:
-		raise DCParsingError('%s: [%s]' % (errmsg, given))
-
-	return EndpntSpec(parts[0], int(parts[1]))
+	return EndpntSpec.from_str(given)
 
 class DCParsingError(configparser.Error):
 	pass
@@ -226,7 +204,7 @@ class DCConfig(configparser.ConfigParser):
 		else:
 			try:
 				str_to_ep(self['root']['endpoint'])
-			except DCParsingError as e:
+			except ValueError as e:
 				self.__eprint('[root]endpoint', e)
 			except KeyError as e:
 				self.__eprint("missing %s option in [root] section" % (e))
@@ -258,7 +236,7 @@ class DCConfig(configparser.ConfigParser):
 				try:
 					nodecnt += 1
 					str_to_ep(key)
-				except DCParsingError as e:
+				except ValueError as e:
 					self.__eprint('[%s]%s' % (group, key), e)
 
 			# verify group has at least one endpoint

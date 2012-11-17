@@ -2,7 +2,6 @@ import logging, time, zmq
 
 import dcamp.dcmsg as dcmsg
 from dcamp.service.service import Service
-from dcamp.config import DCParsingError, str_to_ep
 
 class Management(Service):
 	'''
@@ -81,7 +80,7 @@ class Management(Service):
 					self.reqcnt += 1
 					assert reqmsg.name == b'POLO'
 					repmsg = self.__assign(reqmsg.base_endpoint)
-				except DCParsingError as e:
+				except ValueError as e:
 					errstr = 'invalid base endpoint received: %s' % e
 					self.logger.error(errstr)
 					repmsg = dcmsg.WTF(0, errstr)
