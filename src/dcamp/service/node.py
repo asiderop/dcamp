@@ -10,7 +10,7 @@ class Node(Service):
 	'''
 	Node Service -- provides functionality for boot strapping into dCAMP system.
 
-	@todo: need to timeout if the req fails
+	@todo: need to timeout if the req fails / issue #28
 	'''
 
 	def __init__(self,
@@ -27,7 +27,7 @@ class Node(Service):
 		setup service for polling.
 
 		@todo does this need to be a separate method?
-			why not do it as part of __init__()?
+			why not do it as part of __init__()? / issue #27
 		'''
 		assert self.ctx is not None
 

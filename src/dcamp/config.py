@@ -1,6 +1,9 @@
 import logging, configparser
 from collections import namedtuple
 
+'''
+@todo: this EndpntSpec named tuple is sad; make it a full class with some real names. / issue #22
+'''
 EndpntSpec = namedtuple('EndpntSpec', ['host', 'port'])
 def ep_to_str(self):
 	return "%s:%s" % (self.host, self.port)
@@ -23,7 +26,7 @@ def to_seconds(given):
 	valid time units:
 		s -- seconds
 
-	@todo add this to validation routine
+	@todo add this to validation routine / issue #23
 	'''
 	if given.endswith('s'):
 		return int(given[:len(given)-1])
@@ -212,7 +215,7 @@ class DCConfig(configparser.ConfigParser):
 
 	def __validate(self):
 		'''
-		@todo turn each of these checks into a test routine
+		@todo turn each of these checks into a test routine / issue #24
 		'''
 		self.__num_errors = 0
 		self.__num_warns = 0

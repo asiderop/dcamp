@@ -9,8 +9,7 @@ class Management(Service):
 	Management Service -- provides functionality for interacting with and controlling
 	dCAMP.
 
-	@todo: figure out how the multicast/subnets work
-	@todo: how to handle joining nodes not part of config
+	@todo: how to handle joining nodes not part of config / issue #26
 	'''
 
 	def __init__(self, context, config):
@@ -32,7 +31,7 @@ class Management(Service):
 		setup service for polling.
 
 		@todo does this need to be a separate method?
-			why not do it as part of __init__()?
+			why not do it as part of __init__()? / issue #27
 		'''
 		assert self.ctx is not None
 
@@ -118,6 +117,7 @@ class Management(Service):
 		if parent_endpoint is None:
 			# silently ignore unknown base endpoints
 			self.logger.debug('no base group found for %s' % str(given_endpoint))
+			# XXX: cannot return None--using strict REQ/REP pattern / issue #26
 			return None
 
 		# create reply message
