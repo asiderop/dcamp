@@ -13,7 +13,6 @@ class Base(Role):
 			topics=None):
 		super().__init__()
 
-		self.ctx = zmq.Context.instance()
 		self.services = [
 				Node(self.ctx, address, topics)
 		]

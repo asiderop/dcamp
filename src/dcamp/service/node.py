@@ -50,7 +50,7 @@ class Node(Service):
 
 		self.state = BASE
 
-	def poll(self):
+	def run(self):
 		while True:
 			poller = zmq.Poller()
 			poller.register(self.sub, zmq.POLLIN)
@@ -61,11 +61,9 @@ class Node(Service):
 
 			try:
 				items = dict(poller.poll())
-			except:
-				# assume keyboard interrupt
-				print("keyboard interrupt; base exiting\n%d subs\n%d reqs\n%d reps" %
-						(self.subcnt, self.reqcnt, self.repcnt))
-				return
+			except zmq.ZMQError:
+				self.logger.debug('exception while polling:', exc_info=True )
+				break
 
 			if self.sub in items:
 				submsg = dcmsg.DCMsg.recv(self.sub)
@@ -88,3 +86,6 @@ class Node(Service):
 				self.repcnt += 1
 				self.state = BASE
 				assert repmsg.name in [b'ASSIGN', b'WTF']
+
+			self.logger.debug("%d subs; %d reqs; %d reps" %
+					(self.subcnt, self.reqcnt, self.repcnt))

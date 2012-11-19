@@ -51,7 +51,7 @@ class Management(Service):
 		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
-	def poll(self):
+	def run(self):
 
 		pubmsg = dcmsg.MARCO(self.endpoint)
 		pubnext = time.time()
@@ -70,9 +70,8 @@ class Management(Service):
 			try:
 				items = dict(poller.poll(poller_timer))
 			except:
-				print("keyboard interrupt; root exiting\n%d pubs\n%d reqs\n%d reps" %
-						(self.pubcnt, self.reqcnt, self.repcnt))
-				return
+				self.logger.debug('exception while polling:', exc_info=True )
+				break
 
 			if self.rep in items:
 				try:
@@ -88,6 +87,9 @@ class Management(Service):
 				if repmsg is not None:
 					repmsg.send(self.rep)
 					self.repcnt += 1
+
+			self.logger.debug("%d pubs; %d reqs; %d reps" %
+					(self.pubcnt, self.reqcnt, self.repcnt))
 
 	def __assign(self, given_endpoint):
 		'''
