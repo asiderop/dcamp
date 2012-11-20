@@ -9,9 +9,11 @@ class Base(Role):
 	'''
 
 	def __init__(self,
+			context,
+			pipe,
 			address,
 			topics=None):
-		super().__init__()
+		super().__init__(context, pipe)
 
 		self.services = [
 				Node(self.ctx, address, topics)

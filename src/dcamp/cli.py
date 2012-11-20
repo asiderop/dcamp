@@ -42,21 +42,20 @@ def main():
 
 	subparsers = parser.add_subparsers(title='dcamp commands')
 
-	# commands
+	# root command
 	parser_root = subparsers.add_parser('root',
 			parents=[parser_file, parser_logging],
 			help='run root command')
 	parser_root.set_defaults(func=do_app, cmd='root')
 
+	# base command
 	parser_base = subparsers.add_parser('base',
 			parents=[parser_logging],
 			help='run base command')
-	parser_base.add_argument('-a', '--address',
-			dest='address',
-			type=Address,
-			required=True)
+	parser_base.add_argument('-a', '--address', dest='address', type=Address, required=True)
 	parser_base.set_defaults(func=do_app, cmd='base')
 
+	# config command
 	parser_config = subparsers.add_parser('config',
 			parents=[parser_file, parser_logging],
 			help='run actions on the given %(prog)s config file')
@@ -67,7 +66,7 @@ def main():
 
 	args = parser.parse_args()
 
-	logging.basicConfig(format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+	logging.basicConfig(format='%(asctime)s %(name)-13s %(levelname)-8s %(message)s')
 	logger = logging.getLogger('dcamp')
 	if (args.verbose):
 		logger.setLevel(logging.INFO)
@@ -80,7 +79,7 @@ def main():
 
 def do_app(args):
 	dapp = App(args)
-	return dapp.run()
+	return dapp.exec()
 
 def do_config(args):
 	config = DCConfig()
