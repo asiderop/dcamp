@@ -22,12 +22,11 @@ class Node(Service):
 		self.endpoint = endpoint
 		self.topics = [] if topics is None else topics
 
+		self.setup()
+
 	def setup(self):
 		'''
 		setup service for polling.
-
-		@todo does this need to be a separate method?
-			why not do it as part of __init__()? / issue #27
 		'''
 		assert self.ctx is not None
 

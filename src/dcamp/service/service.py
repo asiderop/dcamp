@@ -8,7 +8,5 @@ class Service(threading.Thread):
 		super().__init__()
 		self.ctx = context
 
-	def setup(self):
-		pass
 	def run(self):
 		raise NotImplemented('subclass must implement run()')
