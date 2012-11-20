@@ -63,7 +63,7 @@ def zpipe(ctx):
     b.linger = 0
     socket_set_hwm(a, 1)
     socket_set_hwm(b, 1)
-    iface = "inproc://%s" % binascii.hexlify(os.urandom(8))
+    iface = "inproc://%s" % binascii.hexlify(os.urandom(8)).decode()
     a.bind(iface)
     b.connect(iface)
     return a,b
