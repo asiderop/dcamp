@@ -2,8 +2,8 @@
 @author: Alexander
 '''
 import logging
+import zmq
 
-from zmq import Context, ZMQError
 from zhelpers import zpipe
 
 from dcamp.role.root import Root
@@ -16,8 +16,7 @@ class App:
 	'''
 
 	def __init__(self, args):
-		self.ctx = Context.instance()
-		self.ctx.linger = 0
+		self.ctx = zmq.Context.instance()
 		self.logger = logging.getLogger('dcamp.app')
 		self.args = args
 
@@ -37,20 +36,23 @@ class App:
 		if 'root' == self.args.cmd:
 			config = DCConfig()
 			config.read_file(self.args.configfile)
-			role = Root(self.ctx, peer, config)
+			role = Root(peer, config)
 
 		elif 'base' == self.args.cmd:
 			try:
-				role = Base(self.ctx, peer, self.args.address)
-			except ZMQError as e:
+				role = Base(peer, self.args.address)
+			except zmq.ZMQError as e:
 				self.logger.debug('exception while starting base role:', exc_info=True )
 				print('Unable to start base node: %s' % e)
 				print('Is one already running on the given address?')
 				return -1
 
+		# start playing role
+		# NOTE: this should only return when exiting
 		assert None != role
-		try:
-			role.play()
-		except KeyboardInterrupt:
-			self.logger.debug('received keyboard interrupt')
-			return 0
+		role.play()
+
+		# cleanup
+		pipe.close()
+		del pipe, peer
+		self.ctx.term()

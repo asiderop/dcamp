@@ -11,8 +11,10 @@ class Management(Service):
 	@todo: how to handle joining nodes not part of config / issue #26
 	'''
 
-	def __init__(self, context, config):
-		super().__init__(context)
+	def __init__(self,
+			pipe,
+			config):
+		super().__init__(pipe)
 
 		self.config = config
 		self.endpoint = self.config.root['endpoint']
@@ -31,8 +33,6 @@ class Management(Service):
 		'''
 		setup service for polling.
 		'''
-		assert self.ctx is not None
-
 		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port)
 
 		self.rep = self.ctx.socket(zmq.REP)
@@ -50,15 +50,20 @@ class Management(Service):
 		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
-	def run(self):
+	def _cleanup(self):
+		self.rep.close()
+		self.pub.close()
+		del self.rep, self.pub
+		super()._cleanup()
 
+	def run(self):
 		pubmsg = dcmsg.MARCO(self.endpoint)
 		pubnext = time.time()
 
-		while True:
-			poller = zmq.Poller()
-			poller.register(self.rep, zmq.POLLIN)
+		poller = zmq.Poller()
+		poller.register(self.rep, zmq.POLLIN)
 
+		while True:
 			if pubnext < time.time():
 				pubmsg.send(self.pub)
 				pubnext = time.time() + self.pubint
@@ -68,9 +73,12 @@ class Management(Service):
 
 			try:
 				items = dict(poller.poll(poller_timer))
-			except:
-				self.logger.debug('exception while polling:', exc_info=True )
-				break
+			except zmq.ZMQError as e:
+				if e.errno == zmq.ETERM:
+					self.logger.debug('received ETERM')
+					break
+				else:
+					raise
 
 			if self.rep in items:
 				try:
@@ -87,8 +95,10 @@ class Management(Service):
 					repmsg.send(self.rep)
 					self.repcnt += 1
 
-			self.logger.debug("%d pubs; %d reqs; %d reps" %
-					(self.pubcnt, self.reqcnt, self.repcnt))
+		# service exiting; return some status info and cleanup
+		self.logger.debug("%d pubs; %d reqs; %d reps" %
+				(self.pubcnt, self.reqcnt, self.repcnt))
+		return self._cleanup()
 
 	def __assign(self, given_endpoint):
 		'''

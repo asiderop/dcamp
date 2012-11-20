@@ -14,10 +14,10 @@ class Node(Service):
 	'''
 
 	def __init__(self,
-			context,
+			pipe,
 			endpoint,
 			topics=None):
-		super().__init__(context)
+		super().__init__(pipe)
 
 		self.endpoint = endpoint
 		self.topics = [] if topics is None else topics
@@ -28,8 +28,6 @@ class Node(Service):
 		'''
 		setup service for polling.
 		'''
-		assert self.ctx is not None
-
 		self.bind_endpoint = "tcp://*:%d" % (self.endpoint.port)
 
 		self.sub = self.ctx.socket(zmq.SUB)
@@ -49,20 +47,29 @@ class Node(Service):
 
 		self.state = BASE
 
-	def run(self):
-		while True:
-			poller = zmq.Poller()
-			poller.register(self.sub, zmq.POLLIN)
+	def _cleanup(self):
+		self.sub.close()
+		if self.req:
+			self.req.close()
+		del self.sub, self.req
+		super()._cleanup()
 
+	def run(self):
+		poller = zmq.Poller()
+		poller.register(self.sub, zmq.POLLIN)
+
+		while True:
 			if JOIN == self.state:
 				assert self.req is not None
-				poller.register(self.req, zmq.POLLIN)
 
 			try:
 				items = dict(poller.poll())
-			except zmq.ZMQError:
-				self.logger.debug('exception while polling:', exc_info=True )
-				break
+			except zmq.ZMQError as e:
+				if e.errno == zmq.ETERM:
+					self.logger.debug('received ETERM')
+					break
+				else:
+					raise
 
 			if self.sub in items:
 				submsg = dcmsg.DCMsg.recv(self.sub)
@@ -71,7 +78,8 @@ class Node(Service):
 
 				if BASE == self.state:
 					self.req = self.ctx.socket(zmq.REQ)
-					self.req.connect("tcp://"+str(submsg.root_endpoint))
+					self.req.connect("tcp://%s" % submsg.root_endpoint)
+					poller.register(self.req, zmq.POLLIN)
 					reqmsg = dcmsg.POLO(self.endpoint)
 					reqmsg.send(self.req)
 					self.reqcnt += 1
@@ -80,11 +88,15 @@ class Node(Service):
 			elif self.req in items:
 				assert self.state == JOIN
 				repmsg = dcmsg.DCMsg.recv(self.req)
-				del(self.req)
+				poller.unregister(self.req)
+				self.req.close()
+				del self.req
 				self.req = None
 				self.repcnt += 1
 				self.state = BASE
 				assert repmsg.name in [b'ASSIGN', b'WTF']
 
-			self.logger.debug("%d subs; %d reqs; %d reps" %
-					(self.subcnt, self.reqcnt, self.repcnt))
+		# service exiting; return some status info and cleanup
+		self.logger.debug("%d subs; %d reqs; %d reps" %
+				(self.subcnt, self.reqcnt, self.repcnt))
+		return self._cleanup()

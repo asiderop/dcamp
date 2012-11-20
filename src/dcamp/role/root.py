@@ -1,4 +1,5 @@
-import logging, zmq
+import logging
+from zhelpers import zpipe
 
 from dcamp.role.role import Role
 from dcamp.service.management import Management
@@ -9,11 +10,14 @@ class Root(Role):
 	'''
 
 	def __init__(self,
-			context,
 			pipe,
 			config):
-		super().__init__(context, pipe)
+		super().__init__(pipe)
 
-		self.services = [
-				Management(self.ctx, config)
-		]
+		# [(service, pipe), ...]
+		self.services = []
+
+		# Management Service
+		s_pipe, s_peer = zpipe(self.ctx) # create control socket pair
+		service = Management(s_peer, config) # create service, passing peer socket
+		self.services.append((service, s_pipe)) # add to our list, saving pipe socket
