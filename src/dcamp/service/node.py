@@ -48,13 +48,17 @@ class Node(Service):
 		self.state = BASE
 
 	def _cleanup(self):
+		# service exiting; return some status info and cleanup
+		self.logger.debug("%d subs; %d reqs; %d reps" %
+				(self.subcnt, self.reqcnt, self.repcnt))
+
 		self.sub.close()
 		if self.req:
 			self.req.close()
 		del self.sub, self.req
 		super()._cleanup()
 
-	def run(self):
+	def _run(self):
 		poller = zmq.Poller()
 		poller.register(self.sub, zmq.POLLIN)
 
@@ -62,14 +66,8 @@ class Node(Service):
 			if JOIN == self.state:
 				assert self.req is not None
 
-			try:
-				items = dict(poller.poll())
-			except zmq.ZMQError as e:
-				if e.errno == zmq.ETERM:
-					self.logger.debug('received ETERM')
-					break
-				else:
-					raise
+			# super class handles exceptions
+			items = dict(poller.poll())
 
 			if self.sub in items:
 				submsg = dcmsg.DCMsg.recv(self.sub)
@@ -96,7 +94,3 @@ class Node(Service):
 				self.state = BASE
 				assert repmsg.name in [b'ASSIGN', b'WTF']
 
-		# service exiting; return some status info and cleanup
-		self.logger.debug("%d subs; %d reqs; %d reps" %
-				(self.subcnt, self.reqcnt, self.repcnt))
-		return self._cleanup()

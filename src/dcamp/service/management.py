@@ -51,12 +51,16 @@ class Management(Service):
 		self.pubcnt = 0
 
 	def _cleanup(self):
+		# service exiting; return some status info and cleanup
+		self.logger.debug("%d pubs; %d reqs; %d reps" %
+				(self.pubcnt, self.reqcnt, self.repcnt))
+
 		self.rep.close()
 		self.pub.close()
 		del self.rep, self.pub
 		super()._cleanup()
 
-	def run(self):
+	def _run(self):
 		pubmsg = dcmsg.MARCO(self.endpoint)
 		pubnext = time.time()
 
@@ -71,14 +75,8 @@ class Management(Service):
 
 			poller_timer = 1e3 * max(0, pubnext - time.time())
 
-			try:
-				items = dict(poller.poll(poller_timer))
-			except zmq.ZMQError as e:
-				if e.errno == zmq.ETERM:
-					self.logger.debug('received ETERM')
-					break
-				else:
-					raise
+			# super class handles exceptions
+			items = dict(poller.poll(poller_timer))
 
 			if self.rep in items:
 				try:
@@ -94,11 +92,6 @@ class Management(Service):
 				if repmsg is not None:
 					repmsg.send(self.rep)
 					self.repcnt += 1
-
-		# service exiting; return some status info and cleanup
-		self.logger.debug("%d pubs; %d reqs; %d reps" %
-				(self.pubcnt, self.reqcnt, self.repcnt))
-		return self._cleanup()
 
 	def __assign(self, given_endpoint):
 		'''

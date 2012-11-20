@@ -15,5 +15,17 @@ class Service(threading.Thread):
 		del self.pipe
 		pass
 
+	def _run(self):
+		raise NotImplemented('subclass must implement _run()')
+
 	def run(self):
-		raise NotImplemented('subclass must implement run()')
+		try:
+			self._run()
+		except zmq.ZMQError as e:
+			if e.errno == zmq.ETERM:
+				self.logger.debug('received ETERM: %s' % self.__class__)
+			else:
+				raise
+
+		# caught ETERM; thread is stopping; cleanup and exit
+		return self._cleanup()
