@@ -1,3 +1,6 @@
+import functools
+
+@functools.total_ordering
 class EndpntSpec(object):
 	'''Class representing an endpoint'''
 
@@ -11,9 +14,9 @@ class EndpntSpec(object):
 	def __repr__(self):
 		return "EndpntSpec(host='%s', port=%s)" % (self.host, self.port)
 	def __eq__(self, given):
-		return self.host == given.host and self.port == given.port
-	def __ne__(self, given):
-		return not self == given
+		return (self.host, self.port) == (given.host, given.port)
+	def __lt__(self, given):
+		return (self.host, self.port) < (given.host, given.port)
 	def __hash__(self):
 		return operator.xor(hash(self.host), hash(self.port))
 
