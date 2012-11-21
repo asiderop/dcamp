@@ -15,10 +15,10 @@ class Base(Role):
 			topics=None):
 		super().__init__(pipe)
 
-		# [(service, pipe), ...]
-		self.services = []
+		# { pipe: service, ...}
+		self.services = {}
 
 		# Node Service
 		s_pipe, s_peer = zpipe(self.ctx) # create control socket pair
 		service = Node(s_peer, address, topics) # create service, passing peer socket
-		self.services.append((service, s_pipe)) # add to our list, saving pipe socket
+		self.services[s_pipe] = service # add to our dict, using pipe socket as key

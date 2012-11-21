@@ -14,10 +14,10 @@ class Root(Role):
 			config):
 		super().__init__(pipe)
 
-		# [(service, pipe), ...]
-		self.services = []
+		# { pipe: service, ...}
+		self.services = {}
 
 		# Management Service
 		s_pipe, s_peer = zpipe(self.ctx) # create control socket pair
 		service = Management(s_peer, config) # create service, passing peer socket
-		self.services.append((service, s_pipe)) # add to our list, saving pipe socket
+		self.services[s_pipe] = service # add to our dict, using pipe socket as key

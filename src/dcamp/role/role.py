@@ -8,12 +8,12 @@ class Role(object):
 		self.ctx = zmq.Context.instance()
 		self.pipe = pipe
 
-		# [(service, pipe), ...]
-		self.services = []
+		# { pipe: service, ...}
+		self.services = {}
 
 	def play(self):
 		# start each service thread
-		for (s, p) in self.services:
+		for s in self.services.values():
 			s.start()
 
 		# @todo: wait for READY message from each service / issue #37
@@ -55,10 +55,10 @@ class Role(object):
 
 		# shared context; will be term()'ed by caller
 
-		for (s, p) in self.services:
+		# close all service sockets
+		for p in self.services:
 			p.close()
-			del p
-			del s
+		del self.services
 
 		# close our own control pipe
 		self.pipe.close()
@@ -66,7 +66,7 @@ class Role(object):
 
 	def _some_alive(self):
 		'''returns True if at least one service of this Role is still running'''
-		for (s, p) in self.services:
+		for s in self.services.values():
 			if s.is_alive:
 				return True
 		return False
