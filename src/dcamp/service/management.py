@@ -27,12 +27,9 @@ class Management(Service):
 		# {group: collector}
 		self.collectors = {}
 
-		self.setup()
+		####
+		# setup service for polling.
 
-	def setup(self):
-		'''
-		setup service for polling.
-		'''
 		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port)
 
 		self.rep = self.ctx.socket(zmq.REP)
@@ -50,6 +47,11 @@ class Management(Service):
 		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
+		self.pubmsg = dcmsg.MARCO(self.endpoint)
+		self.pubnext = time.time()
+
+		self.poller.register(self.rep, zmq.POLLIN)
+
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
 		self.logger.debug("%d pubs; %d reqs; %d reps" %
@@ -60,38 +62,29 @@ class Management(Service):
 		del self.rep, self.pub
 		super()._cleanup()
 
-	def _run(self):
-		pubmsg = dcmsg.MARCO(self.endpoint)
-		pubnext = time.time()
+	def _pre_poll(self):
+		if self.pubnext < time.time():
+			self.pubmsg.send(self.pub)
+			self.pubnext = time.time() + self.pubint
+			self.pubcnt += 1
 
-		poller = zmq.Poller()
-		poller.register(self.rep, zmq.POLLIN)
+		self.poller_timer = 1e3 * max(0, self.pubnext - time.time())
 
-		while True:
-			if pubnext < time.time():
-				pubmsg.send(self.pub)
-				pubnext = time.time() + self.pubint
-				self.pubcnt += 1
+	def _post_poll(self, items):
+		if self.rep in items:
+			try:
+				reqmsg = dcmsg.DCMsg.recv(self.rep)
+				self.reqcnt += 1
+				assert reqmsg.name == b'POLO'
+				repmsg = self.__assign(reqmsg.base_endpoint)
+			except ValueError as e:
+				errstr = 'invalid base endpoint received: %s' % e
+				self.logger.error(errstr)
+				repmsg = dcmsg.WTF(0, errstr)
 
-			poller_timer = 1e3 * max(0, pubnext - time.time())
-
-			# super class handles exceptions
-			items = dict(poller.poll(poller_timer))
-
-			if self.rep in items:
-				try:
-					reqmsg = dcmsg.DCMsg.recv(self.rep)
-					self.reqcnt += 1
-					assert reqmsg.name == b'POLO'
-					repmsg = self.__assign(reqmsg.base_endpoint)
-				except ValueError as e:
-					errstr = 'invalid base endpoint received: %s' % e
-					self.logger.error(errstr)
-					repmsg = dcmsg.WTF(0, errstr)
-
-				if repmsg is not None:
-					repmsg.send(self.rep)
-					self.repcnt += 1
+			if repmsg is not None:
+				repmsg.send(self.rep)
+				self.repcnt += 1
 
 	def __assign(self, given_endpoint):
 		'''
@@ -124,6 +117,6 @@ class Management(Service):
 			return None
 
 		# create reply message
-		repmsg = dcmsg.ASSIGN(parent_endpoint)
-		repmsg['level'] = level
-		return repmsg
+		msg = dcmsg.ASSIGN(parent_endpoint)
+		msg['level'] = level
+		return msg

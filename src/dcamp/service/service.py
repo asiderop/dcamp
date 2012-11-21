@@ -9,23 +9,33 @@ class Service(threading.Thread):
 		self.ctx = zmq.Context.instance()
 		self.pipe = pipe
 
+		self.poller = zmq.Poller()
+		self.poller_timer = None
+
 	def _cleanup(self):
 		# shared context; will be term()'ed by caller
 		self.pipe.close()
 		del self.pipe
 		pass
 
-	def _run(self):
-		raise NotImplemented('subclass must implement _run()')
+	def _pre_poll(self):
+		pass
+	def _post_poll(self, items):
+		raise NotImplemented('subclass must implement _post_poll()')
 
 	def run(self):
-		try:
-			self._run()
-		except zmq.ZMQError as e:
-			if e.errno == zmq.ETERM:
-				self.logger.debug('received ETERM: %s' % self.__class__)
-			else:
-				raise
+		while True:
+			try:
+				self._pre_poll()
+				items = dict(self.poller.poll(self.poller_timer))
+				self._post_poll(items)
+
+			except zmq.ZMQError as e:
+				if e.errno == zmq.ETERM:
+					self.logger.debug('received ETERM: %s' % self.__class__)
+					break
+				else:
+					raise
 
 		# caught ETERM; thread is stopping; cleanup and exit
 		return self._cleanup()

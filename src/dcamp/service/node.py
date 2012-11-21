@@ -22,12 +22,9 @@ class Node(Service):
 		self.endpoint = endpoint
 		self.topics = [] if topics is None else topics
 
-		self.setup()
+		####
+		# setup service for polling.
 
-	def setup(self):
-		'''
-		setup service for polling.
-		'''
 		self.bind_endpoint = "tcp://*:%d" % (self.endpoint.port)
 
 		self.sub = self.ctx.socket(zmq.SUB)
@@ -47,6 +44,8 @@ class Node(Service):
 
 		self.state = BASE
 
+		self.poller.register(self.sub, zmq.POLLIN)
+
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
 		self.logger.debug("%d subs; %d reqs; %d reps" %
@@ -58,39 +57,28 @@ class Node(Service):
 		del self.sub, self.req
 		super()._cleanup()
 
-	def _run(self):
-		poller = zmq.Poller()
-		poller.register(self.sub, zmq.POLLIN)
+	def _post_poll(self, items):
+		if self.sub in items:
+			submsg = dcmsg.DCMsg.recv(self.sub)
+			self.subcnt += 1
+			assert submsg.name == b'MARCO'
 
-		while True:
-			if JOIN == self.state:
-				assert self.req is not None
+			if BASE == self.state:
+				self.req = self.ctx.socket(zmq.REQ)
+				self.req.connect("tcp://%s" % submsg.root_endpoint)
+				self.poller.register(self.req, zmq.POLLIN)
+				reqmsg = dcmsg.POLO(self.endpoint)
+				reqmsg.send(self.req)
+				self.reqcnt += 1
+				self.state = JOIN
 
-			# super class handles exceptions
-			items = dict(poller.poll())
-
-			if self.sub in items:
-				submsg = dcmsg.DCMsg.recv(self.sub)
-				self.subcnt += 1
-				assert submsg.name == b'MARCO'
-
-				if BASE == self.state:
-					self.req = self.ctx.socket(zmq.REQ)
-					self.req.connect("tcp://%s" % submsg.root_endpoint)
-					poller.register(self.req, zmq.POLLIN)
-					reqmsg = dcmsg.POLO(self.endpoint)
-					reqmsg.send(self.req)
-					self.reqcnt += 1
-					self.state = JOIN
-
-			elif self.req in items:
-				assert self.state == JOIN
-				repmsg = dcmsg.DCMsg.recv(self.req)
-				poller.unregister(self.req)
-				self.req.close()
-				del self.req
-				self.req = None
-				self.repcnt += 1
-				self.state = BASE
-				assert repmsg.name in [b'ASSIGN', b'WTF']
-
+		elif self.req in items:
+			assert self.state == JOIN
+			repmsg = dcmsg.DCMsg.recv(self.req)
+			self.poller.unregister(self.req)
+			self.req.close()
+			del self.req
+			self.req = None
+			self.repcnt += 1
+			self.state = BASE
+			assert repmsg.name in [b'ASSIGN', b'WTF']
