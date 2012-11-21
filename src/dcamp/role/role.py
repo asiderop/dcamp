@@ -1,12 +1,17 @@
 import logging, zmq
 
+from dcamp.data import Runnable
+
+@Runnable
 class Role(object):
 	logger = logging.getLogger('dcamp.role')
+
+	MAX_SERVICE_STOPS = 5
 
 	def __init__(self,
 			pipe):
 		self.ctx = zmq.Context.instance()
-		self.pipe = pipe
+		self._pipe = pipe
 
 		# { pipe: service, ...}
 		self.services = {}
@@ -18,28 +23,33 @@ class Role(object):
 
 		# @todo: wait for READY message from each service / issue #37
 
+		self.run_state()
 		self.logger.debug('waiting for control commands')
+
 		# listen for control commands from caller
-		while True:
+		while self.is_running:
 			try:
-				msg = self.pipe.recv_string()
+				msg = self._pipe.recv_string()
 
 				if ('STOP' == msg):
-					self.pipe.send_string('OKAY')
+					self._pipe.send_string('OKAY')
 					self.logger.debug('received STOP control command')
+					self.stop_state()
 					break
 				else:
-					self.pipe.send_string('WTF')
+					self._pipe.send_string('WTF')
 					self.logger.error('unknown control command: %s' % msg)
 
 			except zmq.ZMQError as e:
 				if e.errno == zmq.ETERM:
 					self.logger.debug('received ETERM')
+					self.error_state()
 					break
 				else:
 					raise
 			except KeyboardInterrupt: # only for roles played by dcamp.App
 				self.logger.debug('received KeyboardInterrupt')
+				self.stop_state()
 				break
 
 		# role is exiting; cleanup
@@ -50,8 +60,10 @@ class Role(object):
 		pass
 
 	def _cleanup(self):
-		# try to stop all of our services
-		self._stop()
+		# stop our services cleanly (if we can)
+		if not self.is_errored:
+			# @todo: this might raise an exception
+			self._stop()
 
 		# shared context; will be term()'ed by caller
 
@@ -61,8 +73,8 @@ class Role(object):
 		del self.services
 
 		# close our own control pipe
-		self.pipe.close()
-		del self.pipe
+		self._pipe.close()
+		del self._pipe
 
 	def _some_alive(self):
 		'''returns True if at least one service of this Role is still running'''
