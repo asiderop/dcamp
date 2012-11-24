@@ -11,17 +11,19 @@ class Service(threading.Thread):
 		super().__init__()
 		self.ctx = zmq.Context.instance()
 		self._pipe = pipe
+		#self._pipe.linger = -1
 
 		self.poller = zmq.Poller()
 		self.poller_timer = None
 
-		self.poller.register(self._pipe)
+		self.poller.register(self._pipe, zmq.POLLIN)
 
 	def _cleanup(self):
 		# tell role we're done (if we can)
 		if not self.is_errored:
 			# @todo: this might raise an exception
 			self._pipe.send_string('STOPPED')
+			self.logger.debug('sent STOPPED control reply')
 
 		# shared context; will be term()'ed by caller
 		self._pipe.close()
@@ -39,7 +41,6 @@ class Service(threading.Thread):
 		msg = self._pipe.recv_string()
 
 		if ('STOP' == msg):
-			#self._pipe.send_string('OKAY')
 			self.logger.debug('received STOP control command')
 			self.stop_state()
 		else:

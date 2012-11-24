@@ -3,15 +3,15 @@ import logging, time, zmq
 import dcamp.dcmsg as dcmsg
 from dcamp.service.service import Service
 
-BASE = 0
-JOIN = 1
-
 class Node(Service):
 	'''
 	Node Service -- provides functionality for boot strapping into dCAMP system.
 
 	@todo: need to timeout if the req fails / issue #28
 	'''
+
+	BASE = 0
+	JOIN = 1
 
 	def __init__(self,
 			pipe,
@@ -42,7 +42,7 @@ class Node(Service):
 		self.reqcnt = 0
 		self.repcnt = 0
 
-		self.state = BASE
+		self.state = Node.BASE
 
 		self.poller.register(self.sub, zmq.POLLIN)
 
@@ -63,22 +63,22 @@ class Node(Service):
 			self.subcnt += 1
 			assert submsg.name == b'MARCO'
 
-			if BASE == self.state:
+			if Node.BASE == self.state:
 				self.req = self.ctx.socket(zmq.REQ)
 				self.req.connect("tcp://%s" % submsg.root_endpoint)
 				self.poller.register(self.req, zmq.POLLIN)
 				reqmsg = dcmsg.POLO(self.endpoint)
 				reqmsg.send(self.req)
 				self.reqcnt += 1
-				self.state = JOIN
+				self.state = Node.JOIN
 
 		elif self.req in items:
-			assert self.state == JOIN
+			assert self.state == Node.JOIN
 			repmsg = dcmsg.DCMsg.recv(self.req)
 			self.poller.unregister(self.req)
 			self.req.close()
 			del self.req
 			self.req = None
 			self.repcnt += 1
-			self.state = BASE
+			self.state = Node.BASE
 			assert repmsg.name in [b'ASSIGN', b'WTF']

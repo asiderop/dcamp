@@ -56,8 +56,37 @@ class Role(object):
 		return self._cleanup()
 
 	def _stop(self):
-		# @todo: send stop signal to all services and join / issue #36
-		pass
+		'''try to stop all of this Role's services'''
+		attempts = 0
+
+		# send commands
+		poller = zmq.Poller()
+		for p in self.services:
+			p.send_string('STOP')
+			poller.register(p, zmq.POLLIN)
+
+		while self._some_alive() and attempts < self.MAX_SERVICE_STOPS:
+			attempts += 1
+
+			# poll for any replies
+			items = dict(poller.poll(100)) # wait 100ms for messages
+
+			# mark responding services as stopped
+			alive = list(self.services.keys()) # make copy of key list
+			for p in alive:
+				if p in items:
+					reply = p.recv_string()
+					if 'STOPPED' == reply:
+						self.logger.debug('received STOPPED control reply')
+						poller.unregister(p)
+						p.close()
+						del(self.services[p])
+					else:
+						self.logger.debug('unknown control reply: %s' % reply)
+
+			# send stop command to remaining services
+			for p in self.services:
+				p.send_string('STOP')
 
 	def _cleanup(self):
 		# stop our services cleanly (if we can)
