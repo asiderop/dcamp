@@ -91,7 +91,7 @@ class Role(object):
 	def _cleanup(self):
 		# stop our services cleanly (if we can)
 		if not self.is_errored:
-			# @todo: this might raise an exception
+			# @todo: this might raise an exception / issue #38
 			self._stop()
 
 		# shared context; will be term()'ed by caller

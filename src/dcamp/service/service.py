@@ -21,7 +21,7 @@ class Service(threading.Thread):
 	def _cleanup(self):
 		# tell role we're done (if we can)
 		if not self.is_errored:
-			# @todo: this might raise an exception
+			# @todo: this might raise an exception / issue #38
 			self._pipe.send_string('STOPPED')
 			self.logger.debug('sent STOPPED control reply')
 

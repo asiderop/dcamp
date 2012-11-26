@@ -99,6 +99,7 @@ class Management(Service):
 		level = ''
 
 		# lookup node group
+		# @todo need to keep track of nodes which have already POLO'ed / issue #39
 		for (group, spec) in self.config.groups.items():
 			if given_endpoint in spec.endpoints:
 				self.logger.debug('found base group: %s' % group)
