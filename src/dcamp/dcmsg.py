@@ -30,6 +30,14 @@ class DCMsg(object):
 	def __iter__(self):
 		return iter(self.frames)
 
+	def __str__(self):
+		result = ''
+		count = 0
+		for f in self.frames:
+			result += 'Frame %d: %s\n' % (count, f.decode())
+			count += 1
+		return result[:len(result)-1]
+
 	@classmethod
 	def recv(cls, socket):
 		return cls.from_msg(socket.recv_multipart())

@@ -16,6 +16,9 @@ class Role(object):
 		# { pipe: service, ...}
 		self.services = {}
 
+	def __str__(self):
+		return self.__class__.__name__
+
 	def play(self):
 		# start each service thread
 		for s in self.services.values():

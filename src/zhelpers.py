@@ -32,7 +32,7 @@ def dump(msg_or_socket):
                 break
         if is_text:
             # print only if ascii text
-            print(part)
+            print(part.decode())
         else:
             # not text, print hex
             print(binascii.hexlify(part))
