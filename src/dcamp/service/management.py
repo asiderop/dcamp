@@ -2,6 +2,7 @@ import logging, time, zmq
 
 import dcamp.dcmsg as dcmsg
 from dcamp.service.service import Service
+from dcamp.data import EndpntSpec
 
 class Management(Service):
 	'''
@@ -30,7 +31,7 @@ class Management(Service):
 		####
 		# setup service for polling.
 
-		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port)
+		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port(EndpntSpec.ROOT_DISCOVERY))
 
 		self.rep = self.ctx.socket(zmq.REP)
 		self.rep.bind(self.bind_endpoint)
@@ -38,7 +39,7 @@ class Management(Service):
 		self.pub = self.ctx.socket(zmq.PUB)
 
 		for n in self.nodes:
-			base_endpoint = "tcp://%s:%d" % (n.host, n.port)
+			base_endpoint = "tcp://%s:%d" % (n.host, n.port())
 			self.pub.connect(base_endpoint)
 
 		self.reqcnt = 0
@@ -114,7 +115,7 @@ class Management(Service):
 		if parent_endpoint is None:
 			# silently ignore unknown base endpoints
 			self.logger.debug('no base group found for %s' % str(given_endpoint))
-			# XXX: cannot return None--using strict REQ/REP pattern / issue #26
+			# @todo: cannot return None--using strict REQ/REP pattern / issue #26
 			return None
 
 		# create reply message

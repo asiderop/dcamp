@@ -25,7 +25,7 @@ class Node(Service):
 		####
 		# setup service for polling.
 
-		self.bind_endpoint = "tcp://*:%d" % (self.endpoint.port)
+		self.bind_endpoint = "tcp://*:%d" % (self.endpoint.port())
 
 		self.sub = self.ctx.socket(zmq.SUB)
 

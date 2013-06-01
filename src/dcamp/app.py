@@ -43,11 +43,16 @@ class App:
 		# 1) MARCO "root" base endpoint (multiple times?)
 		# 2) if POLO'ed, ASSIGN
 
+		# @todo:
+		# try to communicate with Root control socket
+		#    if success, warn and return
+		#    if error, continue
+
 		# @todo: this can raise exceptions
 
 		pub = self.ctx.socket(zmq.PUB)
 		base = config.root['endpoint']
-		connect_str = "tcp://%s:%d" % (base.host, base.port)
+		connect_str = "tcp://%s:%d" % (base.host, base.port_base)
 		pub.connect(connect_str)
 
 		rep = self.ctx.socket(zmq.REP)

@@ -6,11 +6,12 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.config import DCParsingError, DCConfig, str_to_ep
+from dcamp.data import EndpntSpec
+from dcamp.config import DCParsingError, DCConfig
 
 def Address(string):
 	try:
-		return str_to_ep(string)
+		return EndpntSpec.from_str(string)
 	except DCParsingError as e:
 		raise ArgumentTypeError(e)
 
@@ -20,16 +21,15 @@ def main():
 	parser.add_argument('--version', action='version', version='%(prog)s 0.1', help='show %(prog)s version and exit')
 
 	# logging output arguments
-	parser_logging = ArgumentParser(add_help=False)
-	parser_logging.add_argument("-v", "--verbose",
+	parser.add_argument("-v", "--verbose",
 			dest="verbose",
 			help="make %(prog)s verbose",
 			action="store_true")
-	parser_logging.add_argument("-d", "--debug",
+	parser.add_argument("-d", "--debug",
 			dest="debug",
 			help="make %(prog)s uber verbose",
 			action="store_true")
-	parser_logging.set_defaults(verbose=False, debug=False)
+	parser.set_defaults(verbose=False, debug=False)
 
 	# configuration file
 	parser_file = ArgumentParser(add_help=False)
@@ -40,24 +40,21 @@ def main():
 			metavar="FILE",
 			required=True)
 
-	subparsers = parser.add_subparsers(title='dcamp commands')
+	subparsers = parser.add_subparsers(title='dcamp commands', dest='command')
 
 	# root command
-	parser_root = subparsers.add_parser('root',
-			parents=[parser_file, parser_logging],
+	parser_root = subparsers.add_parser('root', parents=[parser_file],
 			help='run root command')
 	parser_root.set_defaults(func=do_app, cmd='root')
 
 	# base command
-	parser_base = subparsers.add_parser('base',
-			parents=[parser_logging],
+	parser_base = subparsers.add_parser('base', parents=[],
 			help='run base command')
 	parser_base.add_argument('-a', '--address', dest='address', type=Address, required=True)
 	parser_base.set_defaults(func=do_app, cmd='base')
 
 	# config command
-	parser_config = subparsers.add_parser('config',
-			parents=[parser_file, parser_logging],
+	parser_config = subparsers.add_parser('config', parents=[parser_file],
 			help='run actions on the given %(prog)s config file')
 	config_actions = parser_config.add_mutually_exclusive_group(required=True)
 	config_actions.add_argument('--validate', dest='validate', action='store_true')
@@ -74,6 +71,10 @@ def main():
 	if (args.debug): # not an elif--always set debug level if given
 		logger.setLevel(logging.DEBUG)
 		logger.debug('set logging level to debug')
+
+	if args.command is None:
+		parser.print_usage()
+		exit(1)
 
 	exit(args.func(args))
 
@@ -93,7 +94,7 @@ def do_config(args):
 		return 0
 	elif args.print:
 		config.read_file(args.configfile)
-		for (k, v) in config.kvdict.items():
+		for (k, v) in sorted(config.kvdict.items()):
 			print(k, '=', v)
 		return 0
 	else:

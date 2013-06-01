@@ -5,7 +5,6 @@ from dcamp.data import EndpntSpec
 
 MetricSpec = namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])
 FilterSpec = namedtuple('FilterSpec', ['action', 'match'])
-
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
 # helper methods
@@ -23,9 +22,6 @@ def to_seconds(given):
 		return int(given[:len(given)-1])
 	else:
 		raise DCParsingError('invalid time unit given--valid units: s')
-
-def str_to_ep(given):
-	return EndpntSpec.from_str(given)
 
 class DCParsingError(configparser.Error):
 	pass
@@ -86,7 +82,7 @@ class DCConfig(configparser.ConfigParser):
 		assert self.isvalid
 
 		result = {}
-		result['endpoint'] = str_to_ep(self['root']['endpoint'])
+		result['endpoint'] = EndpntSpec.from_str(self['root']['endpoint'])
 		result['heartbeat'] = to_seconds(self['root']['heartbeat'])
 		self.root = result
 
@@ -125,7 +121,7 @@ class DCConfig(configparser.ConfigParser):
 					filters.append(FilterSpec(key[0], key[1:]))
 				else:
 					# create endpoint spec
-					endpoints.append(str_to_ep(key))
+					endpoints.append(EndpntSpec.from_str(key))
 
 			result[name] = GroupSpec(endpoints, filters, metrics)
 
@@ -198,12 +194,16 @@ class DCConfig(configparser.ConfigParser):
 		self.__num_errors = 0
 		self.__num_warns = 0
 
+		# { host : [ port ] }
+		endpoints = {}
+
 		# check root specification
 		if 'root' not in self:
 			self.__eprint("missing [root] section")
 		else:
 			try:
-				str_to_ep(self['root']['endpoint'])
+				ep = EndpntSpec.from_str(self['root']['endpoint'])
+				endpoints[ep.host] = [ep.port_base]
 			except ValueError as e:
 				self.__eprint('[root]endpoint', e)
 			except KeyError as e:
@@ -235,13 +235,25 @@ class DCConfig(configparser.ConfigParser):
 					continue
 				try:
 					nodecnt += 1
-					str_to_ep(key)
+					ep = EndpntSpec.from_str(key)
+					if ep.host in endpoints:
+						endpoints[ep.host].append(ep.port_base)
+					else:
+						endpoints[ep.host] = [ep.port_base]
 				except ValueError as e:
 					self.__eprint('[%s]%s' % (group, key), e)
 
 			# verify group has at least one endpoint
 			if nodecnt == 0:
 				self.__eprint('[%s] section contains no nodes or subnets' % (group))
+
+		# ensure no overlapping ports
+		for (host, ports) in endpoints.items():
+			prev = ports[0];
+			for p in sorted(ports[1:]):
+				if (prev + 29) >= p:
+					self.__eprint('endpoint port overlap on host %s: %d and %d' % (host, prev, p))
+				prev = p
 
 		# warn if some metric specs not used
 		unused_metrics = set(self.metric_sections.keys()) - used_metrics
