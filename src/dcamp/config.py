@@ -1,7 +1,7 @@
 import logging, configparser
 from collections import namedtuple
 
-from dcamp.data import EndpntSpec
+from dcamp.data.config import EndpntSpec
 
 MetricSpec = namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])
 FilterSpec = namedtuple('FilterSpec', ['action', 'match'])

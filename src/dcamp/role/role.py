@@ -1,6 +1,6 @@
 import logging, zmq
 
-from dcamp.data import Runnable
+from dcamp.util.decorator import Runnable
 
 @Runnable
 class Role(object):

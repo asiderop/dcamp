@@ -6,7 +6,7 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.data import EndpntSpec
+from dcamp.data.config import EndpntSpec
 from dcamp.config import DCParsingError, DCConfig
 
 def Address(string):
@@ -89,13 +89,13 @@ def do_config(args):
 		try:
 			config.validate(args.configfile)
 		except DCParsingError as e:
-			print('\n', e, '\n')
+			print('\n'+ e +'\n')
 			return -1
 		return 0
 	elif args.print:
 		config.read_file(args.configfile)
 		for (k, v) in sorted(config.kvdict.items()):
-			print(k, '=', v)
+			print(k +' = '+ str(v))
 		return 0
 	else:
 		raise RuntimeError('unknown config action given')

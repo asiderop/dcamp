@@ -2,7 +2,7 @@
 
 from unittest import TestCase
 
-from dcamp.data import EndpntSpec
+from dcamp.data.config import EndpntSpec
 
 class TestEndpntSpec(TestCase):
 	def setUp(self):

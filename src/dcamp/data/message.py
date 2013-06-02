@@ -6,7 +6,7 @@ import struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as json
 
-from dcamp.data import EndpntSpec
+from dcamp.data.config import EndpntSpec
 
 class DCMsg(object):
 	'''
