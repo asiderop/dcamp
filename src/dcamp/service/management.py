@@ -33,14 +33,14 @@ class Management(Service):
 
 		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port(EndpntSpec.ROOT_DISCOVERY))
 
-		self.rep = self.ctx.socket(zmq.REP)
-		self.rep.bind(self.bind_endpoint)
+		self.join_socket = self.ctx.socket(zmq.REP)
+		self.join_socket.bind(self.bind_endpoint)
 
-		self.pub = self.ctx.socket(zmq.PUB)
+		self.disc_socket = self.ctx.socket(zmq.PUB)
 
 		for n in self.nodes:
 			base_endpoint = "tcp://%s:%d" % (n.host, n.port())
-			self.pub.connect(base_endpoint)
+			self.disc_socket.connect(base_endpoint)
 
 		self.reqcnt = 0
 		self.repcnt = 0
@@ -51,30 +51,30 @@ class Management(Service):
 		self.pubmsg = dcmsg.MARCO(self.endpoint)
 		self.pubnext = time.time()
 
-		self.poller.register(self.rep, zmq.POLLIN)
+		self.poller.register(self.join_socket, zmq.POLLIN)
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
 		self.logger.debug("%d pubs; %d reqs; %d reps" %
 				(self.pubcnt, self.reqcnt, self.repcnt))
 
-		self.rep.close()
-		self.pub.close()
-		del self.rep, self.pub
+		self.join_socket.close()
+		self.disc_socket.close()
+		del self.join_socket, self.disc_socket
 		super()._cleanup()
 
 	def _pre_poll(self):
 		if self.pubnext < time.time():
-			self.pubmsg.send(self.pub)
+			self.pubmsg.send(self.disc_socket)
 			self.pubnext = time.time() + self.pubint
 			self.pubcnt += 1
 
 		self.poller_timer = 1e3 * max(0, self.pubnext - time.time())
 
 	def _post_poll(self, items):
-		if self.rep in items:
+		if self.join_socket in items:
 			try:
-				reqmsg = dcmsg.DCMsg.recv(self.rep)
+				reqmsg = dcmsg.DCMsg.recv(self.join_socket)
 				self.reqcnt += 1
 				assert reqmsg.name == b'POLO'
 				repmsg = self.__assign(reqmsg.base_endpoint)
@@ -84,7 +84,7 @@ class Management(Service):
 				repmsg = dcmsg.WTF(0, errstr)
 
 			if repmsg is not None:
-				repmsg.send(self.rep)
+				repmsg.send(self.join_socket)
 				self.repcnt += 1
 
 	def __assign(self, given_endpoint):

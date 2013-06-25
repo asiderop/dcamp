@@ -23,12 +23,12 @@ class App:
 		self.args = args
 
 	def exec(self):
-		# issue #31
-		# if base role command:
-		#    start Base role, erroring if already running
-		# if root command:
-		#    execute command, erroring if base role not running on local node
-
+		'''
+		if base role command:
+		    start Base role, erroring if already running
+		if root command:
+		    execute command, erroring if base role not running
+		'''
 		result = 0
 		if 'base' == self.args.cmd:
 			result = self._exec_base()
@@ -44,11 +44,6 @@ class App:
 
 		# 1) MARCO "root" base endpoint (multiple times?)
 		# 2) if POLO'ed, ASSIGN
-
-		# @todo:
-		# try to communicate with Root control socket
-		#    if success, warn and return
-		#    if error, continue
 
 		# @todo: this can raise exceptions
 
