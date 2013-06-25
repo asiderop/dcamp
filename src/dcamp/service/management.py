@@ -15,7 +15,7 @@ class Management(Service):
 	def __init__(self,
 			pipe,
 			config):
-		super().__init__(pipe)
+		Service.__init__(self, pipe)
 
 		self.config = config
 		self.endpoint = self.config.root['endpoint']

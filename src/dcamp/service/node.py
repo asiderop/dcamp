@@ -17,7 +17,7 @@ class Node(Service):
 			pipe,
 			endpoint,
 			topics=None):
-		super().__init__(pipe)
+		Service.__init__(self, pipe)
 
 		self.endpoint = endpoint
 		self.topics = [] if topics is None else topics

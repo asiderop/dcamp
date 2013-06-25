@@ -1,4 +1,5 @@
 import logging, zmq
+from zhelpers import zpipe
 
 from dcamp.util.decorator import Runnable
 
@@ -6,23 +7,33 @@ from dcamp.util.decorator import Runnable
 class Role(object):
 	logger = logging.getLogger('dcamp.role')
 
-	MAX_SERVICE_STOPS = 5
+	MAX_SERVICE_STOP_ATTEMPTS = 5
 
 	def __init__(self,
 			pipe):
 		self.ctx = zmq.Context.instance()
-		self._pipe = pipe
+		self.__control_pipe = pipe
 
 		# { pipe: service, ...}
-		self.services = {}
+		self.__services = {}
 
 	def __str__(self):
 		return self.__class__.__name__
 
+	def __send_control(self, message):
+		self.__control_pipe.send_string(message)
+	def __recv_control(self):
+		return self.__control_pipe.recv_string()
+
+	def _add_service(self, ServiceClass, *args, **kwargs):
+		pipe, peer = zpipe(self.ctx) # create control socket pair
+		service = ServiceClass(peer, *args, **kwargs) # create service, passing peer socket
+		self.__services[pipe] = service # add to our dict, using pipe socket as key
+
 	def play(self):
 		# start each service thread
-		for s in self.services.values():
-			s.start()
+		for service in self.__services.values():
+			service.start()
 
 		# @todo: wait for READY message from each service / issue #37
 
@@ -32,15 +43,15 @@ class Role(object):
 		# listen for control commands from caller
 		while self.is_running:
 			try:
-				msg = self._pipe.recv_string()
+				msg = self.__recv_control()
 
 				if ('STOP' == msg):
-					self._pipe.send_string('OKAY')
+					self.__send_control('OKAY')
 					self.logger.debug('received STOP control command')
 					self.stop_state()
 					break
 				else:
-					self._pipe.send_string('WTF')
+					self.__send_control('WTF')
 					self.logger.error('unknown control command: %s' % msg)
 
 			except zmq.ZMQError as e:
@@ -56,61 +67,61 @@ class Role(object):
 				break
 
 		# role is exiting; cleanup
-		return self._cleanup()
+		return self.__cleanup()
 
-	def _stop(self):
+	def __stop(self):
 		'''try to stop all of this Role's services'''
 		attempts = 0
 
 		# send commands
 		poller = zmq.Poller()
-		for p in self.services:
-			p.send_string('STOP')
-			poller.register(p, zmq.POLLIN)
+		for pipe in self.__services:
+			pipe.send_string('STOP')
+			poller.register(pipe, zmq.POLLIN)
 
-		while self._some_alive() and attempts < self.MAX_SERVICE_STOPS:
+		while self.__some_alive() and attempts < self.MAX_SERVICE_STOP_ATTEMPTS:
 			attempts += 1
 
 			# poll for any replies
 			items = dict(poller.poll(100)) # wait 100ms for messages
 
 			# mark responding services as stopped
-			alive = list(self.services.keys()) # make copy of key list
-			for p in alive:
-				if p in items:
-					reply = p.recv_string()
+			alive = self.__services.keys()[:] # make copy of key list
+			for pipe in alive:
+				if pipe in items:
+					reply = pipe.recv_string()
 					if 'STOPPED' == reply:
 						self.logger.debug('received STOPPED control reply')
-						poller.unregister(p)
-						p.close()
-						del(self.services[p])
+						poller.unregister(pipe)
+						pipe.close()
+						del(self.__services[pipe])
 					else:
 						self.logger.debug('unknown control reply: %s' % reply)
 
 			# send stop command to remaining services
-			for p in self.services:
-				p.send_string('STOP')
+			for pipe in self.__services:
+				pipe.send_string('STOP')
 
-	def _cleanup(self):
+	def __cleanup(self):
 		# stop our services cleanly (if we can)
 		if not self.is_errored:
 			# @todo: this might raise an exception / issue #38
-			self._stop()
+			self.__stop()
 
 		# shared context; will be term()'ed by caller
 
 		# close all service sockets
-		for p in self.services:
-			p.close()
-		del self.services
+		for pipe in self.__services:
+			pipe.close()
+		del self.__services
 
 		# close our own control pipe
-		self._pipe.close()
-		del self._pipe
+		self.__control_pipe.close()
+		del self.__control_pipe
 
-	def _some_alive(self):
+	def __some_alive(self):
 		'''returns True if at least one service of this Role is still running'''
-		for s in self.services.values():
-			if s.is_alive:
+		for service in self.__services.values():
+			if service.is_alive:
 				return True
 		return False

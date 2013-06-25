@@ -1,5 +1,4 @@
 import logging
-from zhelpers import zpipe
 
 from dcamp.role.role import Role
 from dcamp.service.management import Management
@@ -12,12 +11,7 @@ class Root(Role):
 	def __init__(self,
 			pipe,
 			config):
-		super().__init__(pipe)
+		Role.__init__(self, pipe)
 
-		# { pipe: service, ...}
-		self.services = {}
-
-		# Management Service
-		s_pipe, s_peer = zpipe(self.ctx) # create control socket pair
-		service = Management(s_peer, config) # create service, passing peer socket
-		self.services[s_pipe] = service # add to our dict, using pipe socket as key
+		# add Management Service
+		self._add_service(Management, config)

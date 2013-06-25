@@ -29,12 +29,14 @@ class App:
 		# if root command:
 		#    execute command, erroring if base role not running on local node
 
-		if 'root' == self.args.cmd:
-			self._exec_root()
-		elif 'base' == self.args.cmd:
-			self._exec_base()
+		result = 0
+		if 'base' == self.args.cmd:
+			result = self._exec_base()
+		elif 'root' == self.args.cmd:
+			result = self._exec_root()
 
 		self.ctx.term()
+		exit(result)
 
 	def _exec_root(self):
 		config = DCConfig()
@@ -51,8 +53,8 @@ class App:
 		# @todo: this can raise exceptions
 
 		pub = self.ctx.socket(zmq.PUB)
-		base = config.root['endpoint']
-		connect_str = "tcp://%s:%d" % (base.host, base.port_base)
+		root = config.root['endpoint']
+		connect_str = "tcp://%s:%d" % (root.host, root.port_base)
 		pub.connect(connect_str)
 
 		rep = self.ctx.socket(zmq.REP)
@@ -70,12 +72,12 @@ class App:
 				break
 
 		if None == reqmsg:
-			print('Unable to contact base node at root address: %s' % base)
+			print('Unable to contact base node at root address: %s' % root)
 			print('Is the base node running?')
 			return -1
 
 		assert(b'POLO' == reqmsg.name)
-		repmsg = dcmsg.ASSIGN(base)
+		repmsg = dcmsg.ASSIGN(root)
 		repmsg['level'] = 'root'
 		repmsg['config-file'] = self.args.configfile.name
 
