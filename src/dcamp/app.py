@@ -7,10 +7,9 @@ import zmq
 from zhelpers import zpipe
 
 import dcamp.data.message as dcmsg
-from dcamp.data.config import EndpntSpec
+from dcamp.data.config import EndpntSpec, DCConfig
 from dcamp.role.root import Root
 from dcamp.role.base import Base
-from dcamp.config import DCConfig
 
 class App:
 	'''
@@ -49,7 +48,7 @@ class App:
 
 		pub = self.ctx.socket(zmq.PUB)
 		root = config.root['endpoint']
-		connect_str = "tcp://%s:%d" % (root.host, root.port_base)
+		connect_str = "tcp://%s:%d" % (root.host, root.port())
 		pub.connect(connect_str)
 
 		rep = self.ctx.socket(zmq.REP)

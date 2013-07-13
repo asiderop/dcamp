@@ -86,7 +86,7 @@ class Role(object):
 			items = dict(poller.poll(100)) # wait 100ms for messages
 
 			# mark responding services as stopped
-			alive = self.__services.keys()[:] # make copy of key list
+			alive = list(self.__services.keys()) # make copy of key list
 			for pipe in alive:
 				if pipe in items:
 					reply = pipe.recv_string()

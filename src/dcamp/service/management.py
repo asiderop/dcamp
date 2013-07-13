@@ -31,11 +31,11 @@ class Management(Service):
 		####
 		# setup service for polling.
 
-		self.bind_endpoint = 'tcp://*:%d' % (self.endpoint.port(EndpntSpec.ROOT_DISCOVERY))
-
+		# we receive join requests on this socket
 		self.join_socket = self.ctx.socket(zmq.REP)
-		self.join_socket.bind(self.bind_endpoint)
+		self.join_socket.bind('tcp://*:%d' % (self.endpoint.port(EndpntSpec.TOPO_JOIN)))
 
+		# we send topo discovery messages on this socket
 		self.disc_socket = self.ctx.socket(zmq.PUB)
 
 		for n in self.nodes:

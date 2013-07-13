@@ -5,7 +5,7 @@ from zhelpers import zpipe
 import dcamp.data.message as dcmsg
 from dcamp.service.service import Service
 from dcamp.role.root import Root
-from dcamp.config import DCConfig
+from dcamp.data.config import DCConfig
 
 class Node(Service):
 	'''

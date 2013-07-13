@@ -19,5 +19,4 @@ class TestEndpntSpec(TestCase):
 		self.assertTrue(self.e1 == e3)
 
 	def test_ports(self):
-		self.assertTrue(self.e1.port() == self.e1.port(EndpntSpec.BASE))
-		self.assertTrue(self.e1.port(EndpntSpec.BASE) == self.e1.port_base)
+		self.assertTrue(self.e1.port() == self.e1.port(EndpntSpec.TOPO_BASE))
