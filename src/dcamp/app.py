@@ -71,9 +71,19 @@ class App:
 			return -1
 
 		assert(b'POLO' == reqmsg.name)
-		repmsg = dcmsg.ASSIGN(root)
-		repmsg['level'] = 'root'
-		repmsg['config-file'] = self.args.configfile.name
+
+		if 'start' == self.args.action:
+			repmsg = dcmsg.CONTROL(root)
+			repmsg['command'] = 'assignment'
+			repmsg['level'] = 'root'
+			repmsg['config-file'] = self.args.configfile.name
+
+		elif 'stop' == self.args.action:
+			repmsg = dcmsg.CONTROL(root)
+			repmsg['command'] = 'stop'
+
+		else:
+			raise NotImplementedError('unknown root action')
 
 		repmsg.send(rep)
 

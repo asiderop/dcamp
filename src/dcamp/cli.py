@@ -44,7 +44,9 @@ def main():
 	# root command
 	parser_root = subparsers.add_parser('root', parents=[parser_file],
 			help='run root command')
-	parser_root.set_defaults(func=do_app, cmd='root')
+	parser_root.add_argument('--start', dest='action', action='store_const', const='start')
+	parser_root.add_argument('--stop', dest='action', action='store_const', const='stop')
+	parser_root.set_defaults(func=do_app, cmd='root', action='start')
 
 	# base command
 	parser_base = subparsers.add_parser('base', parents=[],

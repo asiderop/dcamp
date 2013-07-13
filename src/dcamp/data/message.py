@@ -8,6 +8,8 @@ import zmq.utils.jsonapi as json
 
 from dcamp.data.config import EndpntSpec
 
+verbose_debug = True
+
 class DCMsg(object):
 	'''
 	Base dCAMP message
@@ -25,6 +27,9 @@ class DCMsg(object):
 
 	def send(self, socket):
 		self.logger.debug('S:%s' % self.__class__.__name__)
+		if verbose_debug:
+			for part in str(self).split('\n'):
+				self.logger.debug('  '+ part)
 		socket.send_multipart(self.frames)
 
 	def __iter__(self):
@@ -51,8 +56,12 @@ class DCMsg(object):
 		key = msg[0]
 		for c in cls.__subclasses__():
 			if c.__name__.encode() == key:
+				result = c.from_msg(msg) # class found, so return it
 				c.logger.debug('R:%s' % c.__name__)
-				return c.from_msg(msg) # class found, so return it
+				if verbose_debug:
+					for part in str(result).split('\n'):
+						cls.logger.debug('  '+ part)
+				return result
 
 		cls.logger.fatal("no subclass matches found")
 		return cls() # if class not found, return generic
@@ -97,7 +106,7 @@ class POLO(DCMsg):
 		assert cls.__name__.encode() == msg[0]
 		return cls(msg[1].decode())
 
-class ASSIGN(DCMsg):
+class CONTROL(DCMsg):
 	def __init__(self, parent_endpoint, properties=None):
 		if not isinstance(parent_endpoint, EndpntSpec):
 			assert isinstance(parent_endpoint, str)
