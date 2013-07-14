@@ -63,7 +63,7 @@ class DCMsg(object):
 						cls.logger.debug('  '+ part)
 				return result
 
-		cls.logger.fatal("no subclass matches found")
+		cls.logger.fatal("no subclass matches found: %s" % key)
 		return cls() # if class not found, return generic
 
 class MARCO(DCMsg):

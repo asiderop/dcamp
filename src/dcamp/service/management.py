@@ -33,14 +33,13 @@ class Management(Service):
 
 		# we receive join requests on this socket
 		self.join_socket = self.ctx.socket(zmq.REP)
-		self.join_socket.bind('tcp://*:%d' % (self.endpoint.port(EndpntSpec.TOPO_JOIN)))
+		self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.TOPO_JOIN))
 
 		# we send topo discovery messages on this socket
 		self.disc_socket = self.ctx.socket(zmq.PUB)
 
-		for n in self.nodes:
-			base_endpoint = "tcp://%s:%d" % (n.host, n.port())
-			self.disc_socket.connect(base_endpoint)
+		for ep in self.nodes:
+			self.disc_socket.connect(ep.connect_uri(EndpntSpec.TOPO_BASE))
 
 		self.reqcnt = 0
 		self.repcnt = 0
@@ -94,7 +93,7 @@ class Management(Service):
 		* promote to collector (if first in group)
 		* assign its parent node
 
-		Returns ASSIGN or None
+		Returns CONTROL or None
 		'''
 		parent_endpoint = None
 		level = ''
@@ -119,6 +118,7 @@ class Management(Service):
 			return None
 
 		# create reply message
-		msg = dcmsg.ASSIGN(parent_endpoint)
+		msg = dcmsg.CONTROL(parent_endpoint)
+		msg['command'] = 'assignment'
 		msg['level'] = level
 		return msg

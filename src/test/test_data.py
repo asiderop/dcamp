@@ -17,6 +17,3 @@ class TestEndpntSpec(TestCase):
 
 		e3 = EndpntSpec.from_str("localhost:1000")
 		self.assertTrue(self.e1 == e3)
-
-	def test_ports(self):
-		self.assertTrue(self.e1.port() == self.e1.port(EndpntSpec.TOPO_BASE))

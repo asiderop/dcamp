@@ -5,7 +5,7 @@ from zhelpers import zpipe
 import dcamp.data.message as dcmsg
 from dcamp.service.service import Service
 from dcamp.role.root import Root
-from dcamp.data.config import DCConfig
+from dcamp.data.config import DCConfig, EndpntSpec
 
 class Node(Service):
 	'''
@@ -30,7 +30,8 @@ class Node(Service):
 		####
 		# setup service for polling.
 
-		self.topo_endpoint = "tcp://*:%d" % (self.endpoint.port())
+		self.topo_endpoint = self.endpoint.bind_uri(EndpntSpec.TOPO_BASE)
+		self.logger.debug('binding to %s' % self.topo_endpoint)
 
 		# @todo these sockets need a better naming convention.
 		self.topo_socket = self.ctx.socket(zmq.SUB)
@@ -69,19 +70,22 @@ class Node(Service):
 		if self.topo_socket in items:
 			marco = dcmsg.DCMsg.recv(self.topo_socket)
 			self.subcnt += 1
-			assert marco.name == b'MARCO'
 
 			# @todo: do we care which state we are in?
 			# if Node.BASE == self.state:
 
-			self.control_socket = self.ctx.socket(zmq.REQ)
-			self.control_socket.connect("tcp://%s" % marco.root_endpoint)
-			self.poller.register(self.control_socket, zmq.POLLIN)
-			polo = dcmsg.POLO(self.endpoint)
-			polo.send(self.control_socket)
-			self.reqcnt += 1
-			if Node.BASE == self.state:
-				self.state = Node.JOIN
+			if marco.name == b'MARCO':
+				self.control_socket = self.ctx.socket(zmq.REQ)
+				self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+				self.poller.register(self.control_socket, zmq.POLLIN)
+				polo = dcmsg.POLO(self.endpoint)
+				polo.send(self.control_socket)
+				self.reqcnt += 1
+				if Node.BASE == self.state:
+					self.state = Node.JOIN
+			else:
+				self.logger.error('unknown topo message: %s' % marco.name)
+				return
 
 		elif self.control_socket in items:
 			response = dcmsg.DCMsg.recv(self.control_socket)
@@ -104,7 +108,9 @@ class Node(Service):
 
 			if 'assignment' == command:
 				# @todo need to handle re-assignment
-				assert Node.JOIN == self.state
+				if Node.JOIN != self.state:
+					self.logger.warning('received re-assignment; ignoring')
+					return
 
 				if 'level' not in response.properties:
 					self.logger.error('property missing: level')
@@ -130,7 +136,9 @@ class Node(Service):
 				self._play_role()
 
 			elif 'stop' == command:
-				assert Node.PLAY == self.state
+				if Node.PLAY != self.state:
+					self.logger.error('role not running; nothing to stop')
+					return
 
 				self.role_pipe.send_string('STOP')
 				response = self.role_pipe.recv_string()

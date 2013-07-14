@@ -42,19 +42,24 @@ class App:
 		config.read_file(self.args.configfile)
 
 		# 1) MARCO "root" base endpoint (multiple times?)
-		# 2) if POLO'ed, ASSIGN
+		# 2) if POLO'ed, send assignment CONTROL
 
 		# @todo: this can raise exceptions
 
 		pub = self.ctx.socket(zmq.PUB)
-		root = config.root['endpoint']
-		connect_str = "tcp://%s:%d" % (root.host, root.port())
+		root_ep = config.root['endpoint']
+		connect_str = root_ep.connect_uri(EndpntSpec.TOPO_BASE)
 		pub.connect(connect_str)
 
 		rep = self.ctx.socket(zmq.REP)
-		bind_port = rep.bind_to_random_port("tcp://*")
+		bind_addr = rep.bind_to_random_port("tcp://*")
 
-		pubmsg = dcmsg.MARCO(EndpntSpec("localhost", bind_port))
+		# subtract 1 so the TOPO_JOIN port calculated by the remote node matches the
+		# random port to which we just bound
+		ep = EndpntSpec("localhost", bind_addr - 1)
+		self.logger.debug('bound to %s + 1' % ep)
+
+		pubmsg = dcmsg.MARCO(ep)
 		reqmsg = None
 		tries = 0
 		while tries < 5:
@@ -66,20 +71,20 @@ class App:
 				break
 
 		if None == reqmsg:
-			print('Unable to contact base node at root address: %s' % root)
+			print('Unable to contact base node at root address: %s' % root_ep)
 			print('Is the base node running?')
 			return -1
 
 		assert(b'POLO' == reqmsg.name)
 
 		if 'start' == self.args.action:
-			repmsg = dcmsg.CONTROL(root)
+			repmsg = dcmsg.CONTROL(root_ep)
 			repmsg['command'] = 'assignment'
 			repmsg['level'] = 'root'
 			repmsg['config-file'] = self.args.configfile.name
 
 		elif 'stop' == self.args.action:
-			repmsg = dcmsg.CONTROL(root)
+			repmsg = dcmsg.CONTROL(root_ep)
 			repmsg['command'] = 'stop'
 
 		else:

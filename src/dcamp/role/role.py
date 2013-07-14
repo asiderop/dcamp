@@ -5,7 +5,6 @@ from dcamp.util.decorator import Runnable
 
 @Runnable
 class Role(object):
-	logger = logging.getLogger('dcamp.role')
 
 	MAX_SERVICE_STOP_ATTEMPTS = 5
 
@@ -13,6 +12,8 @@ class Role(object):
 			pipe):
 		self.ctx = zmq.Context.instance()
 		self.__control_pipe = pipe
+
+		self.logger = logging.getLogger('dcamp.role.'+ self.__class__.__name__)
 
 		# { pipe: service, ...}
 		self.__services = {}
@@ -118,6 +119,8 @@ class Role(object):
 		# close our own control pipe
 		self.__control_pipe.close()
 		del self.__control_pipe
+
+		self.logger.debug('role cleanup finished; exiting')
 
 	def __some_alive(self):
 		'''returns True if at least one service of this Role is still running'''

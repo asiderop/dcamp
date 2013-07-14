@@ -58,26 +58,37 @@ class EndpntSpec(object):
 
 	def __init__(self, host, port):
 		self.host = host
-		self._port = port
+		self.port = port
 
 	# methods to make this class printable, comparable, and hashable
 	def __str__(self):
-		return "%s:%s" % (self.host, self._port)
+		return "%s:%s" % (self.host, self.port)
 	def __repr__(self):
-		return "EndpntSpec(host='%s', port=%s)" % (self.host, self._port)
+		return "EndpntSpec(host='%s', port=%s)" % (self.host, self.port)
 	def __eq__(self, given):
-		return (self.host, self._port) == (given.host, given._port)
+		return (self.host, self.port) == (given.host, given.port)
 	def __lt__(self, given):
-		return (self.host, self._port) < (given.host, given._port)
+		return (self.host, self.port) < (given.host, given.port)
 	def __hash__(self):
-		return operator.xor(hash(self.host), hash(self._port))
+		return operator.xor(hash(self.host), hash(self.port))
 
 	def encode(self):
 		return str(self).encode()
 
-	def port(self, offset=TOPO_BASE):
+	def _port(self, offset):
 		assert offset in EndpntSpec._valid_offsets
-		return self._port + offset
+		return self.port + offset
+
+	def bind_uri(self, offset, protocol='tcp'):
+		return self._uri(offset, protocol, op='bind')
+	def connect_uri(self, offset, protocol='tcp'):
+		return self._uri(offset, protocol, op='connect')
+	def _uri(self, offset, protocol, op):
+		assert op in ['bind', 'connect']
+		return '%s://%s:%d' % (
+				protocol,
+				op == 'bind' and '*' or self.host,
+				self._port(offset))
 
 	@classmethod
 	def from_str(cls, given):
@@ -274,7 +285,7 @@ class DCConfig(configparser.ConfigParser):
 		else:
 			try:
 				ep = EndpntSpec.from_str(self['root']['endpoint'])
-				endpoints[ep.host] = [ep.port()]
+				endpoints[ep.host] = [ep.port]
 			except ValueError as e:
 				self.__eprint('[root]endpoint', e)
 			except KeyError as e:
@@ -308,9 +319,9 @@ class DCConfig(configparser.ConfigParser):
 					nodecnt += 1
 					ep = EndpntSpec.from_str(key)
 					if ep.host in endpoints:
-						endpoints[ep.host].append(ep.port())
+						endpoints[ep.host].append(ep.port)
 					else:
-						endpoints[ep.host] = [ep.port()]
+						endpoints[ep.host] = [ep.port]
 				except ValueError as e:
 					self.__eprint('[%s]%s' % (group, key), e)
 

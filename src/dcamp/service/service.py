@@ -5,12 +5,13 @@ from dcamp.util.decorator import Runnable
 
 @Runnable
 class Service(threading.Thread):
-	logger = logging.getLogger('dcamp.service')
 
 	def __init__(self, pipe):
 		super().__init__()
 		self.ctx = zmq.Context.instance()
 		self.__control_pipe = pipe
+
+		self.logger = logging.getLogger('dcamp.service.'+ self.__class__.__name__)
 
 		self.poller = zmq.Poller()
 		self.poller_timer = None
@@ -32,6 +33,8 @@ class Service(threading.Thread):
 		# shared context; will be term()'ed by caller
 		self.__control_pipe.close()
 		del self.__control_pipe
+
+		self.logger.debug('service cleanup finished; exiting')
 
 	def _pre_poll(self):
 		pass
