@@ -18,6 +18,10 @@ class App:
 
 	def __init__(self, args):
 		self.ctx = zmq.Context.instance()
+
+		# set default options for all sockets
+		self.ctx.linger = 0
+
 		self.logger = logging.getLogger('dcamp.app')
 		self.args = args
 
