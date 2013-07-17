@@ -15,20 +15,31 @@ class DCMsg(object):
 	Base dCAMP message
 	'''
 
+	V0_1 = '0.1'
+	V_CURRENT = V0_1
+
 	logger = logging.getLogger("dcamp.dcmsg")
+
+	def __init__(self, version):
+		self._version = version
 
 	@property
 	def frames(self):
-		return list();
+		return [self.name.encode(),
+				self.version.encode()]
+
+	@property
+	def version(self):
+		return self._version
 
 	@property
 	def name(self):
-		return self.__class__.__name__.encode()
+		return self.__class__.__name__
 
 	def send(self, socket):
-		self.logger.debug('S:%s' % self.__class__.__name__)
+		self.logger.debug('S:%s (v%s)' % (self.name, self.version))
 		if verbose_debug:
-			for part in str(self).split('\n'):
+			for part in str(self).split('\n')[2:]: # skip name and version
 				self.logger.debug('  '+ part)
 		socket.send_multipart(self.frames)
 
@@ -41,7 +52,7 @@ class DCMsg(object):
 		for f in self.frames:
 			result += 'Frame %d: %s\n' % (count, f.decode())
 			count += 1
-		return result[:len(result)-1]
+		return result[:len(result)-1] # drop the trailing new-line
 
 	@classmethod
 	def recv(cls, socket):
@@ -53,21 +64,28 @@ class DCMsg(object):
 		assert isinstance(msg, list)
 		assert 2 <= len(msg)
 
-		key = msg[0]
+		name = msg[0].decode()
+		ver = msg[1].decode()
+
+		if ver > cls.V_CURRENT:
+			cls.logger.warning('message version (%s) is greater than code version (%s)' %
+					(ver, cls.V_CURRENT))
+
 		for c in cls.__subclasses__():
-			if c.__name__.encode() == key:
-				result = c.from_msg(msg) # class found, so return it
-				c.logger.debug('R:%s' % c.__name__)
+			if c.__name__ == name:
+				result = c.from_msg(ver, msg[2:]) # class found, so return it
+				c.logger.debug('R:%s (v%s)' % (name, ver))
 				if verbose_debug:
-					for part in str(result).split('\n'):
+					for part in str(result).split('\n')[2:]: # skip name and version
 						cls.logger.debug('  '+ part)
 				return result
 
-		cls.logger.fatal("no subclass matches found: %s" % key)
+		cls.logger.fatal("no subclass matches found: %s" % name)
 		return cls() # if class not found, return generic
 
 class MARCO(DCMsg):
-	def __init__(self, root_endpoint):
+	def __init__(self, root_endpoint, version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
 		if not isinstance(root_endpoint, EndpntSpec):
 			assert isinstance(root_endpoint, str)
 			root_endpoint = EndpntSpec.from_str(root_endpoint)
@@ -75,19 +93,20 @@ class MARCO(DCMsg):
 
 	@property
 	def frames(self):
-		return [self.name,
-				self.root_endpoint.encode()]
+		return super().frames + [
+				self.root_endpoint.encode()
+			]
 
 	@classmethod
-	def from_msg(cls, msg):
-		# assert we have two frames and correct key
+	def from_msg(cls, ver, msg):
+		# make sure we have exactly one frame
 		assert isinstance(msg, list)
-		assert 2 == len(msg)
-		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1].decode())
+		assert 1 == len(msg)
+		return cls(msg[0].decode(), version=ver)
 
 class POLO(DCMsg):
-	def __init__(self, base_endpoint):
+	def __init__(self, base_endpoint, version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
 		if not isinstance(base_endpoint, EndpntSpec):
 			assert isinstance(base_endpoint, str)
 			base_endpoint = EndpntSpec.from_str(base_endpoint)
@@ -95,19 +114,20 @@ class POLO(DCMsg):
 
 	@property
 	def frames(self):
-		return [self.name,
-				self.base_endpoint.encode()]
+		return super().frames + [
+				self.base_endpoint.encode()
+			]
 
 	@classmethod
-	def from_msg(cls, msg):
-		# assert we have two frames and correct key
+	def from_msg(cls, ver, msg):
+		# make sure we have exactly one frame
 		assert isinstance(msg, list)
-		assert 2 == len(msg)
-		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1].decode())
+		assert 1 == len(msg)
+		return cls(msg[0].decode(), version=ver)
 
 class CONTROL(DCMsg):
-	def __init__(self, parent_endpoint, properties=None):
+	def __init__(self, parent_endpoint, properties=None, version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
 		if not isinstance(parent_endpoint, EndpntSpec):
 			assert isinstance(parent_endpoint, str)
 			parent_endpoint = EndpntSpec.from_str(parent_endpoint)
@@ -127,20 +147,21 @@ class CONTROL(DCMsg):
 
 	@property
 	def frames(self):
-		return [self.name,
+		return super().frames + [
 				self.parent_endpoint.encode(),
-				json.dumps(self.properties)]
+				json.dumps(self.properties)
+			]
 
 	@classmethod
-	def from_msg(cls, msg):
-		# assert we have three frames and correct key
+	def from_msg(cls, ver, msg):
+		# make sure we have two frames
 		assert isinstance(msg, list)
-		assert 3 == len(msg)
-		assert cls.__name__.encode() == msg[0]
-		return cls(msg[1].decode(), properties=json.loads(msg[2]))
+		assert 2 == len(msg)
+		return cls(msg[0].decode(), properties=json.loads(msg[1]), version=ver)
 
 class WTF(DCMsg):
-	def __init__(self, errcode, errstr=''):
+	def __init__(self, errcode, errstr='', version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
 		assert isinstance(errcode, int)
 		assert isinstance(errstr, str)
 		self.errcode = errcode
@@ -148,19 +169,19 @@ class WTF(DCMsg):
 
 	@property
 	def frames(self):
-		return [self.name,
+		return super().frames + [
 				struct.pack('!i', self.errcode),
-				self.errstr.encode()]
+				self.errstr.encode()
+			]
 
 	@classmethod
-	def from_msg(cls, msg):
-		# assert we have either two or three frames and correct key
+	def from_msg(cls, ver, msg):
+		# make sure we have either two or three frames
 		assert isinstance(msg, list)
-		assert len(msg) in [2, 3]
-		assert cls.__name__.encode() == msg[0]
+		assert len(msg) in [1, 2]
 
-		code = struct.unpack('!i', msg[1])[0]
+		code = struct.unpack('!i', msg[0])[0]
 		errstr = ''
-		if len(msg) == 3:
-			errstr = msg[2].decode()
-		return cls(code, errstr)
+		if len(msg) == 2:
+			errstr = msg[1].decode()
+		return cls(code, errstr, version=ver)

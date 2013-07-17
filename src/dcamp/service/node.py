@@ -74,7 +74,7 @@ class Node(Service):
 			# @todo: do we care which state we are in?
 			# if Node.BASE == self.state:
 
-			if marco.name == b'MARCO':
+			if marco.name == 'MARCO':
 				self.control_socket = self.ctx.socket(zmq.REQ)
 				self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
 				self.poller.register(self.control_socket, zmq.POLLIN)
@@ -95,9 +95,9 @@ class Node(Service):
 			self.control_socket = None
 			self.repcnt += 1
 
-			assert response.name in [b'CONTROL', b'WTF']
+			assert response.name in ['CONTROL', 'WTF']
 
-			if b'WTF' == response.name:
+			if 'WTF' == response.name:
 				self.logger.error('WTF(%d): %s' % (response.errcode, response.errstr))
 				return
 			if 'command' not in response.properties:

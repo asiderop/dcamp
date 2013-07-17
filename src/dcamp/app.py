@@ -75,7 +75,7 @@ class App:
 			print('Is the base node running?')
 			return -1
 
-		assert(b'POLO' == reqmsg.name)
+		assert('POLO' == reqmsg.name)
 
 		if 'start' == self.args.action:
 			repmsg = dcmsg.CONTROL(root_ep)

@@ -75,7 +75,7 @@ class Management(Service):
 			try:
 				reqmsg = dcmsg.DCMsg.recv(self.join_socket)
 				self.reqcnt += 1
-				assert reqmsg.name == b'POLO'
+				assert reqmsg.name == 'POLO'
 				repmsg = self.__assign(reqmsg.base_endpoint)
 			except ValueError as e:
 				errstr = 'invalid base endpoint received: %s' % e
