@@ -90,13 +90,22 @@ def do_config(args):
 		try:
 			config.validate(args.configfile)
 		except DCParsingError as e:
-			print('\n'+ e +'\n')
+			print('\n'+ e.message +'\n')
 			return -1
 		return 0
 	elif args.print:
 		config.read_file(args.configfile)
 		for (k, v) in sorted(config.kvdict.items()):
-			print(k +' = '+ str(v))
+			line = k +' = '
+			if type(v) == list:
+				for i in v:
+					line += str(i) + ', '
+				if len(v) == 0:
+					print(line + 'None')
+				else:
+					print(line[:-2])
+			else:
+				print(line + str(v))
 		return 0
 	else:
 		raise RuntimeError('unknown config action given')

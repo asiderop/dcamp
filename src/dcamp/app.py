@@ -61,7 +61,7 @@ class App:
 		# subtract 1 so the TOPO_JOIN port calculated by the remote node matches the
 		# random port to which we just bound
 		ep = EndpntSpec("localhost", bind_addr - 1)
-		self.logger.debug('bound to %s + 1' % ep)
+		self.logger.debug('bound to %s + 1' % str(ep))
 
 		pubmsg = dcmsg.MARCO(ep)
 		reqmsg = None
@@ -75,21 +75,18 @@ class App:
 				break
 
 		if None == reqmsg:
-			print('Unable to contact base node at root address: %s' % root_ep)
+			print('Unable to contact base node at root address: %s' % str(root_ep))
 			print('Is the base node running?')
 			return -1
 
 		assert('POLO' == reqmsg.name)
 
 		if 'start' == self.args.action:
-			repmsg = dcmsg.CONTROL(root_ep)
-			repmsg['command'] = 'assignment'
-			repmsg['level'] = 'root'
+			repmsg = dcmsg.ASSIGN(root_ep, 'root')
 			repmsg['config-file'] = self.args.configfile.name
 
 		elif 'stop' == self.args.action:
-			repmsg = dcmsg.CONTROL(root_ep)
-			repmsg['command'] = 'stop'
+			repmsg = dcmsg.STOP()
 
 		else:
 			raise NotImplementedError('unknown root action')

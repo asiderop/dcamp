@@ -100,13 +100,8 @@ class Node(Service):
 			if 'WTF' == response.name:
 				self.logger.error('WTF(%d): %s' % (response.errcode, response.errstr))
 				return
-			if 'command' not in response.properties:
-				self.logger.error('property missing: command')
-				return
 
-			command = response.properties['command']
-
-			if 'assignment' == command:
+			if 'assignment' == response.command:
 				# @todo need to handle re-assignment
 				if Node.JOIN != self.state:
 					self.logger.warning('received re-assignment; ignoring')
@@ -135,7 +130,7 @@ class Node(Service):
 
 				self._play_role()
 
-			elif 'stop' == command:
+			elif 'stop' == response.command:
 				if Node.PLAY != self.state:
 					self.logger.error('role not running; nothing to stop')
 					return
@@ -159,7 +154,7 @@ class Node(Service):
 				self.state = Node.BASE
 
 			else:
-				self.logger.error('unknown control command: %s' % command)
+				self.logger.error('unknown control command: %s' % response.command)
 				self.state = Node.BASE
 				return
 

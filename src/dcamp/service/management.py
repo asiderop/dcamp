@@ -1,4 +1,5 @@
 import logging, time, zmq
+from datetime import datetime
 
 import dcamp.data.message as dcmsg
 from dcamp.service.service import Service
@@ -21,12 +22,14 @@ class Management(Service):
 		self.endpoint = self.config.root['endpoint']
 
 		# [endpoint]
-		self.nodes = []
+		nodes = []
 		for group in self.config.groups.values():
-			self.nodes.extend(group.endpoints)
+			nodes.extend(group.endpoints)
 
-		# {group: collector}
+		# { group: collector }
 		self.collectors = {}
+		# { endpoint: last-seen-timestamp }
+		self.remote_nodes = {}
 
 		####
 		# setup service for polling.
@@ -38,7 +41,7 @@ class Management(Service):
 		# we send topo discovery messages on this socket
 		self.disc_socket = self.ctx.socket(zmq.PUB)
 
-		for ep in self.nodes:
+		for ep in nodes:
 			self.disc_socket.connect(ep.connect_uri(EndpntSpec.TOPO_BASE))
 
 		self.reqcnt = 0
@@ -57,6 +60,9 @@ class Management(Service):
 		self.logger.debug("%d pubs; %d reqs; %d reps" %
 				(self.pubcnt, self.reqcnt, self.repcnt))
 
+		for (ep, date) in self.remote_nodes.items():
+			self.logger.debug('%s last seen %s' % (str(ep), date))
+
 		self.join_socket.close()
 		self.disc_socket.close()
 		del self.join_socket, self.disc_socket
@@ -72,13 +78,18 @@ class Management(Service):
 
 	def _post_poll(self, items):
 		if self.join_socket in items:
+			repmsg = None
 			try:
 				reqmsg = dcmsg.DCMsg.recv(self.join_socket)
 				self.reqcnt += 1
 				assert reqmsg.name == 'POLO'
-				repmsg = self.__assign(reqmsg.base_endpoint)
+
+				if reqmsg.base_endpoint not in self.remote_nodes:
+					repmsg = self.__assign(reqmsg.base_endpoint)
+				self.remote_nodes[reqmsg.base_endpoint] = datetime.now()
+
 			except ValueError as e:
-				errstr = 'invalid base endpoint received: %s' % e
+				errstr = 'invalid base endpoint received: %s' % str(e)
 				self.logger.error(errstr)
 				repmsg = dcmsg.WTF(0, errstr)
 
@@ -97,6 +108,9 @@ class Management(Service):
 		'''
 		parent_endpoint = None
 		level = ''
+
+		# XXX: store assigned endpoints into /topo hiearchy for distribution to other
+		# config nodes
 
 		# lookup node group
 		# @todo need to keep track of nodes which have already POLO'ed / issue #39
@@ -118,7 +132,4 @@ class Management(Service):
 			return None
 
 		# create reply message
-		msg = dcmsg.CONTROL(parent_endpoint)
-		msg['command'] = 'assignment'
-		msg['level'] = level
-		return msg
+		return dcmsg.ASSIGN(parent_endpoint, level)

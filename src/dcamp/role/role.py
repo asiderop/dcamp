@@ -1,7 +1,7 @@
 import logging, zmq
 from zhelpers import zpipe
 
-from dcamp.util.decorator import Runnable
+from dcamp.util.decorators import Runnable
 
 @Runnable
 class Role(object):

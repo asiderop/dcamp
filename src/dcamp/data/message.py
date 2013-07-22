@@ -1,12 +1,12 @@
 '''
 dCAMP message module
 '''
-import logging
-import struct
-# zmq.jsonapi ensures bytes, instead of unicode:
-import zmq.utils.jsonapi as json
+import logging, struct
 
-from dcamp.data.config import EndpntSpec
+# zmq.jsonapi ensures bytes, instead of unicode:
+import zmq.utils.jsonapi as jsonapi
+
+from dcamp.data.config import SpecTypes, EndpntSpec
 
 verbose_debug = True
 
@@ -126,13 +126,12 @@ class POLO(DCMsg):
 		return cls(msg[0].decode(), version=ver)
 
 class CONTROL(DCMsg):
-	def __init__(self, parent_endpoint, properties=None, version=DCMsg.V_CURRENT):
+
+	def __init__(self, command, properties=None, version=DCMsg.V_CURRENT):
 		DCMsg.__init__(self, version)
-		if not isinstance(parent_endpoint, EndpntSpec):
-			assert isinstance(parent_endpoint, str)
-			parent_endpoint = EndpntSpec.from_str(parent_endpoint)
-		self.parent_endpoint = parent_endpoint
+		assert command in ['assignment', 'stop']
 		assert properties is None or isinstance(properties, dict)
+		self.command = command
 		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
@@ -147,17 +146,86 @@ class CONTROL(DCMsg):
 
 	@property
 	def frames(self):
+
+		# { key : [ (value-type-name, value), ... ] }
+		props = dict()
+
+		for (key, value) in self.properties.items():
+			if type(value) == list:
+				new_list = list()
+				for val in value:
+					new_list.append(CONTROL.__type_tuple_from_value(val))
+				props[key] = new_list
+			else:
+				props[key] = CONTROL.__type_tuple_from_value(value)
+
 		return super().frames + [
-				self.parent_endpoint.encode(),
-				json.dumps(self.properties)
+				self.command.encode(),
+				jsonapi.dumps(props)
 			]
+
+	@staticmethod
+	def __type_tuple_from_value(value):
+		type_name = type(value).__name__
+		# special case spec types (namedtuple) to use dict as values instead of list
+		if type_name in SpecTypes:
+			value = value._asdict()
+		return (type_name, value)
+
+	@staticmethod
+	def __value_from_type_tuple(given):
+		assert 2 == len(given)
+		name = given[0]
+		value = given[1]
+		if name in SpecTypes:
+			return SpecTypes[name](**value)
+		else:
+			return value
 
 	@classmethod
 	def from_msg(cls, ver, msg):
 		# make sure we have two frames
 		assert isinstance(msg, list)
 		assert 2 == len(msg)
-		return cls(msg[0].decode(), properties=json.loads(msg[1]), version=ver)
+
+		cmd = msg[0].decode()
+		props = dict()
+
+		# unpack the json string into actual data types
+		decoded = jsonapi.loads(msg[1])
+		for (key, value_list) in decoded.items():
+
+			# each element will either be a list (tuple)...
+			if len(value_list) == 2 and type(value_list[0]) != list:
+				props[key] = CONTROL.__value_from_type_tuple(value_list)
+
+			# ...or a list of lists (tuples)
+			else:
+				for value in value_list:
+					if type(value) == list:
+						new_list = list()
+						for val in value:
+							new_list.append(CONTROL.__value_from_type_tuple(value))
+						props[key] = new_list
+
+		return cls(command=cmd, properties=props, version=ver)
+
+# XXX: create more CONTROL shortcuts and ensure things still work
+
+def STOP():
+	return CONTROL(command='stop')
+
+def ASSIGN(parent_endpoint, level):
+	assert level in ['root', 'branch', 'leaf']
+	if not isinstance(parent_endpoint, EndpntSpec):
+		assert isinstance(parent_endpoint, str)
+		parent_endpoint = EndpntSpec.from_str(parent_endpoint)
+
+	props = {}
+	props['parent'] = parent_endpoint
+	props['level'] = level
+
+	return CONTROL(command='assignment', properties=props)
 
 class WTF(DCMsg):
 	def __init__(self, errcode, errstr='', version=DCMsg.V_CURRENT):

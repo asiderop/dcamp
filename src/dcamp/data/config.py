@@ -1,32 +1,27 @@
 import logging, configparser
 from collections import namedtuple
-from functools import total_ordering
+from operator import xor
 
-MetricSpec = namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])
-FilterSpec = namedtuple('FilterSpec', ['action', 'match'])
-GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
+import dcamp.util.functions as Util
 
 class DCParsingError(configparser.Error):
 	pass
 
-def to_seconds(given):
-	'''
-	Method determines how given time is specified and return int value in seconds;
-	e.g. to_seconds('90s') == 90
+GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
-	valid time units:
-		s -- seconds
+class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])):
+	''' Class Representing a Metric Specification '''
+	def __str__(self):
+		return "%s(rate='%s', threshold='%s')" % (self.metric,
+				Util.seconds_to_str(self.rate), self.threshold)
 
-	@todo add this to validation routine / issue #23
-	'''
-	if given.endswith('s'):
-		return int(given[:len(given)-1])
-	else:
-		raise DCParsingError('invalid time unit given--valid units: s')
+class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):
+	''' Class Representing a Filter Specification '''
+	def __str__(self):
+		return "%s'%s'" % (self.action, self.match)
 
-@total_ordering
-class EndpntSpec(object):
-	'''Class representing an endpoint'''
+class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
+	''' Class Representing an Endpoint Specification '''
 
 	### port offsets
 
@@ -56,21 +51,8 @@ class EndpntSpec(object):
 		DATA_SUB,
 	]
 
-	def __init__(self, host, port):
-		self.host = host
-		self.port = port
-
-	# methods to make this class printable, comparable, and hashable
 	def __str__(self):
 		return "%s:%s" % (self.host, self.port)
-	def __repr__(self):
-		return "EndpntSpec(host='%s', port=%s)" % (self.host, self.port)
-	def __eq__(self, given):
-		return (self.host, self.port) == (given.host, given.port)
-	def __lt__(self, given):
-		return (self.host, self.port) < (given.host, given.port)
-	def __hash__(self):
-		return operator.xor(hash(self.host), hash(self.port))
 
 	def encode(self):
 		return str(self).encode()
@@ -164,7 +146,7 @@ class DCConfig(configparser.ConfigParser):
 
 		result = {}
 		result['endpoint'] = EndpntSpec.from_str(self['root']['endpoint'])
-		result['heartbeat'] = to_seconds(self['root']['heartbeat'])
+		result['heartbeat'] = Util.str_to_seconds(self['root']['heartbeat'])
 		self.root = result
 
 	def __create_metrics(self):
@@ -174,7 +156,7 @@ class DCConfig(configparser.ConfigParser):
 
 		# process all metric specifications
 		for name in self.metric_sections:
-			rate = to_seconds(self[name]['rate'])
+			rate = Util.str_to_seconds(self[name]['rate'])
 			threshold = self[name]['threshold'] if 'threshold' in self[name] else None
 			metric = self[name]['metric']
 			result[name] = MetricSpec(rate, threshold, metric)
@@ -208,7 +190,9 @@ class DCConfig(configparser.ConfigParser):
 
 		self.groups = result
 
-	# get/pop/push prefix--always ensure a trailing delimiter
+	### get/pop/push prefix
+	# always ensures a trailing delimiter; used by __create_kvdict()
+
 	def __get_pre(self):
 		result = self.delimiter
 		for pre in self.__prefix:
@@ -347,3 +331,10 @@ class DCConfig(configparser.ConfigParser):
 					'see above error messages for details' % (self.__num_errors))
 		else:
 			self.isvalid = True
+
+SpecTypes = {
+		'MetricSpec': MetricSpec,
+		'FilterSpec': FilterSpec,
+		'GroupSpec': GroupSpec,
+		'EndpntSpec': EndpntSpec
+	}

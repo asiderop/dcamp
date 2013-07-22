@@ -1,7 +1,7 @@
 import logging, threading
 import zmq
 
-from dcamp.util.decorator import Runnable
+from dcamp.util.decorators import Runnable
 
 @Runnable
 class Service(threading.Thread):
