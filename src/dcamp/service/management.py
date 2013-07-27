@@ -1,9 +1,9 @@
 import logging, time, zmq
 from datetime import datetime
 
-import dcamp.data.message as dcmsg
+import dcamp.data.messages as dcmsg
 from dcamp.service.service import Service
-from dcamp.data.config import EndpntSpec
+from dcamp.data.specs import EndpntSpec
 
 class Management(Service):
 	'''

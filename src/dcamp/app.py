@@ -6,8 +6,9 @@ import zmq
 
 from zhelpers import zpipe
 
-import dcamp.data.message as dcmsg
-from dcamp.data.config import EndpntSpec, DCConfig
+import dcamp.data.messages as dcmsg
+from dcamp.data.config import DCConfig
+from dcamp.data.specs import EndpntSpec
 from dcamp.role.root import Root
 from dcamp.role.base import Base
 

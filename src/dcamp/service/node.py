@@ -2,10 +2,11 @@ import logging, time, threading, zmq
 
 from zhelpers import zpipe
 
-import dcamp.data.message as dcmsg
+import dcamp.data.messages as dcmsg
 from dcamp.service.service import Service
 from dcamp.role.root import Root
-from dcamp.data.config import DCConfig, EndpntSpec
+from dcamp.data.config import DCConfig
+from dcamp.data.specs import EndpntSpec
 
 class Node(Service):
 	'''

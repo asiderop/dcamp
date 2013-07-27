@@ -6,7 +6,7 @@ import logging, struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
 
-from dcamp.data.config import SpecTypes, EndpntSpec
+from dcamp.data.specs import SerializableSpecTypes, EndpntSpec
 
 verbose_debug = True
 
@@ -168,7 +168,7 @@ class CONTROL(DCMsg):
 	def __type_tuple_from_value(value):
 		type_name = type(value).__name__
 		# special case spec types (namedtuple) to use dict as values instead of list
-		if type_name in SpecTypes:
+		if type_name in SerializableSpecTypes:
 			value = value._asdict()
 		return (type_name, value)
 
@@ -177,8 +177,8 @@ class CONTROL(DCMsg):
 		assert 2 == len(given)
 		name = given[0]
 		value = given[1]
-		if name in SpecTypes:
-			return SpecTypes[name](**value)
+		if name in SerializableSpecTypes:
+			return SerializableSpecTypes[name](**value)
 		else:
 			return value
 

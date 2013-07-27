@@ -6,7 +6,8 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.data.config import EndpntSpec, DCParsingError, DCConfig
+from dcamp.data.config import DCParsingError, DCConfig
+from dcamp.data.specs import EndpntSpec
 
 def Address(string):
 	try:
