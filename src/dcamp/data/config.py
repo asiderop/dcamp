@@ -1,24 +1,24 @@
-import logging, configparser
+import logging
+from configparser import ConfigParser
 
 from dcamp.data.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec
+from dcamp.util.decorators import Prefixable
 import dcamp.util.functions as Util
 
 class DCParsingError(configparser.Error):
 	pass
 
-class DCConfig(configparser.ConfigParser):
+@Prefixable
+class DCConfig(ConfigParser):
 	def __init__(self):
 		self.logger = logging.getLogger('dcamp.data.config')
-		super().__init__(allow_no_value=True, delimiters=('='))
+		ConfigParser.__init__(self, allow_no_value=True, delimiters=('='))
 
 		self.isvalid = False
 
 		self.root = {}
 		self.metrics = {}
 		self.groups = {}
-
-		self.__prefix = []
-		self.delimiter = '/'
 
 		self.kvdict = {}
 
@@ -107,27 +107,6 @@ class DCConfig(configparser.ConfigParser):
 
 		self.groups = result
 
-	### get/pop/push prefix
-	# always ensures a trailing delimiter; used by __create_kvdict()
-
-	def __get_pre(self):
-		result = self.delimiter
-		for pre in self.__prefix:
-			result += pre + self.delimiter
-		return result
-	def __pop_pre(self):
-		# check for sole delimiter
-		if len(self.__prefix) > 0:
-			self.__prefix.pop()
-		return self.__get_pre()
-	def __push_pre(self, pre):
-		if self.delimiter in pre:
-			self.logger.error('delimiter in pushed prefix')
-		if pre.endswith(self.delimiter):
-			pre = pre.rstrip(self.delimiter)
-		self.__prefix.append(pre)
-		return self.__get_pre()
-
 	def __create_kvdict(self):
 		assert self.isvalid
 		assert len(self.root) > 0
@@ -135,25 +114,30 @@ class DCConfig(configparser.ConfigParser):
 
 		result = {}
 
+		prefix = self._push_prefix('config')
+
 		# add root specs
-		prefix = self.__push_pre('root')
+		prefix = self._push_prefix('root')
 		result[prefix+'endpoint'] = self.root['endpoint']
 		result[prefix+'heartbeat'] = self.root['heartbeat']
-		prefix = self.__pop_pre()
+		prefix = self._pop_prefix()
 
 		for (group, spec) in self.groups.items():
 			# add group name to prefix
-			prefix = self.__push_pre(group)
+			prefix = self._push_prefix(group)
 
 			result[prefix+'endpoints'] = spec.endpoints
 			result[prefix+'filters'] = spec.filters
 			result[prefix+'metrics'] = spec.metrics
 
 			# remove name from prefix
-			prefix = self.__pop_pre()
+			prefix = self._pop_prefix()
+
+		# remove "config" prefix
+		prefix = self._pop_prefix()
 
 		# verify we popped as many times as we pushed
-		assert len(self.__get_pre()) == 1
+		assert len(self._get_prefix()) == 1
 
 		self.kvdict = result
 

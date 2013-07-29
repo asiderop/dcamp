@@ -1,7 +1,6 @@
 from collections import namedtuple
 from datetime import datetime
 from operator import xor
-from functools import total_ordering
 
 import dcamp.util.functions as Util
 
@@ -87,42 +86,16 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 
 		return cls(parts[0], int(parts[1]))
 
-@total_ordering
-class TopoSpec(object):
-	def __init__(self, endpoint, role, group, parent=None, children=None):
-		self.endpoint = endpoint
-		self.role = role
-		self.group = group
-
-		self.parent = parent
-		self.children = [] if children is None else children
-
-		self.last_seen = 0
-
-	def __eq__(self, given):
-		pass
-	def __lt__(self, given):
-		pass
-	def __hash__(self):
-		pass
-	def __str__(self):
-		pass
-
-	def touch(self):
-		self.last_seen = datetime.now()
-
 SerializableSpecTypes = {
 		'MetricSpec': MetricSpec,
 		'FilterSpec': FilterSpec,
-		'GroupSpec': GroupSpec,
 		'EndpntSpec': EndpntSpec
 	}
 
 __all__ = [
-	EndpntSpec,
-	FilterSpec,
-	GroupSpec,
-	MetricSpec,
-	SerializableSpecTypes,
-	TopoSpec,
-]
+		EndpntSpec,
+		FilterSpec,
+		GroupSpec,
+		MetricSpec,
+		SerializableSpecTypes,
+	]

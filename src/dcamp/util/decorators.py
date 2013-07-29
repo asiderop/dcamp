@@ -61,3 +61,42 @@ def Runnable(given_class):
 	given_class.is_errored = is_errored
 
 	return given_class
+
+def Prefixable(given_class):
+	'''
+	Decorator provides given class with methods to get/pop/push a prefix.
+
+	These methods always ensure a trailing delimiter.
+	'''
+
+	original_init = given_class.__init__
+	def __init__(self, *args, **kwargs):
+		self._prefix = []
+		self._delimiter = '/'
+		original_init(self, *args, **kwargs)
+	given_class.__init__ = __init__
+
+	def _get_prefix(self):
+		result = self._delimiter
+		for pre in self._prefix:
+			result += pre + self._delimiter
+		return result
+	given_class._get_prefix = _get_prefix
+
+	def _pop_prefix(self):
+		# check for sole delimiter
+		if len(self._prefix) > 0:
+			self._prefix.pop()
+		return self._get_prefix()
+	given_class._pop_prefix = _pop_prefix
+
+	def _push_prefix(self, pre):
+		if self._delimiter in pre:
+			self.logger.error('delimiter in pushed prefix')
+		if pre.endswith(self._delimiter):
+			pre = pre.rstrip(self._delimiter)
+		self._prefix.append(pre)
+		return self._get_prefix()
+	given_class._push_prefix = _push_prefix
+
+	return given_class
