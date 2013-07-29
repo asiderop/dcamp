@@ -1,9 +1,10 @@
-import logging, time, zmq
-from datetime import datetime
+import logging, zmq
+from time import time
 
 import dcamp.data.messages as dcmsg
 from dcamp.service.service import Service
 from dcamp.data.specs import EndpntSpec
+from dcamp.data.topo import TopoTree, TopoNode
 
 class Management(Service):
 	'''
@@ -21,15 +22,16 @@ class Management(Service):
 		self.config = config
 		self.endpoint = self.config.root['endpoint']
 
-		# [endpoint]
-		nodes = []
-		for group in self.config.groups.values():
-			nodes.extend(group.endpoints)
+		# 1) start tree with self as root
+		# 2) add each node to tree as topo-node
+		# tree.nodes contains { node-endpoint: topo-node }
+		# topo-node contains (endpoint, role, group, parent, children, last-seen)
+		# topo keys come from tree.get_topo_key(node)
 
-		# { group: collector }
+		self.tree = TopoTree(self.endpoint)
+
+		# { group: collector-topo-node }
 		self.collectors = {}
-		# { endpoint: last-seen-timestamp }
-		self.remote_nodes = {}
 
 		####
 		# setup service for polling.
@@ -41,8 +43,9 @@ class Management(Service):
 		# we send topo discovery messages on this socket
 		self.disc_socket = self.ctx.socket(zmq.PUB)
 
-		for ep in nodes:
-			self.disc_socket.connect(ep.connect_uri(EndpntSpec.TOPO_BASE))
+		for group in self.config.groups.values():
+			for ep in group.endpoints:
+				self.disc_socket.connect(ep.connect_uri(EndpntSpec.TOPO_BASE))
 
 		self.reqcnt = 0
 		self.repcnt = 0
@@ -51,7 +54,7 @@ class Management(Service):
 		self.pubcnt = 0
 
 		self.pubmsg = dcmsg.MARCO(self.endpoint)
-		self.pubnext = time.time()
+		self.pubnext = time()
 
 		self.poller.register(self.join_socket, zmq.POLLIN)
 
@@ -60,8 +63,9 @@ class Management(Service):
 		self.logger.debug("%d pubs; %d reqs; %d reps" %
 				(self.pubcnt, self.reqcnt, self.repcnt))
 
-		for (ep, date) in self.remote_nodes.items():
-			self.logger.debug('%s last seen %s' % (str(ep), date))
+		self.tree.print()
+		for (key, node) in self.tree.walk():
+			self.logger.debug('%s last seen %s' % (str(node.endpoint), node.last_seen))
 
 		self.join_socket.close()
 		self.disc_socket.close()
@@ -69,12 +73,12 @@ class Management(Service):
 		super()._cleanup()
 
 	def _pre_poll(self):
-		if self.pubnext < time.time():
+		if self.pubnext < time():
 			self.pubmsg.send(self.disc_socket)
-			self.pubnext = time.time() + self.pubint
+			self.pubnext = time() + self.pubint
 			self.pubcnt += 1
 
-		self.poller_timer = 1e3 * max(0, self.pubnext - time.time())
+		self.poller_timer = 1e3 * max(0, self.pubnext - time())
 
 	def _post_poll(self, items):
 		if self.join_socket in items:
@@ -84,9 +88,12 @@ class Management(Service):
 				self.reqcnt += 1
 				assert reqmsg.name == 'POLO'
 
-				if reqmsg.base_endpoint not in self.remote_nodes:
+				remote = self.tree.find_node_by_endpoint(reqmsg.base_endpoint)
+				if remote is None:
 					repmsg = self.__assign(reqmsg.base_endpoint)
-				self.remote_nodes[reqmsg.base_endpoint] = datetime.now()
+				else:
+					repmsg = dcmsg.WTF(0, 'too chatty; already POLOed')
+					remote.touch()
 
 			except ValueError as e:
 				errstr = 'invalid base endpoint received: %s' % str(e)
@@ -106,30 +113,36 @@ class Management(Service):
 
 		Returns CONTROL or None
 		'''
-		parent_endpoint = None
-		level = ''
-
-		# XXX: store assigned endpoints into /topo hiearchy for distribution to other
-		# config nodes
 
 		# lookup node group
 		# @todo need to keep track of nodes which have already POLO'ed / issue #39
 		for (group, spec) in self.config.groups.items():
 			if given_endpoint in spec.endpoints:
 				self.logger.debug('found base group: %s' % group)
+
+				parent = None
+				level = ''
+
 				if group in self.collectors:
-					parent_endpoint = self.collectors[group]
+					# group already exists, make sensor
+					parent = self.collectors[group]
 					level = 'leaf'
 				else:
-					self.collectors[group] = given_endpoint
-					parent_endpoint = self.endpoint
+					# first node in group, make collector
+					parent = self.tree.root
 					level = 'branch'
 
-		if parent_endpoint is None:
-			# silently ignore unknown base endpoints
-			self.logger.debug('no base group found for %s' % str(given_endpoint))
-			# @todo: cannot return None--using strict REQ/REP pattern / issue #26
-			return None
+				node = TopoNode(given_endpoint, level, group)
+				if parent == self.tree.root:
+					self.collectors[group] = node
 
-		# create reply message
-		return dcmsg.ASSIGN(parent_endpoint, level)
+				node.touch()
+				self.tree.insert_node(node, parent)
+
+				# create reply message
+				return dcmsg.ASSIGN(parent.endpoint, level)
+
+		# silently ignore unknown base endpoints
+		self.logger.debug('no base group found for %s' % str(given_endpoint))
+		# @todo: cannot return None--using strict REQ/REP pattern / issue #26
+		return None
