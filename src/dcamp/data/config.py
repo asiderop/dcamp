@@ -1,11 +1,11 @@
 import logging
-from configparser import ConfigParser
+from configparser import ConfigParser, Error as ConfigParserError
 
 from dcamp.data.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec
 from dcamp.util.decorators import Prefixable
 import dcamp.util.functions as Util
 
-class DCParsingError(configparser.Error):
+class DCParsingError(ConfigParserError):
 	pass
 
 @Prefixable

@@ -1,4 +1,6 @@
+from sys import stdout
 from functools import total_ordering
+from datetime import datetime
 
 from dcamp.util.decorators import Prefixable
 from dcamp.data.specs import EndpntSpec
@@ -109,7 +111,7 @@ class TopoTree(object):
 			yield from self.__walk(child)
 			self._pop_prefix()
 
-	def print(self, out=sys.stdout):
+	def print(self, out=stdout):
 		self._push_prefix('topo')
 
 		self._push_prefix(str(self.root.endpoint))
