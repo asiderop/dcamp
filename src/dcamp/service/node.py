@@ -3,8 +3,12 @@ import logging, time, threading, zmq
 from zhelpers import zpipe
 
 import dcamp.data.messages as dcmsg
-from dcamp.service.service import Service
+
 from dcamp.role.root import Root
+from dcamp.role.collector import Collector
+from dcamp.role.metric import Metric
+
+from dcamp.service.service import Service
 from dcamp.data.config import DCConfig
 from dcamp.data.specs import EndpntSpec
 
@@ -119,11 +123,21 @@ class Node(Service):
 					config = DCConfig()
 					config.read_file(open(response['config-file']))
 					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Root(peer, config)
+					self.role = Root(peer, response['parent'], config)
 					self.state = Node.PLAY
 
 				# if level == branch, start Collector role.
+				elif 'branch' == level:
+					self.role_pipe, peer = zpipe(self.ctx)
+					self.role = Collector(peer, response['parent'], self.endpoint)
+					self.state = Node.PLAY
+
 				# if level == leaf, start Metrics role.
+				elif 'leaf' == level:
+					self.role_pipe, peer = zpipe(self.ctx)
+					self.role = Metric(peer, response['parent'], self.endpoint)
+					self.state = Node.PLAY
+
 				else:
 					self.logger.error('unknown assignment level: %s' % level)
 					self.state = Node.BASE

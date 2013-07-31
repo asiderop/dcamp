@@ -3,9 +3,9 @@ from zhelpers import zpipe
 from dcamp.role.role import Role
 from dcamp.service.config import Configuration
 
-class Metric(Role):
+class Collector(Role):
 	'''
-	Metric Role
+	Collector Role
 	'''
 
 	def __init__(self,
@@ -20,7 +20,7 @@ class Metric(Role):
 		# add Configuration Service
 		self._add_service(Configuration,
 				config_pipe,
-				'leaf',		# action
-				parent_ep,	# collector endpoint
+				'branch',	# our action
+				parent_ep,	# root/collector endpoint
 				local_ep,	# our endpoint
 			)

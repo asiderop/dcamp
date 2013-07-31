@@ -22,23 +22,23 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 
 	### port offsets
 
-	TOPO_BASE = 0			# node service receive's topo discovery pubs
-	TOPO_JOIN = 1			# mgmt service receive's topo join requests
+	TOPO_BASE = 0			# SUB topo discovery PUB from mgmt service
+	TOPO_JOIN = 1			# REP assignment to node service topo join REQ
 
-	# XXX: perhaps not needed; just use config_control port?
-	TOPO_CONTROL = 2		# mgmt service receive's commands
+	# XXX: user control of system goes to root role; use mgmt or config service?
+	ROOT_CONTROL = 2		# REP to commands from cli REQ
+	CONFIG_CONTROL = 12		# SUB parent PUB commands
 
-	CONFIG_UPDATE = 10	 	# receive updates
-	CONFIG_SNAPSHOT = 11	# receive snapshots
-	CONFIG_CONTROL = 12		# receive commands
+	CONFIG_UPDATE = 10	 	# PUB updates to child SUB
+	CONFIG_SNAPSHOT = 11	# REP snapshots to child REQ
 
-	DATA_PUB = 20			# send to upstream
-	DATA_SUB = 21			# receive from downstream
+	DATA_PUB = 20			# PUB to parent
+	DATA_SUB = 21			# SUB from children
 
 	_valid_offsets = [
 		TOPO_BASE,
 		TOPO_JOIN,
-		TOPO_CONTROL,
+		ROOT_CONTROL,
 
 		CONFIG_UPDATE,
 		CONFIG_SNAPSHOT,

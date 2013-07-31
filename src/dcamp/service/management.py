@@ -15,9 +15,11 @@ class Management(Service):
 	'''
 
 	def __init__(self,
-			pipe,
-			config):
-		Service.__init__(self, pipe)
+			role_pipe,
+			config_pipe,
+			config,
+			):
+		Service.__init__(self, role_pipe)
 
 		self.config = config
 		self.endpoint = self.config.root['endpoint']
