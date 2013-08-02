@@ -1,7 +1,7 @@
 from zhelpers import zpipe
 
 from dcamp.role.role import Role
-from dcamp.service.config import Configuration
+from dcamp.service.configuration import Configuration
 
 class Collector(Role):
 	'''
@@ -10,6 +10,7 @@ class Collector(Role):
 
 	def __init__(self,
 			control_pipe,
+			group,
 			parent_ep,
 			local_ep,
 			):
@@ -20,7 +21,8 @@ class Collector(Role):
 		# add Configuration Service
 		self._add_service(Configuration,
 				config_pipe,
-				'branch',	# our action
+				'branch',
+				group,
 				parent_ep,	# root/collector endpoint
 				local_ep,	# our endpoint
 			)

@@ -83,7 +83,7 @@ class App:
 		assert('POLO' == reqmsg.name)
 
 		if 'start' == self.args.action:
-			repmsg = dcmsg.ASSIGN(root_ep, 'root')
+			repmsg = dcmsg.ASSIGN(root_ep, 'root', None)
 			repmsg['config-file'] = self.args.configfile.name
 
 		elif 'stop' == self.args.action:

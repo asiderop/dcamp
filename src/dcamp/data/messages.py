@@ -36,6 +36,16 @@ class DCMsg(object):
 	def name(self):
 		return self.__class__.__name__
 
+	@staticmethod
+	def _encode_int(val):
+		# pack as 8-byte int using network order
+		return struct.pack('!q', val)
+
+	@staticmethod
+	def _decode_int(buffer):
+		# unpack as 8-byte int using network order
+		return struct.unpack('!q', buffer)[0]
+
 	def send(self, socket):
 		self.logger.debug('S:%s (v%s)' % (self.name, self.version))
 		if verbose_debug:
@@ -125,13 +135,9 @@ class POLO(DCMsg):
 		assert 1 == len(msg)
 		return cls(msg[0].decode(), version=ver)
 
-class CONTROL(DCMsg):
-
-	def __init__(self, command, properties=None, version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
-		assert command in ['assignment', 'stop']
+class _PROPS(object):
+	def __init__(self, properties=None):
 		assert properties is None or isinstance(properties, dict)
-		self.command = command
 		self.properties = {} if properties is None else properties
 
 	# dictionary access maps to properties:
@@ -144,9 +150,7 @@ class CONTROL(DCMsg):
 	def get(self, k, default=None):
 		return self.properties.get(k, default)
 
-	@property
-	def frames(self):
-
+	def _encode_props(self):
 		# { key : [ (value-type-name, value), ... ] }
 		props = dict()
 
@@ -154,15 +158,12 @@ class CONTROL(DCMsg):
 			if type(value) == list:
 				new_list = list()
 				for val in value:
-					new_list.append(CONTROL.__type_tuple_from_value(val))
+					new_list.append(_PROPS.__type_tuple_from_value(val))
 				props[key] = new_list
 			else:
-				props[key] = CONTROL.__type_tuple_from_value(value)
+				props[key] = _PROPS.__type_tuple_from_value(value)
 
-		return super().frames + [
-				self.command.encode(),
-				jsonapi.dumps(props)
-			]
+		return jsonapi.dumps(props)
 
 	@staticmethod
 	def __type_tuple_from_value(value):
@@ -182,22 +183,15 @@ class CONTROL(DCMsg):
 		else:
 			return value
 
-	@classmethod
-	def from_msg(cls, ver, msg):
-		# make sure we have two frames
-		assert isinstance(msg, list)
-		assert 2 == len(msg)
-
-		cmd = msg[0].decode()
-		props = dict()
-
+	@staticmethod
+	def _decode_props(msg_str):
 		# unpack the json string into actual data types
-		decoded = jsonapi.loads(msg[1])
+		props = dict()
+		decoded = jsonapi.loads(msg_str)
 		for (key, value_list) in decoded.items():
-
 			# each element will either be a list (tuple)...
 			if len(value_list) == 2 and type(value_list[0]) != list:
-				props[key] = CONTROL.__value_from_type_tuple(value_list)
+				props[key] = _PROPS.__value_from_type_tuple(value_list)
 
 			# ...or a list of lists (tuples)
 			else:
@@ -205,17 +199,40 @@ class CONTROL(DCMsg):
 					if type(value) == list:
 						new_list = list()
 						for val in value:
-							new_list.append(CONTROL.__value_from_type_tuple(value))
+							new_list.append(_PROPS.__value_from_type_tuple(value))
 						props[key] = new_list
 
-		return cls(command=cmd, properties=props, version=ver)
+		return props
 
-# XXX: create more CONTROL shortcuts and ensure things still work
+class CONTROL(DCMsg, _PROPS):
+	def __init__(self, command, properties=None, version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
+		_PROPS.__init__(self, properties)
+		assert command in ['assignment', 'stop']
+		self.command = command
+
+	@property
+	def frames(self):
+		return super().frames + [
+				self.command.encode(),
+				self._encode_props()
+			]
+
+	@classmethod
+	def from_msg(cls, ver, msg):
+		# make sure we have two frames
+		assert isinstance(msg, list)
+		assert 2 == len(msg)
+
+		cmd = msg[0].decode()
+		props = _PROPS._decode_props(msg[1])
+
+		return cls(command=cmd, properties=props, version=ver)
 
 def STOP():
 	return CONTROL(command='stop')
 
-def ASSIGN(parent_endpoint, level):
+def ASSIGN(parent_endpoint, level, group):
 	assert level in ['root', 'branch', 'leaf']
 	if not isinstance(parent_endpoint, EndpntSpec):
 		assert isinstance(parent_endpoint, str)
@@ -224,8 +241,48 @@ def ASSIGN(parent_endpoint, level):
 	props = {}
 	props['parent'] = parent_endpoint
 	props['level'] = level
+	props['group'] = group
 
 	return CONTROL(command='assignment', properties=props)
+
+class CONFIG(DCMsg, _PROPS):
+	def __init__(self, key, sequence, uuid=None, value=None, properties=None, version=DCMsg.V_CURRENT):
+		DCMsg.__init__(self, version)
+		_PROPS.__init__(self, properties)
+		assert isinstance(key, str)
+		assert isinstance(sequence, int)
+
+		self.key = key
+		self.sequence = sequence
+		self.uuid = '' if uuid is None else uuid
+		self.value = '' if value is None else value
+
+	@property
+	def frames(self):
+		return super().frames + [
+				self.key.encode(),
+				DCMsg._encode_int(self.sequence),
+				self.uuid.encode(),
+				self._encode_props(),
+				self.value.encode()
+			]
+
+	@classmethod
+	def from_msg(cls, ver, msg):
+		# make sure we have two frames
+		assert isinstance(msg, list)
+		assert 5 == len(msg)
+
+		key = msg[0].decode()
+		seq = DCMsg._decode_int(msg[1])
+		uuid = msg[2].decode()
+		props = _PROPS._decode_props(msg[3])
+		val = msg[4].decode()
+
+		return cls(key, seq, uuid, val, properties=props, version=ver)
+
+def KVPUB(key, value):
+	return CONFIG(key, 0, None, value, None)
 
 class WTF(DCMsg):
 	def __init__(self, errcode, errstr='', version=DCMsg.V_CURRENT):
@@ -238,7 +295,7 @@ class WTF(DCMsg):
 	@property
 	def frames(self):
 		return super().frames + [
-				struct.pack('!i', self.errcode),
+				DCMsg._encode_int(self.errcode),
 				self.errstr.encode()
 			]
 
@@ -248,7 +305,7 @@ class WTF(DCMsg):
 		assert isinstance(msg, list)
 		assert len(msg) in [1, 2]
 
-		code = struct.unpack('!i', msg[0])[0]
+		code = DCMsg._decode_int(msg[0])
 		errstr = ''
 		if len(msg) == 2:
 			errstr = msg[1].decode()

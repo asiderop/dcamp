@@ -2,7 +2,7 @@ from zhelpers import zpipe
 
 from dcamp.role.role import Role
 from dcamp.service.management import Management
-from dcamp.service.config import Configuration
+from dcamp.service.configuration import Configuration
 
 class Root(Role):
 	'''
@@ -11,7 +11,6 @@ class Root(Role):
 
 	def __init__(self,
 			control_pipe,
-			cli_ep,
 			config):
 		Role.__init__(self, control_pipe)
 
@@ -24,6 +23,7 @@ class Root(Role):
 		self._add_service(Configuration,
 				config_pipe,
 				'root',
-				cli_ep, # root uses cli endpoint as parent
+				None, # group
+				None, # parent--root should use cli endpoint as parent / #42
 				config.root['endpoint'],
 			)

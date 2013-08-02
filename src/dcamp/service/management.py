@@ -142,7 +142,7 @@ class Management(Service):
 				self.tree.insert_node(node, parent)
 
 				# create reply message
-				return dcmsg.ASSIGN(parent.endpoint, level)
+				return dcmsg.ASSIGN(parent.endpoint, level, group)
 
 		# silently ignore unknown base endpoints
 		self.logger.debug('no base group found for %s' % str(given_endpoint))

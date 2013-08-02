@@ -123,19 +123,25 @@ class Node(Service):
 					config = DCConfig()
 					config.read_file(open(response['config-file']))
 					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Root(peer, response['parent'], config)
+					self.role = Root(peer, config)
 					self.state = Node.PLAY
 
 				# if level == branch, start Collector role.
 				elif 'branch' == level:
 					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Collector(peer, response['parent'], self.endpoint)
+					self.role = Collector(peer,
+							response['group'],
+							response['parent'],
+							self.endpoint)
 					self.state = Node.PLAY
 
 				# if level == leaf, start Metrics role.
 				elif 'leaf' == level:
 					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Metric(peer, response['parent'], self.endpoint)
+					self.role = Metric(peer,
+							response['group'],
+							response['parent'],
+							self.endpoint)
 					self.state = Node.PLAY
 
 				else:
