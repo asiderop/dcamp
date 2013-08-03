@@ -30,7 +30,6 @@ class Configuration(Service):
 
 		self.svc_pipe = svc_pipe
 		self.level = level
-		self.group = group
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
@@ -40,11 +39,9 @@ class Configuration(Service):
 		# XXX: need basic config service--subscribe to updates and print to debug log
 		if self.level in ['branch', 'leaf']:
 			assert self.parent is not None
-			assert self.group is not None
 
 			# 1) subscribe to udpates from parent
 			self.update_sub = self.ctx.socket(zmq.SUB)
-			#self.update_sub.setsockopt_string(zmq.SUBSCRIBE, '/config/'+group)
 			self.update_sub.setsockopt_string(zmq.SUBSCRIBE, '')
 			self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
 
@@ -56,6 +53,7 @@ class Configuration(Service):
 		# XXX: need basic config service--publish fake config updates
 		if self.level in ['root', 'branch']:
 			# 3) publish updates to children (bind)
+			# XXX: only publish config updates to non-collector children
 			self.update_pub = self.ctx.socket(zmq.PUB)
 			self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
 
@@ -95,4 +93,3 @@ class Configuration(Service):
 			if self.update_pub is not None:
 				update.send(self.update_pub)
 				self.pubcnt += 1
-

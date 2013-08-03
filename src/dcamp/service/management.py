@@ -126,7 +126,7 @@ class Management(Service):
 				level = ''
 
 				if group in self.collectors:
-					# group already exists, make sensor
+					# group already exists, make sensor (leaf) node
 					parent = self.collectors[group]
 					level = 'leaf'
 				else:

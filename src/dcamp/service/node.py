@@ -25,12 +25,10 @@ class Node(Service):
 
 	def __init__(self,
 			pipe,
-			endpoint,
-			topics=None):
+			endpoint):
 		Service.__init__(self, pipe)
 
 		self.endpoint = endpoint
-		self.topics = [] if topics is None else topics
 
 		####
 		# setup service for polling.
@@ -40,11 +38,7 @@ class Node(Service):
 
 		# @todo these sockets need a better naming convention.
 		self.topo_socket = self.ctx.socket(zmq.SUB)
-
-		for t in self.topics:
-			self.topo_socket.setsockopt_string(zmq.SUBSCRIBE, t)
-		if len(self.topics) == 0:
-			self.topo_socket.setsockopt_string(zmq.SUBSCRIBE, '')
+		self.topo_socket.setsockopt_string(zmq.SUBSCRIBE, '')
 
 		self.topo_socket.bind(self.topo_endpoint)
 

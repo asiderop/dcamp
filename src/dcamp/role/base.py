@@ -10,9 +10,8 @@ class Base(Role):
 
 	def __init__(self,
 			pipe,
-			address,
-			topics=None):
+			address):
 		Role.__init__(self, pipe)
 
 		# add Node Service
-		self._add_service(Node, address, topics)
+		self._add_service(Node, address)
