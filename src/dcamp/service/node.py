@@ -71,16 +71,14 @@ class Node(Service):
 			self.subcnt += 1
 
 			# @todo: do we care which state we are in?
-			# if Node.BASE == self.state:
-
 			if marco.name == 'MARCO':
-				self.control_socket = self.ctx.socket(zmq.REQ)
-				self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
-				self.poller.register(self.control_socket, zmq.POLLIN)
-				polo = dcmsg.POLO(self.endpoint)
-				polo.send(self.control_socket)
-				self.reqcnt += 1
 				if Node.BASE == self.state:
+					self.control_socket = self.ctx.socket(zmq.REQ)
+					self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+					self.poller.register(self.control_socket, zmq.POLLIN)
+					polo = dcmsg.POLO(self.endpoint)
+					polo.send(self.control_socket)
+					self.reqcnt += 1
 					self.state = Node.JOIN
 			else:
 				self.logger.error('unknown topo message: %s' % marco.name)
@@ -101,49 +99,8 @@ class Node(Service):
 				return
 
 			if 'assignment' == response.command:
-				# @todo need to handle re-assignment
-				if Node.JOIN != self.state:
-					self.logger.warning('received re-assignment; ignoring')
-					return
-
-				if 'level' not in response.properties:
-					self.logger.error('property missing: level')
-					return
-
-				level = response['level']
-				# if level == root, start Root role.
-				if 'root' == level:
-					assert 'config-file' in response.properties
-					config = DCConfig()
-					config.read_file(open(response['config-file']))
-					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Root(peer, config)
-					self.state = Node.PLAY
-
-				# if level == branch, start Collector role.
-				elif 'branch' == level:
-					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Collector(peer,
-							response['group'],
-							response['parent'],
-							self.endpoint)
-					self.state = Node.PLAY
-
-				# if level == leaf, start Metrics role.
-				elif 'leaf' == level:
-					self.role_pipe, peer = zpipe(self.ctx)
-					self.role = Metric(peer,
-							response['group'],
-							response['parent'],
-							self.endpoint)
-					self.state = Node.PLAY
-
-				else:
-					self.logger.error('unknown assignment level: %s' % level)
-					self.state = Node.BASE
-					return
-
-				self._play_role()
+				self.__handle_assignment(response)
+				return
 
 			elif 'stop' == response.command:
 				if Node.PLAY != self.state:
@@ -173,7 +130,52 @@ class Node(Service):
 				self.state = Node.BASE
 				return
 
-	def _play_role(self):
+	def __handle_assignment(self, response):
+		# @todo need to handle re-assignment
+		if Node.JOIN != self.state:
+			self.logger.warning('received re-assignment; ignoring')
+			return
+
+		if 'level' not in response.properties:
+			self.logger.error('property missing: level')
+			return
+
+		level = response['level']
+		# if level == root, start Root role.
+		if 'root' == level:
+			assert 'config-file' in response.properties
+			config = DCConfig()
+			config.read_file(open(response['config-file']))
+			self.role_pipe, peer = zpipe(self.ctx)
+			self.role = Root(peer, config)
+			self.state = Node.PLAY
+
+		# if level == branch, start Collector role.
+		elif 'branch' == level:
+			self.role_pipe, peer = zpipe(self.ctx)
+			self.role = Collector(peer,
+					response['group'],
+					response['parent'],
+					self.endpoint)
+			self.state = Node.PLAY
+
+		# if level == leaf, start Metrics role.
+		elif 'leaf' == level:
+			self.role_pipe, peer = zpipe(self.ctx)
+			self.role = Metric(peer,
+					response['group'],
+					response['parent'],
+					self.endpoint)
+			self.state = Node.PLAY
+
+		else:
+			self.logger.error('unknown assignment level: %s' % level)
+			self.state = Node.BASE
+			return
+
+		self.__play_role()
+
+	def __play_role(self):
 		# start thread
 		assert self.role is not None
 
