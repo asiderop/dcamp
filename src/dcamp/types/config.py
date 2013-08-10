@@ -1,7 +1,7 @@
 import logging
 from configparser import ConfigParser, Error as ConfigParserError
 
-from dcamp.data.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec
+from dcamp.types.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec
 from dcamp.util.decorators import Prefixable
 import dcamp.util.functions as Util
 
@@ -11,7 +11,7 @@ class DCParsingError(ConfigParserError):
 @Prefixable
 class DCConfig(ConfigParser):
 	def __init__(self):
-		self.logger = logging.getLogger('dcamp.data.config')
+		self.logger = logging.getLogger('dcamp.types.config')
 		ConfigParser.__init__(self, allow_no_value=True, delimiters=('='))
 
 		self.isvalid = False

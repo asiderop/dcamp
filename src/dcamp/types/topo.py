@@ -3,7 +3,7 @@ from functools import total_ordering
 from datetime import datetime
 
 from dcamp.util.decorators import Prefixable
-from dcamp.data.specs import EndpntSpec
+from dcamp.types.specs import EndpntSpec
 
 class TopoError(Exception):
 	pass

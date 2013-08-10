@@ -6,7 +6,7 @@ import logging, struct
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
 
-from dcamp.data.specs import SerializableSpecTypes, EndpntSpec
+from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
 
 verbose_debug = True
 

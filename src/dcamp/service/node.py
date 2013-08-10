@@ -2,15 +2,15 @@ import logging, time, threading, zmq
 
 from zhelpers import zpipe
 
-import dcamp.data.messages as dcmsg
+import dcamp.types.messages.common as dcmsg
 
 from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
 from dcamp.service.service import Service
-from dcamp.data.config import DCConfig
-from dcamp.data.specs import EndpntSpec
+from dcamp.types.config import DCConfig
+from dcamp.types.specs import EndpntSpec
 
 class Node(Service):
 	'''

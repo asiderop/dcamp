@@ -1,10 +1,10 @@
 import logging, zmq
 from time import time
 
-import dcamp.data.messages as dcmsg
+import dcamp.types.messages.common as dcmsg
 from dcamp.service.service import Service
-from dcamp.data.specs import EndpntSpec
-from dcamp.data.topo import TopoTree, TopoNode
+from dcamp.types.specs import EndpntSpec
+from dcamp.types.topo import TopoTree, TopoNode
 
 class Management(Service):
 	'''
