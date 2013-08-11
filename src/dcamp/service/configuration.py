@@ -1,7 +1,7 @@
 import logging, zmq
 from time import time
 
-import dcamp.types.messages.common as dcmsg
+import dcamp.types.messages.configuration as ConfigMsg
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service
 
@@ -9,6 +9,10 @@ class Configuration(Service):
 	'''
 	Configuration Service --
 	'''
+
+	# states
+	STATE_SYNC = 0
+	STATE_GOGO = 1
 
 	def __init__(self,
 			control_pipe, # control pipe for shutting down service
@@ -25,18 +29,23 @@ class Configuration(Service):
 
 		(self.subcnt, self.pubcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0)
 
-		self.pubnext = time()
-		self.pubint = 3
-
 		self.svc_pipe = svc_pipe
 		self.level = level
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
+		# { key : ( value, seq-num ) }
+		self.kvdict = {}
+		self.kv_seq = -1
+
+		self.state = None
+		self.pending_updates = []
+
 		self.update_sub = None
 		self.update_pub = None
+		self.kvsync_req = None
+		self.kvsync_rep = None
 
-		# XXX: need basic config service--subscribe to updates and print to debug log
 		if self.level in ['branch', 'leaf']:
 			assert self.parent is not None
 
@@ -48,17 +57,32 @@ class Configuration(Service):
 			self.poller.register(self.update_sub, zmq.POLLIN)
 
 			# 2) request snapshot from parent
-			pass
+			self.kvsync_req = self.ctx.socket(zmq.DEALER)
+			icanhaz = ConfigMsg.ICANHAZ()
+			icanhaz.send(self.kvsync_req, prefix=[b'']) # DEALER needs empty first frame
+			self.state = Configuration.STATE_SYNC
 
-		# XXX: need basic config service--publish fake config updates
-		if self.level in ['root', 'branch']:
+			self.poller.register(self.kvsync_req)
+
+		else:
+			assert 'root' == self.level
+			self.__setup_outbound()
+
+	def __setup_outbound(self):
 			# 3) publish updates to children (bind)
 			# XXX: only publish config updates to non-collector children
 			self.update_pub = self.ctx.socket(zmq.PUB)
 			self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
 
 			# 4) service snapshot requests to children (bind)
-			pass
+			self.kvsync_rep = self.ctx.socket(zmq.ROUTER)
+			self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
+
+			# XXX: process pending updates
+			# for update in self.pending_updates:
+			#	__process_update_message()
+
+			self.state = Configuration.STATE_GOGO
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
@@ -69,27 +93,57 @@ class Configuration(Service):
 			self.update_sub.close()
 		if self.update_pub is not None:
 			self.update_pub.close()
-		del self.update_sub, self.update_pub
+		if self.kvsync_req is not None:
+			self.kvsync_req.close()
+		if self.kvsync_rep is not None:
+			self.kvsync_rep.close()
+		del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
 		super()._cleanup()
-
-	def _pre_poll(self):
-		if 'root' == self.level:
-			if self.pubnext < time():
-				new_update = dcmsg.KVPUB('foobar', 'haha')
-				new_update.send(self.update_pub)
-				self.pubnext = time() + self.pubint
-				self.pubcnt += 1
-
-			self.poller_timer = 1e3 * max(0, self.pubnext - time())
 
 	def _post_poll(self, items):
 		if self.update_sub in items:
-			update = dcmsg.DCMsg.recv(self.update_sub)
-			self.subcnt += 1
-			assert update.name == 'CONFIG'
+			self.__recv_update()
+		if self.kvsync_req in items:
+			self.__recv_snapshot()
+		if self.kvsync_rep in items:
+			self.__send_snapshot()
 
-			self.logger.debug('received config update')
+	def __recv_snapshot(self, child):
+		assert self.state == Configuration.STATE_SYNC
+		# XXX: if KTHXBYE, __setup_outbound()
+		pass
 
-			if self.update_pub is not None:
-				update.send(self.update_pub)
-				self.pubcnt += 1
+	def __send_snapshot(self, child):
+		assert self.state == Configuration.STATE_GOGO
+		pass
+
+	def __recv_update(self):
+		update = ConfigMsg.CONFIG.recv(self.update_sub)
+		self.subcnt += 1
+
+		if update.is_error:
+			self.logger.error('received error message from parent: %s' % update)
+			return
+
+		if Configuration.STATE_SYNC == self.state:
+			self.pending_updates.append(update)
+		elif Configuration.STATE_GOGO == self.state:
+			self.__process_update_message(update)
+		else:
+			raise NotImplementedError('unknown state')
+
+	def __process_update_message(self, msg):
+		# if not greater than current kv-sequence, skip this one
+		if update.sequence <= self.kv_seq:
+			self.logger.warn('KVPUB out of sequence (cur=%d, recvd=%d); dropping' % (
+					self.kv_seq, update.sequence))
+			return
+
+		self.kv_seq = update.sequence
+		self.kvdict[update.key] = (update.value, update.sequence)
+		if len(update.value) == 0:
+			del self.kvdict[update.key]
+
+		if self.update_pub is not None:
+			update.send(self.update_pub)
+			self.pubcnt += 1

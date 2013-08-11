@@ -2,7 +2,7 @@ import logging, time, threading, zmq
 
 from zhelpers import zpipe
 
-import dcamp.types.messages.common as dcmsg
+import dcamp.types.messages.topology as TopoMsg
 
 from dcamp.role.root import Root
 from dcamp.role.collector import Collector
@@ -67,35 +67,33 @@ class Node(Service):
 
 	def _post_poll(self, items):
 		if self.topo_socket in items:
-			marco = dcmsg.DCMsg.recv(self.topo_socket)
+			marco = TopoMsg.MARCO.recv(self.topo_socket)
 			self.subcnt += 1
 
-			# @todo: do we care which state we are in?
-			if marco.name == 'MARCO':
-				if Node.BASE == self.state:
-					self.control_socket = self.ctx.socket(zmq.REQ)
-					self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
-					self.poller.register(self.control_socket, zmq.POLLIN)
-					polo = dcmsg.POLO(self.endpoint)
-					polo.send(self.control_socket)
-					self.reqcnt += 1
-					self.state = Node.JOIN
-			else:
-				self.logger.error('unknown topo message: %s' % marco.name)
+			if marco.is_error:
+				self.logger.error('topo message error: %s' % marco.errstr)
 				return
 
+			# @todo: do we care which state we are in?
+			if Node.BASE == self.state:
+				self.control_socket = self.ctx.socket(zmq.REQ)
+				self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+				self.poller.register(self.control_socket, zmq.POLLIN)
+				polo = TopoMsg.POLO(self.endpoint)
+				polo.send(self.control_socket)
+				self.reqcnt += 1
+				self.state = Node.JOIN
+
 		elif self.control_socket in items:
-			response = dcmsg.DCMsg.recv(self.control_socket)
+			response = TopoMsg.CONTROL.recv(self.control_socket)
 			self.poller.unregister(self.control_socket)
 			self.control_socket.close()
 			del self.control_socket
 			self.control_socket = None
 			self.repcnt += 1
 
-			assert response.name in ['CONTROL', 'WTF']
-
-			if 'WTF' == response.name:
-				self.logger.error('WTF(%d): %s' % (response.errcode, response.errstr))
+			if response.is_error:
+				self.logger.error(response)
 				return
 
 			if 'assignment' == response.command:

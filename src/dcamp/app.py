@@ -6,7 +6,8 @@ import zmq
 
 from zhelpers import zpipe
 
-import dcamp.types.messages.common as dcmsg
+import dcamp.types.messages.topology as TopoMsg
+
 from dcamp.types.config import DCConfig
 from dcamp.types.specs import EndpntSpec
 from dcamp.role.root import Root
@@ -64,7 +65,7 @@ class App:
 		ep = EndpntSpec("localhost", bind_addr - 1)
 		self.logger.debug('bound to %s + 1' % str(ep))
 
-		pubmsg = dcmsg.MARCO(ep)
+		pubmsg = TopoMsg.MARCO(ep)
 		reqmsg = None
 		tries = 0
 		while tries < 5:
@@ -72,22 +73,24 @@ class App:
 			pubmsg.send(pub)
 			result = rep.poll(timeout=1000)
 			if 0 != result:
-				reqmsg = dcmsg.DCMsg.recv(rep)
+				reqmsg = TopoMsg.POLO.recv(rep)
 				break
 
 		if None == reqmsg:
-			print('Unable to contact base node at root address: %s' % str(root_ep))
-			print('Is the base node running?')
+			self.logger.error('Unable to contact root address: %s' % str(root_ep))
+			self.logger.error('Is the base node running?')
 			return -1
 
-		assert('POLO' == reqmsg.name)
+		if reqmsg.is_error:
+			self.logger.error('Received error message from root address: %s' % reqmsg)
+			return -1
 
 		if 'start' == self.args.action:
-			repmsg = dcmsg.ASSIGN(root_ep, 'root', None)
+			repmsg = TopoMsg.ASSIGN(root_ep, 'root', None)
 			repmsg['config-file'] = self.args.configfile.name
 
 		elif 'stop' == self.args.action:
-			repmsg = dcmsg.STOP()
+			repmsg = TopoMsg.STOP()
 
 		else:
 			raise NotImplementedError('unknown root action')
@@ -107,8 +110,8 @@ class App:
 			role = Base(peer, self.args.address)
 		except zmq.ZMQError as e:
 			self.logger.debug('exception while starting base role:', exc_info=True )
-			print('Unable to start base node: %s' % e)
-			print('Is one already running on the given address?')
+			self.logger.error('Unable to start base node: %s' % e)
+			self.logger.error('Is one already running on the given address?')
 			return -1
 
 		# start playing role

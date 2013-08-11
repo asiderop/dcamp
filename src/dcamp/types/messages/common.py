@@ -8,6 +8,7 @@ import zmq.utils.jsonapi as jsonapi
 
 from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
 
+# TODO: use a new log level instead
 verbose_debug = True
 
 class DCMsg(object):
@@ -15,26 +16,32 @@ class DCMsg(object):
 	Base dCAMP message
 	'''
 
-	V0_1 = '0.1'
-	V_CURRENT = V0_1
-
 	logger = logging.getLogger("dcamp.dcmsg")
 
-	def __init__(self, version):
-		self._version = version
+	def __iter__(self):
+		return iter(self.frames)
 
-	@property
-	def frames(self):
-		return [self.name.encode(),
-				self.version.encode()]
-
-	@property
-	def version(self):
-		return self._version
+	def __str__(self):
+		result = ''
+		for (count, f) in enumerate(self.frames):
+			result += 'Frame %d: %s\n' % (count, f.decode())
+		return result[:len(result)-1] # drop the trailing new-line
 
 	@property
 	def name(self):
 		return self.__class__.__name__
+
+	@property
+	def is_error(self):
+		return isinstance(self, WTF)
+
+	@property
+	def frames(self):
+		raise NotImplementedError('subclass must implement method')
+
+	@classmethod
+	def from_msg(cls, msg):
+		raise NotImplementedError('subclass must implement method')
 
 	@staticmethod
 	def _encode_int(val):
@@ -46,96 +53,39 @@ class DCMsg(object):
 		# unpack as 8-byte int using network order
 		return struct.unpack('!q', buffer)[0]
 
-	def send(self, socket):
-		self.logger.debug('S:%s (v%s)' % (self.name, self.version))
+	def send(self, socket, prefix=None):
+		self.logger.debug('S:%s' % (self.name))
 		if verbose_debug:
-			for part in str(self).split('\n')[2:]: # skip name and version
+			for part in str(self).split('\n'):
 				self.logger.debug('  '+ part)
-		socket.send_multipart(self.frames)
-
-	def __iter__(self):
-		return iter(self.frames)
-
-	def __str__(self):
-		result = ''
-		count = 0
-		for f in self.frames:
-			result += 'Frame %d: %s\n' % (count, f.decode())
-			count += 1
-		return result[:len(result)-1] # drop the trailing new-line
+		parts = self.frames
+		if prefix is not None:
+			parts = prefix + self.frames
+		socket.send_multipart(parts)
 
 	@classmethod
 	def recv(cls, socket):
-		return cls.from_msg(socket.recv_multipart())
+		frames = socket.recv_multipart()
+		try:
+			# try to decode message with given class
+			msg = cls.from_msg(frames)
+		except (ValueError, struct.error) as e:
+			try:
+				# otherwise, try decoding WTF message
+				msg = WTF.from_msg(frames)
+			except:
+				# finally, return WTF with original error string
+				msg = WTF(1, str(e))
 
-	@classmethod
-	def from_msg(cls, msg):
-		# assert we have at least two frames
-		assert isinstance(msg, list)
-		assert 2 <= len(msg)
+		cls.logger.debug('R:%s' % (msg.name))
+		if verbose_debug:
+			for part in str(msg).split('\n'):
+				cls.logger.debug('  '+ part)
 
-		name = msg[0].decode()
-		ver = msg[1].decode()
-
-		if ver > cls.V_CURRENT:
-			cls.logger.warning('message version (%s) is greater than code version (%s)' %
-					(ver, cls.V_CURRENT))
-
-		for c in cls.__subclasses__():
-			if c.__name__ == name:
-				result = c.from_msg(ver, msg[2:]) # class found, so return it
-				c.logger.debug('R:%s (v%s)' % (name, ver))
-				if verbose_debug:
-					for part in str(result).split('\n')[2:]: # skip name and version
-						cls.logger.debug('  '+ part)
-				return result
-
-		cls.logger.fatal("no subclass matches found: %s" % name)
-		return cls() # if class not found, return generic
-
-class MARCO(DCMsg):
-	def __init__(self, root_endpoint, version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
-		if not isinstance(root_endpoint, EndpntSpec):
-			assert isinstance(root_endpoint, str)
-			root_endpoint = EndpntSpec.from_str(root_endpoint)
-		self.root_endpoint = root_endpoint
-
-	@property
-	def frames(self):
-		return super().frames + [
-				self.root_endpoint.encode()
-			]
-
-	@classmethod
-	def from_msg(cls, ver, msg):
-		# make sure we have exactly one frame
-		assert isinstance(msg, list)
-		assert 1 == len(msg)
-		return cls(msg[0].decode(), version=ver)
-
-class POLO(DCMsg):
-	def __init__(self, base_endpoint, version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
-		if not isinstance(base_endpoint, EndpntSpec):
-			assert isinstance(base_endpoint, str)
-			base_endpoint = EndpntSpec.from_str(base_endpoint)
-		self.base_endpoint = base_endpoint
-
-	@property
-	def frames(self):
-		return super().frames + [
-				self.base_endpoint.encode()
-			]
-
-	@classmethod
-	def from_msg(cls, ver, msg):
-		# make sure we have exactly one frame
-		assert isinstance(msg, list)
-		assert 1 == len(msg)
-		return cls(msg[0].decode(), version=ver)
+		return msg
 
 class _PROPS(object):
+	''' helper class for messages with property dictionaries '''
 	def __init__(self, properties=None):
 		assert properties is None or isinstance(properties, dict)
 		self.properties = {} if properties is None else properties
@@ -150,20 +100,44 @@ class _PROPS(object):
 	def get(self, k, default=None):
 		return self.properties.get(k, default)
 
-	def _encode_props(self):
+	@staticmethod
+	def _encode_dict(given):
 		# { key : [ (value-type-name, value), ... ] }
-		props = dict()
-
-		for (key, value) in self.properties.items():
+		result = dict()
+		for (key, value) in given.items():
 			if type(value) == list:
 				new_list = list()
 				for val in value:
 					new_list.append(_PROPS.__type_tuple_from_value(val))
-				props[key] = new_list
+				result[key] = new_list
 			else:
-				props[key] = _PROPS.__type_tuple_from_value(value)
+				result[key] = _PROPS.__type_tuple_from_value(value)
 
-		return jsonapi.dumps(props)
+		return jsonapi.dumps(result)
+
+	@staticmethod
+	def _decode_dict(given):
+		# unpack the json string into actual data types
+		result = dict()
+		decoded = jsonapi.loads(given)
+		for (key, value_list) in decoded.items():
+			if type(value_list) != list:
+				raise ValueError('expected json list but found ' % type(value_list))
+
+			# each element will either be a list (a single tuple)...
+			if len(value_list) == 2 and type(value_list[0]) != list:
+				result[key] = _PROPS.__value_from_type_tuple(value_list)
+
+			# ...or a list of lists (tuples)
+			else:
+				for value in value_list:
+					if type(value) != list:
+						raise ValueError('expected json list but found ' % type(value))
+					new_list = list()
+					for val in value:
+						new_list.append(_PROPS.__value_from_type_tuple(value))
+					result[key] = new_list
+		return result
 
 	@staticmethod
 	def __type_tuple_from_value(value):
@@ -183,130 +157,34 @@ class _PROPS(object):
 		else:
 			return value
 
-	@staticmethod
-	def _decode_props(msg_str):
-		# unpack the json string into actual data types
-		props = dict()
-		decoded = jsonapi.loads(msg_str)
-		for (key, value_list) in decoded.items():
-			# each element will either be a list (tuple)...
-			if len(value_list) == 2 and type(value_list[0]) != list:
-				props[key] = _PROPS.__value_from_type_tuple(value_list)
-
-			# ...or a list of lists (tuples)
-			else:
-				for value in value_list:
-					if type(value) == list:
-						new_list = list()
-						for val in value:
-							new_list.append(_PROPS.__value_from_type_tuple(value))
-						props[key] = new_list
-
-		return props
-
-class CONTROL(DCMsg, _PROPS):
-	def __init__(self, command, properties=None, version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
-		_PROPS.__init__(self, properties)
-		assert command in ['assignment', 'stop']
-		self.command = command
-
-	@property
-	def frames(self):
-		return super().frames + [
-				self.command.encode(),
-				self._encode_props()
-			]
-
-	@classmethod
-	def from_msg(cls, ver, msg):
-		# make sure we have two frames
-		assert isinstance(msg, list)
-		assert 2 == len(msg)
-
-		cmd = msg[0].decode()
-		props = _PROPS._decode_props(msg[1])
-
-		return cls(command=cmd, properties=props, version=ver)
-
-def STOP():
-	return CONTROL(command='stop')
-
-def ASSIGN(parent_endpoint, level, group):
-	assert level in ['root', 'branch', 'leaf']
-	if not isinstance(parent_endpoint, EndpntSpec):
-		assert isinstance(parent_endpoint, str)
-		parent_endpoint = EndpntSpec.from_str(parent_endpoint)
-
-	props = {}
-	props['parent'] = parent_endpoint
-	props['level'] = level
-	props['group'] = group
-
-	return CONTROL(command='assignment', properties=props)
-
-class CONFIG(DCMsg, _PROPS):
-	def __init__(self, key, sequence, uuid=None, value=None, properties=None, version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
-		_PROPS.__init__(self, properties)
-		assert isinstance(key, str)
-		assert isinstance(sequence, int)
-
-		self.key = key
-		self.sequence = sequence
-		self.uuid = '' if uuid is None else uuid
-		self.value = '' if value is None else value
-
-	@property
-	def frames(self):
-		return super().frames + [
-				self.key.encode(),
-				DCMsg._encode_int(self.sequence),
-				self.uuid.encode(),
-				self._encode_props(),
-				self.value.encode()
-			]
-
-	@classmethod
-	def from_msg(cls, ver, msg):
-		# make sure we have two frames
-		assert isinstance(msg, list)
-		assert 5 == len(msg)
-
-		key = msg[0].decode()
-		seq = DCMsg._decode_int(msg[1])
-		uuid = msg[2].decode()
-		props = _PROPS._decode_props(msg[3])
-		val = msg[4].decode()
-
-		return cls(key, seq, uuid, val, properties=props, version=ver)
-
-def KVPUB(key, value):
-	return CONFIG(key, 0, None, value, None)
-
 class WTF(DCMsg):
-	def __init__(self, errcode, errstr='', version=DCMsg.V_CURRENT):
-		DCMsg.__init__(self, version)
+	def __init__(self, errcode, errstr=''):
+		DCMsg.__init__(self)
 		assert isinstance(errcode, int)
 		assert isinstance(errstr, str)
 		self.errcode = errcode
 		self.errstr = errstr
 
+	def __str__(self):
+		return 'WTF(%d): %s' % (self.errcode, self.errstr)
+
 	@property
 	def frames(self):
-		return super().frames + [
+		return [
 				DCMsg._encode_int(self.errcode),
-				self.errstr.encode()
+				self.errstr.encode(),
 			]
 
 	@classmethod
-	def from_msg(cls, ver, msg):
+	def from_msg(cls, msg):
 		# make sure we have either two or three frames
 		assert isinstance(msg, list)
-		assert len(msg) in [1, 2]
+
+		if len(msg) not in [1, 2]:
+			raise ValueError('wrong number of frames')
 
 		code = DCMsg._decode_int(msg[0])
 		errstr = ''
 		if len(msg) == 2:
 			errstr = msg[1].decode()
-		return cls(code, errstr, version=ver)
+		return cls(code, errstr)

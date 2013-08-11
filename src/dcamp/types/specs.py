@@ -51,9 +51,6 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 	def __str__(self):
 		return "%s:%s" % (self.host, self.port)
 
-	def encode(self):
-		return str(self).encode()
-
 	def _port(self, offset):
 		assert offset in EndpntSpec._valid_offsets
 		return self.port + offset
@@ -69,8 +66,16 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 				op == 'bind' and '*' or self.host,
 				self._port(offset))
 
+	def encode(self):
+		return str(self).encode()
+	@classmethod
+	def decode(cls, given):
+		assert isinstance(given, bytes)
+		return cls.from_str(given.decode())
+
 	@classmethod
 	def from_str(cls, given):
+		assert isinstance(given, str)
 		errmsg = None
 
 		parts = given.split(':')

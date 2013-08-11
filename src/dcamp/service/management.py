@@ -1,7 +1,9 @@
 import logging, zmq
 from time import time
 
-import dcamp.types.messages.common as dcmsg
+from dcamp.types.messages.common import WTF
+import dcamp.types.messages.topology as TopoMsg
+
 from dcamp.service.service import Service
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTree, TopoNode
@@ -55,7 +57,7 @@ class Management(Service):
 		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
-		self.pubmsg = dcmsg.MARCO(self.endpoint)
+		self.pubmsg = TopoMsg.MARCO(self.endpoint)
 		self.pubnext = time()
 
 		self.poller.register(self.join_socket, zmq.POLLIN)
@@ -84,27 +86,23 @@ class Management(Service):
 
 	def _post_poll(self, items):
 		if self.join_socket in items:
-			repmsg = None
-			try:
-				reqmsg = dcmsg.DCMsg.recv(self.join_socket)
-				self.reqcnt += 1
-				assert reqmsg.name == 'POLO'
+			reqmsg = TopoMsg.POLO.recv(self.join_socket)
+			self.reqcnt += 1
 
+			if reqmsg.is_error:
+				errstr = 'invalid base endpoint received: %s' % (reqmsg.errstr)
+				self.logger.error(errstr)
+				repmsg = WTF(0, errstr)
+			else:
 				remote = self.tree.find_node_by_endpoint(reqmsg.base_endpoint)
 				if remote is None:
 					repmsg = self.__assign(reqmsg.base_endpoint)
 				else:
-					repmsg = dcmsg.WTF(0, 'too chatty; already POLOed')
+					repmsg = WTF(0, 'too chatty; already POLOed')
 					remote.touch()
 
-			except ValueError as e:
-				errstr = 'invalid base endpoint received: %s' % str(e)
-				self.logger.error(errstr)
-				repmsg = dcmsg.WTF(0, errstr)
-
-			if repmsg is not None:
-				repmsg.send(self.join_socket)
-				self.repcnt += 1
+			repmsg.send(self.join_socket)
+			self.repcnt += 1
 
 	def __assign(self, given_endpoint):
 		'''
@@ -142,7 +140,7 @@ class Management(Service):
 				self.tree.insert_node(node, parent)
 
 				# create reply message
-				return dcmsg.ASSIGN(parent.endpoint, level, group)
+				return TopoMsg.ASSIGN(parent.endpoint, level, group)
 
 		# silently ignore unknown base endpoints
 		self.logger.debug('no base group found for %s' % str(given_endpoint))
