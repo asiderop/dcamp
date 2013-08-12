@@ -1,4 +1,4 @@
-import logging, zmq
+import logging, zmq, random
 from time import time
 
 import dcamp.types.messages.configuration as ConfigMsg
@@ -46,29 +46,43 @@ class Configuration(Service):
 		self.kvsync_req = None
 		self.kvsync_rep = None
 
+		topics = []
+		if 'leaf' == self.level:
+			assert group is not None
+			topics.append('/config/%s' % group)
+		elif 'branch' == self.level:
+			topics.append('/config')
+			topics.append('/topo')
+
 		if self.level in ['branch', 'leaf']:
 			assert self.parent is not None
+			assert len(topics) > 0
 
 			# 1) subscribe to udpates from parent
 			self.update_sub = self.ctx.socket(zmq.SUB)
-			self.update_sub.setsockopt_string(zmq.SUBSCRIBE, '')
+			for t in topics:
+				self.update_sub.setsockopt_string(zmq.SUBSCRIBE, t)
 			self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
 
 			self.poller.register(self.update_sub, zmq.POLLIN)
 
 			# 2) request snapshot from parent
-			self.kvsync_req = self.ctx.socket(zmq.DEALER)
-			icanhaz = ConfigMsg.ICANHAZ()
-			icanhaz.send(self.kvsync_req, prefix=[b'']) # DEALER needs empty first frame
+			#self.kvsync_req = self.ctx.socket(zmq.DEALER)
+			#icanhaz = ConfigMsg.ICANHAZ()
+			#icanhaz.send(self.kvsync_req, prefix=[b'']) # DEALER socket needs empty first frame
 			self.state = Configuration.STATE_SYNC
 
-			self.poller.register(self.kvsync_req)
+			# XXX: just for testing
+			self.__setup_outbound()
+			#self.poller.register(self.kvsync_req)
 
 		else:
 			assert 'root' == self.level
+			self.pubnext = time() + 1
 			self.__setup_outbound()
 
 	def __setup_outbound(self):
+		if self.level in ['branch', 'root']:
 			# 3) publish updates to children (bind)
 			# XXX: only publish config updates to non-collector children
 			self.update_pub = self.ctx.socket(zmq.PUB)
@@ -99,6 +113,19 @@ class Configuration(Service):
 			self.kvsync_rep.close()
 		del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
 		super()._cleanup()
+
+	def _pre_poll(self):
+		# send fake updates to random groups, just for testing
+		if self.level == 'root':
+			if self.pubnext < time():
+				self.kv_seq += 1
+				pubmsg = ConfigMsg.KVPUB('/config/group%d/test-key' % random.randint(1,3),
+						'test-val', self.kv_seq - random.randint(0, 2)) # randomize the seq number
+				pubmsg.send(self.update_pub)
+				self.pubnext = time() + 5
+				self.pubcnt += 1
+
+			self.poller_timer = 1e3 * max(0, self.pubnext - time())
 
 	def _post_poll(self, items):
 		if self.update_sub in items:
@@ -132,7 +159,7 @@ class Configuration(Service):
 		else:
 			raise NotImplementedError('unknown state')
 
-	def __process_update_message(self, msg):
+	def __process_update_message(self, update):
 		# if not greater than current kv-sequence, skip this one
 		if update.sequence <= self.kv_seq:
 			self.logger.warn('KVPUB out of sequence (cur=%d, recvd=%d); dropping' % (

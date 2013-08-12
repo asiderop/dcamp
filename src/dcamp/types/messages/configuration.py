@@ -17,6 +17,19 @@ class CONFIG(DCMsg, _PROPS):
 		self.uuid = '' if uuid is None else uuid
 		self.value = '' if value is None else value
 
+	def __str__(self):
+		if self.key in ['ICANHAZ', 'KTHXBAI']:
+			return '%s %s' % (self.key, self.value)
+		elif 'HUGZ' == self.key:
+			return self.key
+		else:
+			result = '#%d: %s = %s' % (self.sequence, self.key, self.value)
+			if '' != self.uuid:
+				result += ' (%s)' % self.uuid
+			for (prop, val) in self.properties.items():
+				result += '\n%s : %s' % (prop, val)
+			return result
+
 	@property
 	def frames(self):
 		return [
@@ -51,5 +64,5 @@ def KTHXBAI(subtree=None):
 	return CONFIG(key='KTHXBAI', value=subtree)
 def KVPUB(k, v, seq, uuid=None):
 	return CONFIG(key=k, sequence=seq, uuid=uuid, value=v)
-def HUGZ():
+def HUGZ(): # TODO: add sequence numbers to heartbeats?
 	return CONFIG(key='HUGZ', sequence=0)
