@@ -5,6 +5,7 @@ import logging, struct
 
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
+from zmq import DEALER, ROUTER
 
 from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
 
@@ -17,6 +18,9 @@ class DCMsg(object):
 	'''
 
 	logger = logging.getLogger("dcamp.dcmsg")
+
+	def __init__(self, peer_id=None):
+		self._peer_id = peer_id
 
 	def __iter__(self):
 		return iter(self.frames)
@@ -53,19 +57,30 @@ class DCMsg(object):
 		# unpack as 8-byte int using network order
 		return struct.unpack('!q', buffer)[0]
 
-	def send(self, socket, prefix=None):
+	def send(self, socket):
 		self.logger.debug('S:%s' % (self.name))
 		if verbose_debug:
 			for part in str(self).split('\n'):
 				self.logger.debug('  '+ part)
+
 		parts = self.frames
-		if prefix is not None:
-			parts = prefix + self.frames
+		if DEALER == socket.socket_type:
+			parts.insert(0, b'') # DEALER needs empty first frame (i.e. delimiter)
+		elif ROUTER == socket.socket_type:
+			assert self._peer_id is not None
+			parts.insert(0, self._peer_id) # ROUTER needs peer identity in first frame
+
 		socket.send_multipart(parts)
 
 	@classmethod
 	def recv(cls, socket):
 		frames = socket.recv_multipart()
+
+		peer_id = None
+		if ROUTER == socket.socket_type:
+			peer_id = frames.pop(0) # first frame from ROUTER is peer identity
+			assert b'' == frames.pop(0) # second frame is empty (i.e. delimiter)
+
 		try:
 			# try to decode message with given class
 			msg = cls.from_msg(frames)
@@ -76,6 +91,8 @@ class DCMsg(object):
 			except:
 				# finally, return WTF with original error string
 				msg = WTF(1, str(e))
+
+		msg._peer_id = peer_id
 
 		cls.logger.debug('R:%s' % (msg.name))
 		if verbose_debug:
