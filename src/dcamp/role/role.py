@@ -42,7 +42,7 @@ class Role(object):
 		self.logger.debug('waiting for control commands')
 
 		# listen for control commands from caller
-		while self.is_running:
+		while self.in_running_state:
 			try:
 				msg = self.__recv_control()
 
@@ -105,7 +105,7 @@ class Role(object):
 
 	def __cleanup(self):
 		# stop our services cleanly (if we can)
-		if not self.is_errored:
+		if not self.in_errored_state:
 			# @todo: this might raise an exception / issue #38
 			self.__stop()
 

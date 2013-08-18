@@ -25,7 +25,7 @@ class Service(threading.Thread):
 
 	def _cleanup(self):
 		# tell role we're done (if we can)
-		if not self.is_errored:
+		if not self.in_errored_state:
 			# @todo: this might raise an exception / issue #38
 			self.__send_control('STOPPED')
 			self.logger.debug('sent STOPPED control reply')
@@ -56,7 +56,7 @@ class Service(threading.Thread):
 
 	def run(self):
 		self.run_state()
-		while self.is_running:
+		while self.in_running_state:
 			try:
 				self._pre_poll()
 				items = dict(self.poller.poll(self.poller_timer))

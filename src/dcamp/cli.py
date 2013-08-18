@@ -65,7 +65,7 @@ def main():
 
 	args = parser.parse_args()
 
-	logging.basicConfig(format='%(asctime)s %(name)-24s %(levelname)-8s %(message)s')
+	logging.basicConfig(format='%(asctime)s %(name)-27s %(levelname)-8s %(message)s')
 	logger = logging.getLogger('dcamp')
 	if (args.verbose):
 		logger.setLevel(logging.INFO)
