@@ -38,6 +38,9 @@ class Configuration(Service):
 		self.kvdict = {}
 		self.kv_seq = -1
 
+		# { topic : final-seq-num }
+		self.kvsync_completed = {}
+
 		self.state = None
 		self.pending_updates = []
 
@@ -46,21 +49,21 @@ class Configuration(Service):
 		self.kvsync_req = None
 		self.kvsync_rep = None
 
-		topics = []
+		self.topics = []
 		if 'leaf' == self.level:
 			assert group is not None
-			topics.append('/config/%s' % group)
+			self.topics.append('/config/%s' % group)
 		elif 'branch' == self.level:
-			topics.append('/config')
-			topics.append('/topo')
+			self.topics.append('/config')
+			self.topics.append('/topo')
 
 		if self.level in ['branch', 'leaf']:
 			assert self.parent is not None
-			assert len(topics) > 0
+			assert len(self.topics) > 0
 
 			# 1) subscribe to udpates from parent
 			self.update_sub = self.ctx.socket(zmq.SUB)
-			for t in topics:
+			for t in self.topics:
 				self.update_sub.setsockopt_string(zmq.SUBSCRIBE, t)
 			self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
 
@@ -69,8 +72,9 @@ class Configuration(Service):
 			# 2) request snapshot(s) from parent
 			self.kvsync_req = self.ctx.socket(zmq.DEALER)
 			self.kvsync_req.connect(self.parent.connect_uri(EndpntSpec.CONFIG_SNAPSHOT))
-			icanhaz = ConfigMsg.ICANHAZ(';'.join(topics))
-			icanhaz.send(self.kvsync_req)
+			for t in self.topics:
+				icanhaz = ConfigMsg.ICANHAZ(t)
+				icanhaz.send(self.kvsync_req)
 
 			self.poller.register(self.kvsync_req, zmq.POLLIN)
 
@@ -91,6 +95,8 @@ class Configuration(Service):
 			self.kvdict['/config/group3/metrics'] = ("NETWORK(rate='60s', threshold='None')", 8)
 			self.kvdict['/config/root/endpoint'] = ("localhost:5500", 9)
 			self.kvdict['/config/root/heartbeat'] = ("5", 10)
+
+			self.kv_seq = 10
 
 			self.pubnext = time() + 1
 			self.__setup_outbound()
@@ -119,7 +125,8 @@ class Configuration(Service):
 
 		# print each key-value pair; value is really (value, seq-num)
 		sleep(1)
-		for (k, (v, s)) in self.kvdict.items():
+		self.logger.debug('kv-seq: %d' % self.kv_seq)
+		for (k, (v, s)) in sorted(self.kvdict.items()):
 			self.logger.debug('%s: %s (%d)' % (k, v, s))
 
 		if self.update_sub is not None:
@@ -137,11 +144,10 @@ class Configuration(Service):
 		# XXX: send fake updates to random groups, just for testing
 		if self.level == 'root':
 			if self.pubnext < time():
-				self.kv_seq += 1
 				pubmsg = ConfigMsg.KVPUB('/config/group%d/test-key-%d' % (random.randint(1,3), random.randint(0,30)),
-						'test-val', self.kv_seq + random.randint(0, 0)) # randomize the seq number
-				pubmsg.send(self.update_pub)
-				self.pubnext = time() + 1
+						'test-val', self.kv_seq + 1 + random.randint(0, 0)) # randomize the seq number
+				self.__process_update_message(pubmsg) # add to our kvdict and publish update
+				self.pubnext = time() + 5
 				self.pubcnt += 1
 
 			self.poller_timer = 1e3 * max(0, self.pubnext - time())
@@ -171,19 +177,16 @@ class Configuration(Service):
 		else:
 			raise NotImplementedError('unknown state')
 
-	def __process_update_message(self, update, allow_out_of_sequence=False):
+	def __process_update_message(self, update, ignore_sequence=False):
 		# if not greater than current kv-sequence, skip this one
-		if not allow_out_of_sequence and update.sequence <= self.kv_seq:
+		if not ignore_sequence and update.sequence <= self.kv_seq:
 			self.logger.warn('KVPUB out of sequence (cur=%d, recvd=%d); dropping' % (
 					self.kv_seq, update.sequence))
 			return
 
-		if allow_out_of_sequence:
-			# during sync, we allow out of sequence updates; we only set our seq-num when
-			# we get a message that is higher than any previous message
-			if update.sequence > self.kv_seq:
-				self.kv_seq = update.sequence
-		else:
+		# during kvsync, we allow out of sequence updates; we only set our seq-num when
+		# not doing a kvsync
+		if not ignore_sequence:
 			self.kv_seq = update.sequence
 
 		self.kvdict[update.key] = (update.value, update.sequence)
@@ -206,13 +209,20 @@ class Configuration(Service):
 			return
 
 		if ConfigMsg.CONFIG.KTHXBAI == response.ctype:
-			# TODO: if response.sequence != self.kv_seq: wait? request new snap?
-			if response.sequence != self.kv_seq:
-				self.logger.warn('final seq-num does not match (cur=%d, recvd=%d)'
-						% (self.kv_seq, response.sequence))
+			if response.value not in self.topics:
+				self.logger.error('received KTHXBAI of unexpected subtree: %s' % response.value)
+				return
+
+			# add given subtree to completed list; return if still waiting for other
+			# subtree kvsync sessions
+			self.kvsync_completed[response.value] = response.sequence
+			if len(self.kvsync_completed) != len(self.topics):
+				return
+
+			self.kv_seq = max(self.kvsync_completed.values())
 			self.__setup_outbound()
 		else:
-			self.__process_update_message(response, allow_out_of_sequence=True)
+			self.__process_update_message(response, ignore_sequence=True)
 
 	def __send_snapshot(self):
 		assert Configuration.STATE_GOGO == self.state
@@ -224,10 +234,18 @@ class Configuration(Service):
 			return
 
 		peer_id = request._peer_id
-		subtrees = request.value.split(';') # subtree stored as value in ICANHAZ message
+		subtree = request.value # subtree stored as value in ICANHAZ message
 
-		# XXX: for (k, (v, s)) in kvdict.items():
-		#    send KVSYNC
+		# send all the key-value pairs in our dict
+		max_seq = -1
+		for (k, (v, s)) in self.kvdict.items():
+			# skip keys not in the requested subtree
+			if not k.startswith(subtree):
+				continue
+			max_seq = max([max_seq, s])
+			snap = ConfigMsg.KVSYNC(k, v, s, peer_id)
+			snap.send(self.kvsync_rep)
 
-		snap = ConfigMsg.KTHXBAI(self.kv_seq, peer_id, ';'.join(subtrees))
+		# send final message, closing the kvsync session
+		snap = ConfigMsg.KTHXBAI(self.kv_seq, peer_id, subtree)
 		snap.send(self.kvsync_rep)
