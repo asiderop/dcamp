@@ -28,7 +28,7 @@ class CONFIG(DCMsg, _PROPS):
 		self.key = key
 		self.sequence = sequence
 		self.uuid = '' if uuid is None else uuid
-		self.value = '' if value is None else value
+		self.value = value
 
 		if 'ICANHAZ' == key:
 			self.ctype = CONFIG.ICANHAZ
@@ -60,7 +60,7 @@ class CONFIG(DCMsg, _PROPS):
 				DCMsg._encode_int(self.sequence),
 				self.uuid.encode(),
 				_PROPS._encode_dict(self.properties),
-				self.value.encode(),
+				DCMsg._encode_blob(self.value),
 			]
 
 	@classmethod
@@ -75,7 +75,7 @@ class CONFIG(DCMsg, _PROPS):
 		seq = DCMsg._decode_int(msg[1])
 		uuid = msg[2].decode()
 		props = _PROPS._decode_dict(msg[3])
-		val = msg[4].decode()
+		val = DCMsg._decode_blob(msg[4])
 
 		return cls(key, val, seq, uuid, properties=props)
 

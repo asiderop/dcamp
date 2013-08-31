@@ -3,6 +3,11 @@ dCAMP message module
 '''
 import logging, struct
 
+# imports for pickling
+import importlib, io, pickle
+# safe modules to import during pickling
+import builtins, datetime
+
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
 from zmq import DEALER, ROUTER
@@ -56,6 +61,13 @@ class DCMsg(object):
 	def _decode_int(buffer):
 		# unpack as 8-byte int using network order
 		return struct.unpack('!q', buffer)[0]
+
+	@staticmethod
+	def _encode_blob(val):
+		return pickle.dumps(val)
+	@staticmethod
+	def _decode_blob(buffer):
+		return RestrictedUnpickler.restricted_loads(buffer)
 
 	def send(self, socket):
 		self.logger.debug('S:%s' % (self.name))
@@ -119,6 +131,7 @@ class _PROPS(object):
 
 	@staticmethod
 	def _encode_dict(given):
+		# TODO: this is innefficient; change to use blob encoding?
 		# { key : [ (value-type-name, value), ... ] }
 		result = dict()
 		for (key, value) in given.items():
@@ -205,3 +218,30 @@ class WTF(DCMsg):
 		if len(msg) == 2:
 			errstr = msg[1].decode()
 		return cls(code, errstr)
+
+
+class RestrictedUnpickler(pickle.Unpickler):
+
+	SAFE_IMPORTS = {
+		'builtins': [ 'range', 'complex', 'set', 'frozenset', 'slice' ],
+		'datetime' : [ 'datetime' ],
+	}
+
+	def find_class(self, module, name):
+		# Only allow safe classes from builtins.
+		if (	( module in RestrictedUnpickler.SAFE_IMPORTS and
+				  name in RestrictedUnpickler.SAFE_IMPORTS[module] )
+				or module.startswith('dcamp.types')
+				):
+			# TODO: is it inneficient to import the same module over and over?
+			mod = importlib.import_module(module)
+			return getattr(mod, name)
+
+		# Forbid everything else.
+		raise pickle.UnpicklingError("global '%s.%s' is forbidden" %
+									 (module, name))
+
+	@staticmethod
+	def restricted_loads(s):
+		"""Helper function analogous to pickle.loads()."""
+		return RestrictedUnpickler(io.BytesIO(s)).load()

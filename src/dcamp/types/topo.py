@@ -24,17 +24,21 @@ class TopoNode(object):
 		self.last_seen = 0
 
 	def __eq__(self, given):
+		if given is None:
+			return False
 		return self.endpoint == given.endpoint
 	def __lt__(self, given):
+		if given is None:
+			return False
 		return self.endpoint < given.endpoint
 	def __hash__(self):
 		return hash(self.endpoint)
 	def __str__(self):
 		# "root node for tree: localhost:9090"
 		# "collector node for groupA: localhost:5454"
-		return "%s node for %s: %s" % (self.role,
+		return "%s node for %s last seen %s" % (self.role,
 				'tree' if self.role == 'root' else self.group,
-				str(self.endpoint))
+				str(self.last_seen))
 
 	def __repr__(self):
 		return "TopoSpec(endpoint='%s', role='%s', group='%s')" % (self.endpoint,
@@ -85,7 +89,8 @@ class TopoTree(object):
 		parent = node.parent
 		while parent != None:
 			key = str(parent.endpoint) + self._delimiter + key
-		return self._delimiter + key
+			parent = parent.parent
+		return self._delimiter + 'topo' + self._delimiter + key
 
 	def walk(self):
 		self._push_prefix('topo')

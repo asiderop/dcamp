@@ -16,7 +16,6 @@ class Configuration(Service):
 
 	def __init__(self,
 			control_pipe, # control pipe for shutting down service
-			svc_pipe,	# service pipe for telling other local services what to do
 			level,
 			group,
 			parent_ep,	# from where we receive config updates/snapshots
@@ -27,27 +26,34 @@ class Configuration(Service):
 		assert isinstance(parent_ep, (EndpntSpec, type(None)))
 		assert isinstance(local_ep, EndpntSpec)
 
-		(self.subcnt, self.pubcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0)
-
-		self.svc_pipe = svc_pipe
 		self.level = level
 		self.parent = parent_ep
 		self.endpoint = local_ep
+
+		self.state = None
+
+		# No special locking is needed for the kvdict / seq_num members.
+		#
+		# WRITE: If level is root, there will be no sub messages to process, so only one
+		#        thread (the Management service thread) will ever write to the kvdict and
+		#        seq_num members.
+		# READ:  If a kvsync and __setitem__() call occur simultaneously, the new item will
+		#        trigger a kvpub update. So if the new value is not included in the sync
+		#        snapshot, the clients will still get the new value.
 
 		# { key : ( value, seq-num ) }
 		self.kvdict = {}
 		self.kv_seq = -1
 
+		# sockets and message counts
+		(self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
+		(self.subcnt, self.pubcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0)
+
+		### Branch/Leaf Members
+
 		# { topic : final-seq-num }
 		self.kvsync_completed = {}
-
-		self.state = None
 		self.pending_updates = []
-
-		self.update_sub = None
-		self.update_pub = None
-		self.kvsync_req = None
-		self.kvsync_rep = None
 
 		self.topics = []
 		if 'leaf' == self.level:
@@ -57,6 +63,9 @@ class Configuration(Service):
 			self.topics.append('/config')
 			self.topics.append('/topo')
 
+		self.__initalize_sockets()
+
+	def __initalize_sockets(self):
 		if self.level in ['branch', 'leaf']:
 			assert self.parent is not None
 			assert len(self.topics) > 0
@@ -83,23 +92,28 @@ class Configuration(Service):
 		else:
 			assert 'root' == self.level
 
-			# XXX: just for testing
-			self.kvdict['/config/group1/endpoints'] = ("localhost:5600, siderop1-losx.local:5630, localhost:5660", 0)
-			self.kvdict['/config/group1/filters'] = ("None", 1)
-			self.kvdict['/config/group1/metrics'] = ("CPU(rate='5s', threshold='30s')", 2)
-			self.kvdict['/config/group2/endpoints'] = ("localhost:5700, localhost:5730, localhost:5760", 3)
-			self.kvdict['/config/group2/filters'] = ("-'192.168.1.0/24', +'.netapp.com'", 4)
-			self.kvdict['/config/group2/metrics'] = ("CPU(rate='5s', threshold='30s'), DISK(rate='10s', threshold='>5000')", 5)
-			self.kvdict['/config/group3/endpoints'] = ("192.168.1.102:5800, 192.168.1.102:5830, 192.168.1.102:5860", 6)
-			self.kvdict['/config/group3/filters'] = ("None", 7)
-			self.kvdict['/config/group3/metrics'] = ("NETWORK(rate='60s', threshold='None')", 8)
-			self.kvdict['/config/root/endpoint'] = ("localhost:5500", 9)
-			self.kvdict['/config/root/heartbeat'] = ("5", 10)
-
-			self.kv_seq = 10
-
 			self.pubnext = time() + 1
 			self.__setup_outbound()
+
+	### Dictionary Access
+	# map access to internal kvdict
+
+	def __getitem__(self, k):
+		(val, seq) = self.kvdict[k]
+		return val
+	def get(self, k, default=None):
+		(val, seq) = self.kvdict.get(k, (default, 0))
+		return val
+
+	def __setitem__(self, k, v):
+		assert 'root' == self.level, "only root level allowed to make modifications"
+		item = ConfigMsg.KVPUB(k, v, self.kv_seq + 1)
+		self.__process_update_message(item) # add to our kvdict and publish update
+
+	def __delitem__(self, k):
+		assert 'root' == self.level, "only root level allowed to make modifications"
+		item = ConfigMsg.KVPUB(k, None, self.kv_seq + 1)
+		self.__process_update_message(item) # remove from our kvdict and publish update
 
 	def __setup_outbound(self):
 		if self.level in ['branch', 'root']:
@@ -112,9 +126,11 @@ class Configuration(Service):
 			self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
 			self.poller.register(self.kvsync_rep, zmq.POLLIN)
 
-			# process pending updates
+			# process pending updates; this will trigger kvpub updates for each message
+			# processed
 			for update in self.pending_updates:
 				self.__process_update_message(update)
+			del(self.pending_updates)
 
 			self.state = Configuration.STATE_GOGO
 
@@ -169,8 +185,8 @@ class Configuration(Service):
 			return
 
 		if Configuration.STATE_SYNC == self.state:
-			# TODO: could just not read the message; let them queue up on the socket
-			#       itself...
+			# TODO: another solution is to just not read the message; let them queue up on
+			#       the socket itself...
 			self.pending_updates.append(update)
 		elif Configuration.STATE_GOGO == self.state:
 			self.__process_update_message(update)
@@ -190,7 +206,7 @@ class Configuration(Service):
 			self.kv_seq = update.sequence
 
 		self.kvdict[update.key] = (update.value, update.sequence)
-		if len(update.value) == 0:
+		if update.value is None:
 			del self.kvdict[update.key]
 
 		# this should be None if still in SYNC state
@@ -220,6 +236,7 @@ class Configuration(Service):
 				return
 
 			self.kv_seq = max(self.kvsync_completed.values())
+			del(self.kvsync_completed)
 			self.__setup_outbound()
 		else:
 			self.__process_update_message(response, ignore_sequence=True)

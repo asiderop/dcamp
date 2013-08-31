@@ -18,13 +18,21 @@ class Management(Service):
 
 	def __init__(self,
 			role_pipe,
-			config_pipe,
+			config_service,
 			config,
 			):
 		Service.__init__(self, role_pipe)
 
+		# TODO: use config_service as full state representation; add accessor methods to
+		#       make it convenient and remove the self.config and self.tree members.
+		#       IDEA: create subclass of Configuration service class which provides these
+		#       additional methods? how would that work when a branch is promoted to root?
+		self.config_service = config_service
 		self.config = config
 		self.endpoint = self.config.root['endpoint']
+
+		for (k, v) in self.config.kvdict.items():
+			self.config_service[k] = v
 
 		# 1) start tree with self as root
 		# 2) add each node to tree as topo-node
@@ -33,6 +41,7 @@ class Management(Service):
 		# topo keys come from tree.get_topo_key(node)
 
 		self.tree = TopoTree(self.endpoint)
+		self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 
 		# { group: collector-topo-node }
 		self.collectors = {}
@@ -137,7 +146,8 @@ class Management(Service):
 					self.collectors[group] = node
 
 				node.touch()
-				self.tree.insert_node(node, parent)
+				node = self.tree.insert_node(node, parent)
+				self.config_service[self.tree.get_topo_key(node)] = node.last_seen
 
 				# create reply message
 				return TopoMsg.ASSIGN(parent.endpoint, level, group)

@@ -30,6 +30,7 @@ class Role(object):
 		pipe, peer = zpipe(self.ctx) # create control socket pair
 		service = ServiceClass(peer, *args, **kwargs) # create service, passing peer socket
 		self.__services[pipe] = service # add to our dict, using pipe socket as key
+		return service
 
 	def play(self):
 		# start each service thread
