@@ -91,8 +91,6 @@ class Configuration(Service):
 
 		else:
 			assert 'root' == self.level
-
-			self.pubnext = time() + 1
 			self.__setup_outbound()
 
 	### Dictionary Access
@@ -155,18 +153,6 @@ class Configuration(Service):
 			self.kvsync_rep.close()
 		del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
 		super()._cleanup()
-
-	def _pre_poll(self):
-		# XXX: send fake updates to random groups, just for testing
-		if self.level == 'root':
-			if self.pubnext < time():
-				pubmsg = ConfigMsg.KVPUB('/config/group%d/test-key-%d' % (random.randint(1,3), random.randint(0,30)),
-						'test-val', self.kv_seq + 1 + random.randint(0, 0)) # randomize the seq number
-				self.__process_update_message(pubmsg) # add to our kvdict and publish update
-				self.pubnext = time() + 5
-				self.pubcnt += 1
-
-			self.poller_timer = 1e3 * max(0, self.pubnext - time())
 
 	def _post_poll(self, items):
 		if self.update_sub in items:

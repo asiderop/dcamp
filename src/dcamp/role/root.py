@@ -21,6 +21,6 @@ class Root(Role):
 				None, # parent--root should use cli endpoint as parent / #42
 				config.root['endpoint'],
 			)
+
 		# add Management Service
 		self._add_service(Management, config_service, config)
-

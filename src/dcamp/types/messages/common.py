@@ -131,7 +131,7 @@ class _PROPS(object):
 
 	@staticmethod
 	def _encode_dict(given):
-		# TODO: this is innefficient; change to use blob encoding?
+		# TODO: this is innefficient; modify so only supports string and int types
 		# { key : [ (value-type-name, value), ... ] }
 		result = dict()
 		for (key, value) in given.items():

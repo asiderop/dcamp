@@ -6,6 +6,9 @@ import logging
 from dcamp.types.messages.common import DCMsg, _PROPS, WTF
 from dcamp.types.specs import EndpntSpec
 
+# @todo: need to include UUIDs in each message so nodes can distinguish between multiple
+#        invocations of the same endpoint
+
 class MARCO(DCMsg):
 	def __init__(self, root_endpoint):
 		DCMsg.__init__(self)
