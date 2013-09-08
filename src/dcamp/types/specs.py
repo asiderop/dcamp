@@ -20,7 +20,7 @@ class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):
 class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 	''' Class Representing an Endpoint Specification '''
 
-	### port offsets
+	### port offsets (for binding)
 
 	TOPO_BASE = 0			# SUB topo discovery PUB from mgmt service
 	TOPO_JOIN = 1			# REP assignment to node service topo join REQ
@@ -32,8 +32,8 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 	CONFIG_UPDATE = 10	 	# PUB updates to child SUB
 	CONFIG_SNAPSHOT = 11	# REP snapshots to child REQ
 
-	DATA_PUB = 20			# PUB to parent
-	DATA_SUB = 21			# SUB from children
+	DATA_SUB = 20			# SUB from children
+	DATA_PUSH_PULL = 21		# PUSH/PULL metrics between sensor and filter
 
 	_valid_offsets = [
 		TOPO_BASE,
@@ -44,8 +44,8 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 		CONFIG_SNAPSHOT,
 		CONFIG_CONTROL,
 
-		DATA_PUB,
 		DATA_SUB,
+		DATA_PUSH_PULL,
 	]
 
 	def __str__(self):
@@ -63,7 +63,7 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 		assert op in ['bind', 'connect']
 		return '%s://%s:%d' % (
 				protocol,
-				op == 'bind' and '*' or self.host,
+				('inproc' == protocol or 'connect' == op) and self.host or '*',
 				self._port(offset))
 
 	def encode(self):

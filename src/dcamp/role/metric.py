@@ -17,9 +17,12 @@ class Metric(Role):
 		Role.__init__(self, control_pipe)
 
 		# add Configuration Service
-		self._add_service(Configuration,
+		config_service = self._add_service(Configuration,
 				'leaf',
 				group,
 				parent_ep,	# collector endpoint
 				local_ep,	# our endpoint
 			)
+
+		# add Sensor Service
+		self._add_service(Sensor, config_service, local_ep)
