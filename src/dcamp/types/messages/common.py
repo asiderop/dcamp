@@ -54,11 +54,15 @@ class DCMsg(object):
 
 	@staticmethod
 	def _encode_int(val):
+		if val is None:
+			return b''
 		# pack as 8-byte int using network order
 		return struct.pack('!q', val)
 
 	@staticmethod
 	def _decode_int(buffer):
+		if len(buffer) == 0:
+			return None
 		# unpack as 8-byte int using network order
 		return struct.unpack('!q', buffer)[0]
 

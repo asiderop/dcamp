@@ -1,10 +1,12 @@
 '''
-dCAMP message module
+dCAMP Data Protocol
 '''
 import logging
 
 from dcamp.types.messages.common import DCMsg
 from dcamp.types.specs import EndpntSpec
+
+__all__ = [ 'DATA' ]
 
 class DATA(DCMsg):
 	'''
@@ -27,7 +29,7 @@ class DATA(DCMsg):
 	]
 
 	def __init__(self, source, mtype, detail=None, time1=None, value1=None, time2=None, value2=None):
-		DCMsg.__init__(self, peer_id)
+		DCMsg.__init__(self)
 
 		assert isinstance(source, EndpntSpec)
 		assert mtype in DATA.mtypes
@@ -50,6 +52,9 @@ class DATA(DCMsg):
 		self.value2 = value2
 
 	def __str__(self):
+		if self.mtype in ['HUGZ']:
+			return '%s -- HUGZ' % str(self.source)
+
 		result = '%s -- %s = ' % (self.source, self.detail)
 		if self.mtype in ['basic', 'sum']:
 			result += '%d' % (self.value1)
@@ -73,10 +78,10 @@ class DATA(DCMsg):
 				self.source.encode(),
 				self.mtype.encode(),
 				self.detail.encode(),
-				self.time1 is None and b'' or DCMsg._encode_int(self.time1),
-				self.value1 is None and b'' or DCMsg._encode_int(self.value1),
-				self.time2 is None and b'' or DCMsg._encode_int(self.time2),
-				self.value2 is None and b'' or DCMsg._encode_int(self.value2),
+				DCMsg._encode_int(self.time1),
+				DCMsg._encode_int(self.value1),
+				DCMsg._encode_int(self.time2),
+				DCMsg._encode_int(self.value2),
 			]
 
 	@classmethod
@@ -91,9 +96,9 @@ class DATA(DCMsg):
 		mtype = msg[1].decode()
 		detail = msg[2].decode()
 
-		time1 = len(msg[3]) == 0 and None or DCMsg._decode_int(msg[3])
-		value1 = len(msg[4]) == 0 and None or DCMsg._decode_int(msg[4])
-		time2 = len(msg[5]) == 0 and None or DCMsg._decode_int(msg[5])
-		value2 = len(msg[6]) == 0 and None or DCMsg._decode_int(msg[6])
+		time1 = DCMsg._decode_int(msg[3])
+		value1 = DCMsg._decode_int(msg[4])
+		time2 = DCMsg._decode_int(msg[5])
+		value2 = DCMsg._decode_int(msg[6])
 
 		return cls(source, mtype, detail, time1, value1, time2, value2)

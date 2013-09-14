@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Komodo Project File - DO NOT EDIT -->
 <project id="e2c1b82a-4ad9-7947-85ce-df2c85196bf0" kpf_version="5" name="dcamp.komodoproject">
-<preference-set idref="e2c1b82a-4ad9-7947-85ce-df2c85196bf0">
+<preference-set idref="e2c1b82a-4ad9-7947-85ce-df2c85196bf0" id="project" preftype="project">
 <preference-set id="Invocations">
 <preference-set id="Project">
   <string id="cookieparams"></string>
@@ -299,6 +299,7 @@
   <string id="tidy_accessibility">0</string>
   <string id="tidy_configpath"></string>
   <string id="tidy_errorlevel">errors</string>
+  <boolean id="useTabs">1</boolean>
   <string id="userEnvironmentStartupOverride"></string>
   <long id="ySlop">2</long>
 </preference-set>

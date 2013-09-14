@@ -4,6 +4,14 @@ from operator import xor
 
 import dcamp.util.functions as Util
 
+__all__ = [
+		'EndpntSpec',
+		'FilterSpec',
+		'GroupSpec',
+		'MetricSpec',
+		'SerializableSpecTypes',
+	]
+
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
 class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'metric'])):
@@ -97,10 +105,3 @@ SerializableSpecTypes = {
 		'EndpntSpec': EndpntSpec
 	}
 
-__all__ = [
-		EndpntSpec,
-		FilterSpec,
-		GroupSpec,
-		MetricSpec,
-		SerializableSpecTypes,
-	]
