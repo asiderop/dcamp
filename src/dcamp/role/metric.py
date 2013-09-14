@@ -2,6 +2,8 @@ from zhelpers import zpipe
 
 from dcamp.role.role import Role
 from dcamp.service.configuration import Configuration
+from dcamp.service.sensor import Sensor
+from dcamp.service.filter import Filter
 
 class Metric(Role):
 	'''
@@ -26,3 +28,4 @@ class Metric(Role):
 
 		# add Sensor Service
 		self._add_service(Sensor, config_service, local_ep)
+		self._add_service(Filter, config_service, local_ep)

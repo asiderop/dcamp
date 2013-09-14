@@ -27,6 +27,7 @@ class Configuration(Service):
 		assert isinstance(local_ep, EndpntSpec)
 
 		self.level = level
+		self.group = group
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
@@ -57,8 +58,8 @@ class Configuration(Service):
 
 		self.topics = []
 		if 'leaf' == self.level:
-			assert group is not None
-			self.topics.append('/config/%s' % group)
+			assert self.group is not None
+			self.topics.append('/config/%s' % self.group)
 		elif 'branch' == self.level:
 			self.topics.append('/config')
 			self.topics.append('/topo')
@@ -112,6 +113,13 @@ class Configuration(Service):
 		assert 'root' == self.level, "only root level allowed to make modifications"
 		item = ConfigMsg.KVPUB(k, None, self.kv_seq + 1)
 		self.__process_update_message(item) # remove from our kvdict and publish update
+
+	def get_metric_specs(self, group=None):
+		if group is None:
+			group = self.group
+
+		# return (spec-list, seq-id) or (None, -1)
+		return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
 
 	def __setup_outbound(self):
 		if self.level in ['branch', 'root']:

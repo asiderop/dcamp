@@ -40,7 +40,7 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 	CONFIG_UPDATE = 10	 	# PUB updates to child SUB
 	CONFIG_SNAPSHOT = 11	# REP snapshots to child REQ
 
-	DATA_SUB = 20			# SUB from children
+	DATA_PUB = 20			# PUB metrics to parent SUB
 	DATA_PUSH_PULL = 21		# PUSH/PULL metrics between sensor and filter
 
 	_valid_offsets = [
@@ -52,7 +52,7 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 		CONFIG_SNAPSHOT,
 		CONFIG_CONTROL,
 
-		DATA_SUB,
+		DATA_PUB,
 		DATA_PUSH_PULL,
 	]
 
