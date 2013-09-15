@@ -29,6 +29,8 @@ class Node(Service):
 		Service.__init__(self, pipe)
 
 		self.endpoint = endpoint
+		self.uuid = TopoMsg.gen_uuid()
+		self.polo_msg = TopoMsg.POLO(self.endpoint, self.uuid)
 
 		####
 		# setup service for polling.
@@ -67,20 +69,19 @@ class Node(Service):
 
 	def _post_poll(self, items):
 		if self.topo_socket in items:
-			marco = TopoMsg.MARCO.recv(self.topo_socket)
+			marco_msg = TopoMsg.MARCO.recv(self.topo_socket)
 			self.subcnt += 1
 
-			if marco.is_error:
-				self.logger.error('topo message error: %s' % marco.errstr)
+			if marco_msg.is_error:
+				self.logger.error('topo message error: %s' % marco_msg.errstr)
 				return
 
 			# @todo: do we care which state we are in?
 			if Node.BASE == self.state:
 				self.control_socket = self.ctx.socket(zmq.REQ)
-				self.control_socket.connect(marco.root_endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+				self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
 				self.poller.register(self.control_socket, zmq.POLLIN)
-				polo = TopoMsg.POLO(self.endpoint)
-				polo.send(self.control_socket)
+				self.polo_msg.send(self.control_socket)
 				self.reqcnt += 1
 				self.state = Node.JOIN
 

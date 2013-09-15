@@ -30,6 +30,7 @@ class Management(Service):
 		self.config_service = config_service
 		self.config = config
 		self.endpoint = self.config.root['endpoint']
+		self.uuid = TopoMsg.gen_uuid()
 
 		for (k, v) in self.config.kvdict.items():
 			self.config_service[k] = v
@@ -40,7 +41,7 @@ class Management(Service):
 		# topo-node contains (endpoint, role, group, parent, children, last-seen)
 		# topo keys come from tree.get_topo_key(node)
 
-		self.tree = TopoTree(self.endpoint)
+		self.tree = TopoTree(self.endpoint, self.uuid)
 		self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 
 		# { group: collector-topo-node }
@@ -66,7 +67,7 @@ class Management(Service):
 		self.pubint = self.config.root['heartbeat']
 		self.pubcnt = 0
 
-		self.pubmsg = TopoMsg.MARCO(self.endpoint)
+		self.marco_msg = TopoMsg.MARCO(self.endpoint, self.uuid)
 		self.pubnext = time()
 
 		self.poller.register(self.join_socket, zmq.POLLIN)
@@ -87,7 +88,7 @@ class Management(Service):
 
 	def _pre_poll(self):
 		if self.pubnext < time():
-			self.pubmsg.send(self.disc_socket)
+			self.marco_msg.send(self.disc_socket)
 			self.pubnext = time() + self.pubint
 			self.pubcnt += 1
 
@@ -95,17 +96,29 @@ class Management(Service):
 
 	def _post_poll(self, items):
 		if self.join_socket in items:
-			reqmsg = TopoMsg.POLO.recv(self.join_socket)
+			polo_msg = TopoMsg.POLO.recv(self.join_socket)
 			self.reqcnt += 1
 
-			if reqmsg.is_error:
-				errstr = 'invalid base endpoint received: %s' % (reqmsg.errstr)
+			repmsg = None
+
+			if polo_msg.is_error:
+				errstr = 'invalid base endpoint received: %s' % (polo_msg.errstr)
 				self.logger.error(errstr)
 				repmsg = WTF(0, errstr)
+
 			else:
-				remote = self.tree.find_node_by_endpoint(reqmsg.base_endpoint)
+				remote = self.tree.find_node_by_endpoint(polo_msg.endpoint)
 				if remote is None:
-					repmsg = self.__assign(reqmsg.base_endpoint)
+					repmsg = self.__assign(polo_msg)
+
+				elif remote.uuid != polo_msg.uuid:
+					# node recovered before it was recognized as down; just resend the
+					# same assignment info as before
+					self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
+					remote.uuid = polo_msg.uuid
+					remote.touch()
+					repmsg = remote.assignment()
+
 				else:
 					repmsg = WTF(0, 'too chatty; already POLOed')
 					remote.touch()
@@ -113,7 +126,7 @@ class Management(Service):
 			repmsg.send(self.join_socket)
 			self.repcnt += 1
 
-	def __assign(self, given_endpoint):
+	def __assign(self, polo_msg):
 		'''
 		Method to handle assigning joining node to topology:
 		* lookup node's group
@@ -126,7 +139,7 @@ class Management(Service):
 		# lookup node group
 		# @todo need to keep track of nodes which have already POLO'ed / issue #39
 		for (group, spec) in self.config.groups.items():
-			if given_endpoint in spec.endpoints:
+			if polo_msg.endpoint in spec.endpoints:
 				self.logger.debug('found base group: %s' % group)
 
 				parent = None
@@ -141,7 +154,7 @@ class Management(Service):
 					parent = self.tree.root
 					level = 'branch'
 
-				node = TopoNode(given_endpoint, level, group)
+				node = TopoNode(polo_msg.endpoint, polo_msg.uuid, level, group)
 				if parent == self.tree.root:
 					self.collectors[group] = node
 
@@ -150,9 +163,9 @@ class Management(Service):
 				self.config_service[self.tree.get_topo_key(node)] = node.last_seen
 
 				# create reply message
-				return TopoMsg.ASSIGN(parent.endpoint, level, group)
+				return node.assignment()
 
 		# silently ignore unknown base endpoints
-		self.logger.debug('no base group found for %s' % str(given_endpoint))
+		self.logger.debug('no base group found for %s' % str(polo_msg.endpoint))
 		# @todo: cannot return None--using strict REQ/REP pattern / issue #26
 		return None

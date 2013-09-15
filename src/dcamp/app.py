@@ -65,24 +65,24 @@ class App:
 		ep = EndpntSpec("localhost", bind_addr - 1)
 		self.logger.debug('bound to %s + 1' % str(ep))
 
-		pubmsg = TopoMsg.MARCO(ep)
-		reqmsg = None
+		marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid())
+		polo = None
 		tries = 0
 		while tries < 5:
 			tries += 1
-			pubmsg.send(pub)
+			marco.send(pub)
 			result = rep.poll(timeout=1000)
 			if 0 != result:
-				reqmsg = TopoMsg.POLO.recv(rep)
+				polo = TopoMsg.POLO.recv(rep)
 				break
 
-		if None == reqmsg:
+		if None == polo:
 			self.logger.error('Unable to contact root address: %s' % str(root_ep))
 			self.logger.error('Is the base node running?')
 			return -1
 
-		if reqmsg.is_error:
-			self.logger.error('Received error message from root address: %s' % reqmsg)
+		if polo.is_error:
+			self.logger.error('Received error message from root address: %s' % polo)
 			return -1
 
 		if 'start' == self.args.action:

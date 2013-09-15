@@ -1,7 +1,7 @@
 '''
-dCAMP message module
+dCAMP Topology Protocol
 '''
-import logging
+import logging, uuid
 
 from dcamp.types.messages.common import DCMsg, _PROPS, WTF
 from dcamp.types.specs import EndpntSpec
@@ -9,43 +9,55 @@ from dcamp.types.specs import EndpntSpec
 # @todo: need to include UUIDs in each message so nodes can distinguish between multiple
 #        invocations of the same endpoint
 
-class MARCO(DCMsg):
-	def __init__(self, root_endpoint):
+# TODO: the MARCO and POLO message types are really the same message structure. Should
+#       these two just be combined?
+
+__all__ = [
+		'gen_uuid'
+		'MARCO',
+		'POLO',
+		'CONTROL',
+		'STOP',
+		'ASSIGN',
+	]
+
+def gen_uuid():
+	return uuid.uuid4()
+
+class TOPO(DCMsg):
+	def __init__(self, ep, id):
 		DCMsg.__init__(self)
-		assert isinstance(root_endpoint, EndpntSpec)
-		self.root_endpoint = root_endpoint
+		assert isinstance(ep, EndpntSpec)
+		assert isinstance(id, uuid.UUID)
+		self.endpoint = ep
+		self.uuid = id
+
+	def __str__(self):
+		return '%s (%s)' % (self.endpoint, self.uuid)
 
 	@property
 	def frames(self):
-		return [ self.root_endpoint.encode() ]
+		return [ self.endpoint.encode(), self.uuid.bytes ]
 
 	@classmethod
 	def from_msg(cls, msg):
 		assert isinstance(msg, list)
 
-		# make sure we have exactly one frame
-		if 1 != len(msg):
+		# make sure we have exactly two frames
+		if 2 != len(msg):
 			raise ValueError('wrong number of frames')
-		return cls(EndpntSpec.decode(msg[0]))
 
-class POLO(DCMsg):
-	def __init__(self, base_endpoint):
-		DCMsg.__init__(self)
-		assert isinstance(base_endpoint, EndpntSpec)
-		self.base_endpoint = base_endpoint
+		ep = EndpntSpec.decode(msg[0])
+		id = uuid.UUID(bytes=msg[1])
+		return cls(ep, id)
 
-	@property
-	def frames(self):
-		return [ self.base_endpoint.encode() ]
+class MARCO(TOPO):
+	def __init__(self, root_endpoint, root_uuid):
+		TOPO.__init__(self, root_endpoint, root_uuid)
 
-	@classmethod
-	def from_msg(cls, msg):
-		assert isinstance(msg, list)
-
-		# make sure we have exactly one frame
-		if 1 != len(msg):
-			raise ValueError('wrong number of frames')
-		return cls(EndpntSpec.decode(msg[0]))
+class POLO(TOPO):
+	def __init__(self, base_endpoint, base_uuid):
+		TOPO.__init__(self, base_endpoint, base_uuid)
 
 class CONTROL(DCMsg, _PROPS):
 	def __init__(self, command, properties=None):

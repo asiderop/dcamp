@@ -1,9 +1,18 @@
+import uuid
 from sys import stdout
 from functools import total_ordering
 from datetime import datetime
 
 from dcamp.util.decorators import Prefixable
 from dcamp.types.specs import EndpntSpec
+from dcamp.types.messages.topology import ASSIGN
+
+__all__ = [
+		'TopoError',
+		'DuplicateNodeError',
+		'TopoNode',
+		'TopoTree',
+	]
 
 class TopoError(Exception):
 	pass
@@ -12,11 +21,13 @@ class DuplicateNodeError(TopoError):
 
 @total_ordering
 class TopoNode(object):
-	def __init__(self, endpoint, role, group):
+	def __init__(self, endpoint, id, level, group):
 		assert isinstance(endpoint, EndpntSpec)
+		assert isinstance(id, uuid.UUID)
 
 		self.endpoint = endpoint
-		self.role = role
+		self.uuid = id
+		self.level = level
 		self.group = group
 
 		self.parent = None
@@ -36,13 +47,13 @@ class TopoNode(object):
 	def __str__(self):
 		# "root node for tree: localhost:9090"
 		# "collector node for groupA: localhost:5454"
-		return "%s node for %s last seen %s" % (self.role,
-				'tree' if self.role == 'root' else self.group,
+		return "%s node for %s last seen %s" % (self.level,
+				'tree' if self.level == 'root' else self.group,
 				str(self.last_seen))
 
 	def __repr__(self):
-		return "TopoSpec(endpoint='%s', role='%s', group='%s')" % (self.endpoint,
-				self.role, self.group)
+		return "TopoSpec(endpoint='%s', id=%s, level='%s', group='%s')" % (
+				self.endpoint, self.uuid, self.level, self.group)
 
 	def add_child(self, child):
 		assert isinstance(child, TopoNode)
@@ -52,19 +63,22 @@ class TopoNode(object):
 	def touch(self):
 		self.last_seen = datetime.now()
 
+	def assignment(self):
+		return ASSIGN(self.parent.endpoint, self.level, self.group)
+
 @Prefixable
 class TopoTree(object):
 	pass
 
-	def __init__(self, root_ep):
-		self.root = TopoNode(root_ep, role='root', group=None)
+	def __init__(self, root_ep, root_id):
+		self.root = TopoNode(root_ep, root_id, level='root', group=None)
 		self.nodes = { root_ep: self.root }
 
-	def insert_endpoint(self, node_ep, role, group, parent):
+	def insert_endpoint(self, node_ep, node_id, level, group, parent):
 		if node_ep in self.nodes:
 			raise DuplicateNodeError('endpoint already exists: %s' % self.nodes[node_ep])
 
-		node = TopoNode(node_ep, role, group)
+		node = TopoNode(node_ep, node_id, level, group)
 		return self.insert_node(node, parent)
 
 	def insert_node(self, node, parent):
