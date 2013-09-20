@@ -10,7 +10,7 @@ import builtins, datetime
 
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
-from zmq import DEALER, ROUTER
+from zmq import DEALER, ROUTER, NOBLOCK
 
 from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
 
@@ -90,7 +90,7 @@ class DCMsg(object):
 
 	@classmethod
 	def recv(cls, socket):
-		frames = socket.recv_multipart()
+		frames = socket.recv_multipart(NOBLOCK)
 
 		peer_id = None
 		if ROUTER == socket.socket_type:

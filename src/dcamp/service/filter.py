@@ -1,4 +1,4 @@
-import logging, zmq
+import logging, zmq, tempfile
 from time import time
 
 import dcamp.types.messages.data as DataMsg
@@ -30,6 +30,9 @@ class Filter(Service):
 		self.pub_socket = self.ctx.socket(zmq.PUB)
 		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUB))
 
+		self.data_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
+		self.logger.debug('writing data to %s' % self.data_file.name)
+
 		# XXX: get metric specs from config service
 		self.pub_int = 10 # start out checking for config updates every 5 seconds
 		self.next_pub = 0
@@ -54,13 +57,18 @@ class Filter(Service):
 
 	def _post_poll(self, items):
 		if self.pull_socket in items:
-			data = DataMsg.DATA.recv(self.pull_socket)
+			while True:
+				data = None
+				try: data = DataMsg.DATA.recv(self.pull_socket)
+				except zmq.Again as e: break
 			self.pullcnt += 1
+				self.data_file.write(str(data) + '\n')
 			del data
 
 	def __pub_metrics(self):
-		metric = DataMsg.DATA(self.endpoint, 'HUGZ')
-		metric.send(self.pub_socket)
+		#metric = DataMsg.DATA(self.endpoint, 'HUGZ')
+		#metric.send(self.pub_socket)
+		self.logger.debug('PUB-METRICS')
 		self.pubcnt += 1
 		self.next_pub = time() + self.pub_int
 

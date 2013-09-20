@@ -55,7 +55,7 @@ class DATA(DCMsg):
 		if self.mtype in ['HUGZ']:
 			return '%s -- HUGZ' % str(self.source)
 
-		result = '%s -- %s = ' % (self.source, self.detail)
+		result = '%s -- %s @ %d = ' % (self.source, self.detail, self.time1)
 		if self.mtype in ['basic', 'sum']:
 			result += '%d' % (self.value1)
 		elif self.mtype in ['average', 'percent']:

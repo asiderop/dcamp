@@ -76,7 +76,7 @@ class DCConfig(ConfigParser):
 			rate = Util.str_to_seconds(self[name]['rate'])
 			threshold = self[name]['threshold'] if 'threshold' in self[name] else None
 			metric = self[name]['metric']
-			result[name] = MetricSpec(rate, threshold, metric)
+			result[name] = MetricSpec(rate, threshold, metric, None)
 
 		self.metrics = result
 
