@@ -62,7 +62,7 @@ class Filter(Service):
 				try: data = DataMsg.DATA.recv(self.pull_socket)
 				except zmq.Again as e: break
 			self.pullcnt += 1
-				self.data_file.write(str(data) + '\n')
+				self.data_file.write(data.log_str() + '\n')
 			del data
 
 	def __pub_metrics(self):

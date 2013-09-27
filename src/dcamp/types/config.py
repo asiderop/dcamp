@@ -74,7 +74,7 @@ class DCConfig(ConfigParser):
 		# process all metric specifications
 		for name in self.metric_sections:
 			rate = Util.str_to_seconds(self[name]['rate'])
-			threshold = self[name]['threshold'] if 'threshold' in self[name] else None
+			threshold = self[name]['threshold'] if 'threshold' in self[name] else ''
 			metric = self[name]['metric']
 			result[name] = MetricSpec(rate, threshold, metric, None)
 

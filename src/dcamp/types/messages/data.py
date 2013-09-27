@@ -5,6 +5,7 @@ import logging
 
 from dcamp.types.messages.common import DCMsg
 from dcamp.types.specs import EndpntSpec
+from dcamp.util.functions import bytes_to_str
 
 __all__ = [ 'DATA' ]
 
@@ -51,26 +52,31 @@ class DATA(DCMsg):
 		self.time2 = time2
 		self.value2 = value2
 
-	def __str__(self):
-		if self.mtype in ['HUGZ']:
-			return '%s -- HUGZ' % str(self.source)
-
-		result = '%s -- %s @ %d = ' % (self.source, self.detail, self.time1)
+	def __calc(self):
+		result = None
 		if self.mtype in ['basic', 'sum']:
-			result += '%d' % (self.value1)
+			result = '%d' % (self.value1)
 		elif self.mtype in ['average', 'percent']:
 			val = self.value1 / self.value2
 			if 'percent' == self.mtype:
 				val *= 100
-			result += '%d' (val)
+			result = '%d' % (val)
 			if 'percent' == self.mtype:
-				result += '%%'
+				result += '%'
 			elif 'average' == self.mtype:
-				result += ' averaged across %d ms' % (self.time2 - self.time1)
+				result += ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
 		elif self.mtype in ['rate']:
-			result += '%d / ms' % ((self.value2 - self.value1) / (self.time2 - self.time1))
+			result = '%s / sec' % bytes_to_str((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3)
 
 		return result
+
+	def log_str(self):
+		return '%d\t%s\t%s\t%s' % (self.time1, self.source, self.detail, self.__calc())
+
+	def __str__(self):
+		if self.mtype in ['HUGZ']:
+			return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
+		return '%s -- %s @ %d = %s' % (self.source, self.detail, self.time1, self.__calc())
 
 	@property
 	def frames(self):

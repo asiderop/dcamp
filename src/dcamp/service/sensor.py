@@ -1,13 +1,12 @@
-import logging, zmq, sys
+import logging, zmq, sys, psutil
 from time import time
-from random import randint
 from collections import namedtuple as NamedTuple
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service
 
-MetricCollection = NamedTuple('MetricCollection', 'epoch, spec')
+MetricCollection = NamedTuple('MetricCollection', 'epoch, spec, last_time, last_value')
 
 # round down to most recent second -- designed for collection scheduling
 now_secs = lambda: int(time())
@@ -68,7 +67,7 @@ class Sensor(Service):
 		pass
 
 	def __send_hug(self):
-		metric = DataMsg.DATA(self.endpoint, 'HUGZ')
+		metric = DataMsg.DATA(self.endpoint, 'HUGZ', time1=now_msecs())
 		metric.send(self.metrics_socket)
 		self.hugz_cnt += 1
 
@@ -76,15 +75,14 @@ class Sensor(Service):
 
 		collected = []
 		while True:
-			M = self.metric_specs.pop(0)
-			assert M.epoch <= now_secs(), 'next metric is not scheduled for collection'
+			collection = self.metric_specs.pop(0)
+			assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
 
-			metric = DataMsg.DATA(self.endpoint, 'basic', M.spec.metric, time1=now_msecs(), value1=randint(0, 1000))
-			metric.send(self.metrics_socket)
-			self.push_cnt += 1
-
-			# add to list of collected metrics along with its next collection
-			collected.append(MetricCollection(now_secs() + M.spec.rate, M.spec))
+			(msg, collection) = self.__do_sample(collection)
+			if msg is not None:
+				msg.send(self.metrics_socket)
+				self.push_cnt += 1
+			collected.append(collection)
 
 			if len(self.metric_specs) == 0:
 				# no more work
@@ -107,13 +105,13 @@ class Sensor(Service):
 			new_specs = []
 
 			# add all old metric specs, continue with its next collection time
-			for M in self.metric_specs:
-				if M.spec in specs:
-					new_specs.append(M)
-					specs.remove(M.spec)
+			for collection in self.metric_specs:
+				if collection.spec in specs:
+					new_specs.append(collection)
+					specs.remove(collection.spec)
 
 			# add all new metric specs, starting collection now
-			new_specs = [MetricCollection(0, elem) for elem in specs]
+			new_specs = [MetricCollection(0, elem, 0, 0) for elem in specs]
 
 			self.metric_specs = sorted(new_specs)
 			self.metric_seqid = seq
@@ -144,3 +142,77 @@ class Sensor(Service):
 		val = max(0, (wakeup * 1e3) - now_msecs())
 		self.logger.debug('next wakeup in %dms' % val)
 		return val
+
+	def __do_sample(self, collection):
+		''' returns tuple of (data-msg, metric-collection) '''
+		# TODO: move this to another class?
+
+		(time1, value1, time2, value2) = (None, None, None, None)
+		mtype = None
+
+		# local vars for easier access
+		detail = collection.spec.detail
+		last_t = collection.last_time
+		last_v = collection.last_value
+
+		first = (last_t, last_v) == (0, 0)
+
+		if 'CPU' == detail:
+			mtype = 'percent'
+
+			time1 = now_msecs()
+			# percent is accurate to one decimal point
+			value1 = int(psutil.cpu_percent(interval=0) * 10)
+			value2 = 1000
+
+			# fake last time/value since they are not needed
+			(last_t, last_v) = (1, 1)
+
+		elif 'DISK' == detail:
+			mtype = 'rate'
+
+			time1 = last_t
+			value1 = last_v
+
+			time2 = now_msecs()
+			disk = psutil.disk_io_counters()
+			value2 = disk.read_bytes + disk.write_bytes
+
+			last_t = time2
+			last_v = value2
+
+		elif 'NETWORK' == detail:
+			mtype = 'rate'
+
+			time1 = last_t
+			value1 = last_v
+
+			time2 = now_msecs()
+			net = psutil.net_io_counters()
+			value2 = net.bytes_sent + net.bytes_recv
+
+			last_t = time2
+			last_v = value2
+
+		elif 'MEMORY' == detail:
+			mtype = 'percent'
+
+			time1 = now_msecs()
+			vmem = psutil.virtual_memory()
+			value1 = vmem.used
+			value2 = vmem.total
+
+			# fake last time/value since they are not needed
+			(last_t, last_v) = (1, 1)
+
+		m = None
+		if not first:
+			m = DataMsg.DATA(self.endpoint, mtype, detail,
+					time1=time1, value1=value1,
+					time2=time2, value2=value2,
+				)
+
+		# create new collection with next collection time
+		c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, last_t, last_v)
+
+		return (m, c)

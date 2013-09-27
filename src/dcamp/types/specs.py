@@ -14,10 +14,10 @@ __all__ = [
 
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
-class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'metric', 'param'])):
+class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'detail', 'param'])):
 	''' Class Representing a Metric Specification '''
 	def __str__(self):
-		return "%s(rate='%s', threshold='%s' param='%s')" % (self.metric,
+		return "%s(rate='%s', threshold='%s' param='%s')" % (self.detail,
 				Util.seconds_to_str(self.rate), self.threshold, self.param or '')
 
 class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):

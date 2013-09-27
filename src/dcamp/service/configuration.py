@@ -148,8 +148,9 @@ class Configuration(Service):
 		# print each key-value pair; value is really (value, seq-num)
 		sleep(1)
 		self.logger.debug('kv-seq: %d' % self.kv_seq)
+		width = len(str(self.kv_seq))
 		for (k, (v, s)) in sorted(self.kvdict.items()):
-			self.logger.debug('%s: %s (%d)' % (k, v, s))
+			self.logger.debug('({0:0{width}d}) {1}: {2}'.format(s, k, v, width=width))
 
 		if self.update_sub is not None:
 			self.update_sub.close()
