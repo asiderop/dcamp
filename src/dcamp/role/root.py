@@ -14,7 +14,8 @@ class Root(Role):
 			config):
 		Role.__init__(self, control_pipe)
 
-		# add Configuration Service
+		### add services
+
 		config_service = self._add_service(Configuration,
 				'root',
 				None, # group
@@ -22,5 +23,5 @@ class Root(Role):
 				config.root['endpoint'],
 			)
 
-		# add Management Service
 		self._add_service(Management, config_service, config)
+		self._add_service(Filter, 'root', config_service, local_ep)

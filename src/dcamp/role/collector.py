@@ -16,10 +16,13 @@ class Collector(Role):
 			):
 		Role.__init__(self, control_pipe)
 
-		# add Configuration Service
+		### add services
+
 		self._add_service(Configuration,
 				'branch',
 				group,
 				parent_ep,	# root/collector endpoint
 				local_ep,	# our endpoint
 			)
+
+		self._add_service(Filter, 'branch', config_service, local_ep)

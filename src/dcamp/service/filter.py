@@ -9,10 +9,13 @@ class Filter(Service):
 
 	def __init__(self,
 			control_pipe,
+			level,
 			config_service,
 			endpoint):
 		Service.__init__(self, control_pipe)
+		assert level in ['root', 'branch', 'leaf']
 
+		self.level = level
 		self.config_service = config_service
 		self.endpoint = endpoint
 
@@ -27,8 +30,8 @@ class Filter(Service):
 		self.poller.register(self.pull_socket)
 
 		# pub metrics on this sockets (to the node's parent)
-		self.pub_socket = self.ctx.socket(zmq.PUB)
-		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUB))
+		self.pubs_socket = self.ctx.socket(zmq.PUB)
+		self.pubs_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUB))
 
 		self.data_file = tempfile.NamedTemporaryFile(mode='w', delete=False)
 		self.logger.debug('writing data to %s' % self.data_file.name)
@@ -43,8 +46,8 @@ class Filter(Service):
 				(self.pullcnt, self.pubcnt, self.metric_specs))
 
 		self.pull_socket.close()
-		self.pub_socket.close()
-		del self.pull_socket, self.pub_socket
+		self.pubs_socket.close()
+		del self.pull_socket, self.pubs_socket
 		super()._cleanup()
 
 	def _pre_poll(self):
@@ -67,7 +70,7 @@ class Filter(Service):
 
 	def __pub_metrics(self):
 		#metric = DataMsg.DATA(self.endpoint, 'HUGZ')
-		#metric.send(self.pub_socket)
+		#metric.send(self.pubs_socket)
 		self.logger.debug('PUB-METRICS')
 		self.pubcnt += 1
 		self.next_pub = time() + self.pub_int
