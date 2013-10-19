@@ -35,13 +35,13 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 
 	# XXX: user control of system goes to root role; use mgmt or config service?
 	ROOT_CONTROL = 2		# REP to commands from cli REQ
-	CONFIG_CONTROL = 12		# SUB parent PUB commands
+	CONFIG_CONTROL = 12		# SUB commands from parent PUB
 
 	CONFIG_UPDATE = 10	 	# PUB updates to child SUB
 	CONFIG_SNAPSHOT = 11	# REP snapshots to child REQ
 
-	DATA_PUB = 20			# PUB metrics to parent SUB
-	DATA_PUSH_PULL = 21		# PUSH/PULL metrics between sensor and filter
+	DATA_SUB = 20			# SUB metrics from child PUB
+	DATA_PUSH_PULL = 21		# PUSH/PULL metrics between sensor and filter services (intra-node)
 
 	_valid_offsets = [
 		TOPO_BASE,
@@ -52,7 +52,7 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 		CONFIG_SNAPSHOT,
 		CONFIG_CONTROL,
 
-		DATA_PUB,
+		DATA_SUB,
 		DATA_PUSH_PULL,
 	]
 
@@ -104,4 +104,3 @@ SerializableSpecTypes = {
 		'FilterSpec': FilterSpec,
 		'EndpntSpec': EndpntSpec
 	}
-

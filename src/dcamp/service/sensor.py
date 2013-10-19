@@ -33,7 +33,7 @@ class Sensor(Service):
 
 		# we push metrics on this socket (to filter service)
 		self.metrics_socket = self.ctx.socket(zmq.PUSH)
-		self.metrics_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
+		self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 
 		self.next_collection = sys.maxsize # units: seconds
 		self.hug_int = 5 # units: seconds
@@ -46,9 +46,6 @@ class Sensor(Service):
 
 		self.metrics_socket.close()
 		del self.metrics_socket
-
-		#self.pr.disable()
-		#self.pr.dump_stats('sensor.stats')
 
 		super()._cleanup()
 
