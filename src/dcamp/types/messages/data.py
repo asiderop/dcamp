@@ -67,11 +67,16 @@ class DATA(DCMsg):
 				result += ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
 		elif self.mtype in ['rate']:
 			result = '%s / sec' % bytes_to_str((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3)
+		else:
+			raise NotImplemented()
 
 		return result
 
 	def log_str(self):
-		return '%d\t%s\t%s\t%s' % (self.time1, self.source, self.detail, self.__calc())
+		if 'HUGZ' == self.mtype:
+			return '%d\t%s\t%s' % (self.time1, self.source, self.mtype)
+		else:
+			return '%d\t%s\t%s\t%s' % (self.time1, self.source, self.detail, self.__calc())
 
 	def __str__(self):
 		if self.mtype in ['HUGZ']:

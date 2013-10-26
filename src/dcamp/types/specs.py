@@ -10,6 +10,7 @@ __all__ = [
 		'GroupSpec',
 		'MetricSpec',
 		'SerializableSpecTypes',
+		'MetricCollection',
 	]
 
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
@@ -19,6 +20,10 @@ class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'detail', 'param
 	def __str__(self):
 		return "%s(rate='%s', threshold='%s' param='%s')" % (self.detail,
 				Util.seconds_to_str(self.rate), self.threshold, self.param or '')
+
+class MetricCollection(namedtuple('MetricCollection', 'epoch, spec, last_time, last_value')):
+	''' Class Representing a Metric Collection Specification '''
+	pass
 
 class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):
 	''' Class Representing a Filter Specification '''

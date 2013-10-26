@@ -1,17 +1,9 @@
 import logging, zmq, sys, psutil
-from time import time
-from collections import namedtuple as NamedTuple
 
 import dcamp.types.messages.data as DataMsg
-from dcamp.types.specs import EndpntSpec
+from dcamp.types.specs import EndpntSpec, MetricCollection
 from dcamp.service.service import Service
-
-MetricCollection = NamedTuple('MetricCollection', 'epoch, spec, last_time, last_value')
-
-# round down to most recent second -- designed for collection scheduling
-now_secs = lambda: int(time())
-# round up/down to nearest millisecond -- designed for collection records
-now_msecs = lambda: int(round(time() * 1000))
+from dcamp.util.functions import now_secs, now_msecs
 
 class Sensor(Service):
 
@@ -29,20 +21,18 @@ class Sensor(Service):
 		self.metric_specs = []
 		self.metric_seqid = -1
 
-		(self.push_cnt, self.hugz_cnt) = (0, 0)
+		self.push_cnt = 0
 
 		# we push metrics on this socket (to filter service)
 		self.metrics_socket = self.ctx.socket(zmq.PUSH)
 		self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 
-		self.next_collection = sys.maxsize # units: seconds
-		self.hug_int = 5 # units: seconds
-		self.next_hug = 0 # units: seconds
+		self.next_collection = now_secs() + 5 # units: seconds
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
-		self.logger.debug("%d pushes + %d hugz\n%s metrics" %
-				(self.push_cnt, self.hugz_cnt, self.metric_specs))
+		self.logger.debug("%d pushes\n%s metrics" %
+				(self.push_cnt, self.metric_specs))
 
 		self.metrics_socket.close()
 		del self.metrics_socket
@@ -55,18 +45,14 @@ class Sensor(Service):
 		now = now_secs()
 		if self.next_collection <= now:
 			self.__collect_and_push_metrics()
-		elif self.next_hug <= now:
-			self.__send_hug()
 
-		self.poller_timer = self.__get_next_wakeup()
+		# next_collection is in secs; subtract current msecs to get next wakeup epoch
+		wakeup = max(0, (self.next_collection * 1e3) - now_msecs())
+		self.logger.debug('next wakeup in %dms' % wakeup)
+		self.poller_timer = wakeup
 
 	def _post_poll(self, items):
 		pass
-
-	def __send_hug(self):
-		metric = DataMsg.DATA(self.endpoint, 'HUGZ', time1=now_msecs())
-		metric.send(self.metrics_socket)
-		self.hugz_cnt += 1
 
 	def __collect_and_push_metrics(self):
 
@@ -119,26 +105,8 @@ class Sensor(Service):
 			if len(self.metric_specs) > 0:
 				self.next_collection = self.metric_specs[0].epoch
 			else:
-				self.next_collection = sys.maxsize
-
-	def __get_next_wakeup(self):
-		'''
-		Method calculates the next wake-up time, using HUGZ if the next metric collection
-		is farther away then the hug interval.
-
-		@returns next wakeup time
-		@pre should only be called immediately after sending a message
-		'''
-
-		# just sent a message, so reset hugz
-		wakeup = self.next_hug = now_secs() + self.hug_int
-		if len(self.metric_specs) > 0:
-			wakeup = min(self.next_collection, self.next_hug)
-
-		# wakeup is in secs; subtract current msecs to get next wakeup epoch
-		val = max(0, (wakeup * 1e3) - now_msecs())
-		self.logger.debug('next wakeup in %dms' % val)
-		return val
+				# check for new metric specs every five seconds
+				self.next_collection = now_secs() + 5
 
 	def __do_sample(self, collection):
 		''' returns tuple of (data-msg, metric-collection) '''

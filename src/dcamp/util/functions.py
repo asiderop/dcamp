@@ -2,6 +2,13 @@
 dCAMP Utility Functions module
 '''
 
+from time import time
+
+# round down to most recent second -- designed for collection scheduling
+now_secs = lambda: int(time())
+# round up/down to nearest millisecond -- designed for collection records
+now_msecs = lambda: int(round(time() * 1000))
+
 def seconds_to_str(seconds):
 	'''
 	Method takes given number of seconds and determines how to best (concisely) represent
