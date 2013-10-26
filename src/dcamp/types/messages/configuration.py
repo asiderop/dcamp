@@ -2,6 +2,7 @@
 dCAMP message module
 '''
 import logging
+from uuid import UUID
 
 from dcamp.types.messages.common import DCMsg, _PROPS
 
@@ -24,10 +25,11 @@ class CONFIG(DCMsg, _PROPS):
 		_PROPS.__init__(self, properties)
 		assert isinstance(key, str)
 		assert isinstance(sequence, int)
+		assert isinstance(uuid, (UUID, type(None)))
 
 		self.key = key
 		self.sequence = sequence
-		self.uuid = '' if uuid is None else uuid
+		self.uuid = uuid
 		self.value = value
 
 		if 'ICANHAZ' == key:
@@ -47,7 +49,7 @@ class CONFIG(DCMsg, _PROPS):
 			return self.key
 		else:
 			result = '#%d: %s = %s' % (self.sequence, self.key, self.value)
-			if '' != self.uuid:
+			if self.uuid is not None:
 				result += ' (%s)' % self.uuid
 			for (prop, val) in self.properties.items():
 				result += '\n%s : %s' % (prop, val)
@@ -57,10 +59,10 @@ class CONFIG(DCMsg, _PROPS):
 	def frames(self):
 		return [
 				self.key.encode(),
-				DCMsg._encode_int(self.sequence),
-				self.uuid.encode(),
-				_PROPS._encode_dict(self.properties),
-				DCMsg._encode_blob(self.value),
+				self._encode_int(self.sequence),
+				self._encode_uuid(self.uuid),
+				self._encode_dict(self.properties),
+				self._encode_blob(self.value),
 			]
 
 	@classmethod
@@ -73,7 +75,7 @@ class CONFIG(DCMsg, _PROPS):
 
 		key = msg[0].decode()
 		seq = DCMsg._decode_int(msg[1])
-		uuid = msg[2].decode()
+		uuid = DCMsg._decode_uuid(msg[2])
 		props = _PROPS._decode_dict(msg[3])
 		val = DCMsg._decode_blob(msg[4])
 

@@ -1,7 +1,8 @@
 '''
 dCAMP Topology Protocol
 '''
-import logging, uuid
+import logging
+from uuid import UUID, uuid4
 
 from dcamp.types.messages.common import DCMsg, _PROPS, WTF
 from dcamp.types.specs import EndpntSpec
@@ -22,13 +23,13 @@ __all__ = [
 	]
 
 def gen_uuid():
-	return uuid.uuid4()
+	return uuid4()
 
 class TOPO(DCMsg):
 	def __init__(self, ep, id):
 		DCMsg.__init__(self)
 		assert isinstance(ep, EndpntSpec)
-		assert isinstance(id, uuid.UUID)
+		assert isinstance(id, UUID)
 		self.endpoint = ep
 		self.uuid = id
 
@@ -37,7 +38,10 @@ class TOPO(DCMsg):
 
 	@property
 	def frames(self):
-		return [ self.endpoint.encode(), self.uuid.bytes ]
+		return [
+				self.endpoint.encode(),
+				self._encode_uuid(self.uuid),
+			]
 
 	@classmethod
 	def from_msg(cls, msg):
@@ -48,7 +52,7 @@ class TOPO(DCMsg):
 			raise ValueError('wrong number of frames')
 
 		ep = EndpntSpec.decode(msg[0])
-		id = uuid.UUID(bytes=msg[1])
+		id = DCMsg._decode_uuid(msg[1])
 		return cls(ep, id)
 
 class MARCO(TOPO):

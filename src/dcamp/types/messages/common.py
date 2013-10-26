@@ -1,7 +1,9 @@
 '''
 dCAMP message module
 '''
-import logging, struct
+import logging
+from struct import pack, unpack, error as StructError
+from uuid import UUID
 
 # imports for pickling
 import importlib, io, pickle
@@ -57,14 +59,14 @@ class DCMsg(object):
 		if val is None:
 			return b''
 		# pack as 8-byte int using network order
-		return struct.pack('!q', val)
+		return pack('!q', val)
 
 	@staticmethod
 	def _decode_int(buffer):
 		if len(buffer) == 0:
 			return None
 		# unpack as 8-byte int using network order
-		return struct.unpack('!q', buffer)[0]
+		return unpack('!q', buffer)[0]
 
 	@staticmethod
 	def _encode_blob(val):
@@ -72,6 +74,19 @@ class DCMsg(object):
 	@staticmethod
 	def _decode_blob(buffer):
 		return RestrictedUnpickler.restricted_loads(buffer)
+
+	@staticmethod
+	def _encode_uuid(val):
+		if val is None:
+			return b''
+		assert isinstance(val, UUID)
+		return val.bytes
+
+	@staticmethod
+	def _decode_uuid(buffer):
+		if len(buffer) == 0:
+			return None
+		return UUID(bytes=buffer)
 
 	def send(self, socket):
 		self.logger.debug('S:%s' % (self.name))
@@ -100,7 +115,7 @@ class DCMsg(object):
 		try:
 			# try to decode message with given class
 			msg = cls.from_msg(frames)
-		except (ValueError, struct.error) as e:
+		except (ValueError, StructError) as e:
 			try:
 				# otherwise, try decoding WTF message
 				msg = WTF.from_msg(frames)
