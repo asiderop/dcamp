@@ -113,7 +113,9 @@ class Sensor(Service):
 		# TODO: move this to another class?
 
 		(time1, value1, time2, value2) = (None, None, None, None)
-		mtype = None
+		props = {}
+		props['detail'] = collection.spec.detail
+		props['config-name'] = collection.spec.config_name
 
 		# local vars for easier access
 		detail = collection.spec.detail
@@ -123,7 +125,7 @@ class Sensor(Service):
 		first = (last_t, last_v) == (0, 0)
 
 		if 'CPU' == detail:
-			mtype = 'percent'
+			props['type'] = 'percent'
 
 			time1 = now_msecs()
 			# percent is accurate to one decimal point
@@ -134,7 +136,7 @@ class Sensor(Service):
 			(last_t, last_v) = (1, 1)
 
 		elif 'DISK' == detail:
-			mtype = 'rate'
+			props['type'] = 'rate'
 
 			time1 = last_t
 			value1 = last_v
@@ -147,7 +149,7 @@ class Sensor(Service):
 			last_v = value2
 
 		elif 'NETWORK' == detail:
-			mtype = 'rate'
+			props['type'] = 'rate'
 
 			time1 = last_t
 			value1 = last_v
@@ -160,7 +162,7 @@ class Sensor(Service):
 			last_v = value2
 
 		elif 'MEMORY' == detail:
-			mtype = 'percent'
+			props['type'] = 'percent'
 
 			time1 = now_msecs()
 			vmem = psutil.virtual_memory()
@@ -172,7 +174,7 @@ class Sensor(Service):
 
 		m = None
 		if not first:
-			m = DataMsg.DATA(self.endpoint, mtype, detail,
+			m = DataMsg.DATA(self.endpoint, props,
 					time1=time1, value1=value1,
 					time2=time2, value2=value2,
 				)

@@ -3,21 +3,25 @@ dCAMP Data Protocol
 '''
 import logging
 
-from dcamp.types.messages.common import DCMsg
+from dcamp.types.messages.common import DCMsg, _PROPS
 from dcamp.types.specs import EndpntSpec
-from dcamp.util.functions import bytes_to_str
+from dcamp.util.functions import bytes_to_str, is_int_or_none, is_str_or_none, now_msecs
 
 __all__ = [ 'DATA' ]
 
-class DATA(DCMsg):
+class DATA(DCMsg, _PROPS):
 	'''
 	Frame 0: data source (leaf or collector node endpoint), as 0MQ string
-	Frame 1: metric type or "HUGZ", as 0MQ string [ basic / sum / average / percent / rate]
-	Frame 2: metric name/detail, as 0MQ string
-	Frame 3: time t1 in ms epoch utc, 8 bytes in network order
-	Frame 4: value v1, 8 bytes in network order
-	Frame 5: time t2 in ms epoch utc, 8 bytes in network order
-	Frame 6: value v2, 8 bytes in network order
+	Frame 1: properties, as 0MQ string
+	Frame 2: time t1 in ms epoch utc, 8 bytes in network order
+	Frame 3: value v1, 8 bytes in network order
+	Frame 4: time t2 in ms epoch utc, 8 bytes in network order; not empty for average and rate
+	Frame 5: value v2, 8 bytes in network order; empty for basic and sum
+
+	properties = *( type / detail / config )
+	type       = "type=" ( "HUGZ" / "basic" / "sum" / "average" / "percent" / "rate" )
+	detail     = "detail=" <string>
+	config     = "config-name=" <string>
 	'''
 
 	mtypes = [
@@ -29,43 +33,58 @@ class DATA(DCMsg):
 		'rate',
 	]
 
-	def __init__(self, source, mtype, detail=None, time1=None, value1=None, time2=None, value2=None):
+	def __init__(self, source, properties,
+			time1=None, value1=None, time2=None, value2=None):
 		DCMsg.__init__(self)
+		_PROPS.__init__(self, properties)
 
 		assert isinstance(source, EndpntSpec)
-		assert mtype in DATA.mtypes
-		assert isinstance(detail, (str, type(None)))
 
-		assert isinstance(time1, (int, type(None)))
-		assert isinstance(value1, (int, type(None)))
-		assert isinstance(time2, (int, type(None)))
-		assert isinstance(value2, (int, type(None)))
+		assert 'type' in properties, 'missing metric "type" key'
+		assert self.m_type in DATA.mtypes, 'given metric "type" not valid'
 
-		# TODO: add more verifications of parameters based on given mtype
+		assert is_int_or_none(time1)
+		assert is_int_or_none(value1)
+		assert is_int_or_none(time2)
+		assert is_int_or_none(value2)
+
+		# TODO: add more verifications of parameters based on given m_type
 
 		self.source = source
-		self.mtype = mtype
-		self.detail = detail or ''
 
 		self.time1 = time1
 		self.value1 = value1
 		self.time2 = time2
 		self.value2 = value2
 
+	@property
+	def m_type(self):
+		return self['type']
+	@property
+	def detail(self):
+		return self.get('detail', None)
+	@property
+	def config_name(self):
+		return self.get('config-name', None)
+
+	@property
+	def is_hugz(self):
+		return 'HUGZ' == self['type']
+
 	def __calc(self):
 		result = None
-		if self.mtype in ['basic', 'sum']:
+		if self.m_type in ['basic', 'sum']:
 			result = '%d' % (self.value1)
-		elif self.mtype in ['average', 'percent']:
+		elif self.m_type in ['average', 'percent']:
 			val = self.value1 / self.value2
-			if 'percent' == self.mtype:
+			if 'percent' == self.m_type:
 				val *= 100
 			result = '%d' % (val)
-			if 'percent' == self.mtype:
+			if 'percent' == self.m_type:
 				result += '%'
-			elif 'average' == self.mtype:
+			elif 'average' == self.m_type:
 				result += ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
-		elif self.mtype in ['rate']:
+		elif self.m_type in ['rate']:
 			result = '%s / sec' % bytes_to_str((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3)
 		else:
 			raise NotImplemented()
@@ -73,13 +92,13 @@ class DATA(DCMsg):
 		return result
 
 	def log_str(self):
-		if 'HUGZ' == self.mtype:
-			return '%d\t%s\t%s' % (self.time1, self.source, self.mtype)
+		if self.is_hugz:
+			return '%d\t%s\t%s' % (self.time1, self.source, self.m_type)
 		else:
 			return '%d\t%s\t%s\t%s' % (self.time1, self.source, self.detail, self.__calc())
 
 	def __str__(self):
-		if self.mtype in ['HUGZ']:
+		if self.is_hugz:
 			return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
 		return '%s -- %s @ %d = %s' % (self.source, self.detail, self.time1, self.__calc())
 
@@ -87,12 +106,11 @@ class DATA(DCMsg):
 	def frames(self):
 		return [
 				self.source.encode(),
-				self.mtype.encode(),
-				self.detail.encode(),
-				DCMsg._encode_int(self.time1),
-				DCMsg._encode_int(self.value1),
-				DCMsg._encode_int(self.time2),
-				DCMsg._encode_int(self.value2),
+				self._encode_dict(self.properties),
+				self._encode_int(self.time1),
+				self._encode_int(self.value1),
+				self._encode_int(self.time2),
+				self._encode_int(self.value2),
 			]
 
 	@classmethod
@@ -100,16 +118,22 @@ class DATA(DCMsg):
 		assert isinstance(msg, list)
 
 		# make sure we have six frames
-		if 7 != len(msg):
+		if 6 != len(msg):
 			raise ValueError('wrong number of frames')
 
 		source = EndpntSpec.decode(msg[0])
-		mtype = msg[1].decode()
-		detail = msg[2].decode()
+		props = _PROPS._decode_dict(msg[1])
 
-		time1 = DCMsg._decode_int(msg[3])
-		value1 = DCMsg._decode_int(msg[4])
-		time2 = DCMsg._decode_int(msg[5])
-		value2 = DCMsg._decode_int(msg[6])
+		time1 = DCMsg._decode_int(msg[2])
+		value1 = DCMsg._decode_int(msg[3])
+		time2 = DCMsg._decode_int(msg[4])
+		value2 = DCMsg._decode_int(msg[5])
 
-		return cls(source, mtype, detail, time1, value1, time2, value2)
+		return cls(source, props, time1, value1, time2, value2)
+
+def HUGZ(endpoint):
+	return DATA(
+			source=endpoint,
+			properties={'type': 'HUGZ'},
+			time1=now_msecs()
+		)

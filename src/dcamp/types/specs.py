@@ -2,7 +2,7 @@ from collections import namedtuple
 from datetime import datetime
 from operator import xor
 
-import dcamp.util.functions as Util
+from dcamp.util.functions import seconds_to_str
 
 __all__ = [
 		'EndpntSpec',
@@ -15,11 +15,11 @@ __all__ = [
 
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
-class MetricSpec(namedtuple('MetricSpec', ['rate', 'threshold', 'detail', 'param'])):
+class MetricSpec(namedtuple('MetricSpec', ['config', 'rate', 'threshold', 'detail', 'param'])):
 	''' Class Representing a Metric Specification '''
 	def __str__(self):
-		return "%s(rate='%s', threshold='%s' param='%s')" % (self.detail,
-				Util.seconds_to_str(self.rate), self.threshold, self.param or '')
+		return "%s(detail='%s', rate='%s', threshold='%s' param='%s')" % (self.config,
+				self.detail, seconds_to_str(self.rate), self.threshold, self.param or '')
 
 class MetricCollection(namedtuple('MetricCollection', 'epoch, spec, last_time, last_value')):
 	''' Class Representing a Metric Collection Specification '''

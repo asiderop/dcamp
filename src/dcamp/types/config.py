@@ -76,7 +76,7 @@ class DCConfig(ConfigParser):
 			rate = Util.str_to_seconds(self[name]['rate'])
 			threshold = self[name]['threshold'] if 'threshold' in self[name] else ''
 			metric = self[name]['metric']
-			result[name] = MetricSpec(rate, threshold, metric, None)
+			result[name] = MetricSpec(name, rate, threshold, metric, None)
 
 		self.metrics = result
 
@@ -172,7 +172,7 @@ class DCConfig(ConfigParser):
 				ep = EndpntSpec.from_str(self['root']['endpoint'])
 				endpoints[ep.host] = [ep.port]
 			except ValueError as e:
-				self.__eprint('[root]endpoint', e)
+				self.__eprint('[root] endpoint', e)
 			except KeyError as e:
 				self.__eprint("missing %s option in [root] section" % (e))
 
@@ -208,7 +208,7 @@ class DCConfig(ConfigParser):
 					else:
 						endpoints[ep.host] = [ep.port]
 				except ValueError as e:
-					self.__eprint('[%s]%s' % (group, key), e)
+					self.__eprint('invalid endpoint or undefined metric in %s: "%s"' % (group, key))
 
 			# verify group has at least one endpoint
 			if nodecnt == 0:

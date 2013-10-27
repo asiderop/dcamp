@@ -1,4 +1,4 @@
-import logging, zmq, tempfile, sys, psutil
+import logging, zmq, tempfile, sys, psutil, os
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec, MetricCollection
@@ -36,8 +36,9 @@ class Filter(Service):
 		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 		self.poller.register(self.pull_socket)
 
+		os.makedirs('./logs/', exist_ok=True)
 		self.data_file = tempfile.NamedTemporaryFile(mode='w', delete=False,
-				prefix='{}.'.format(self.level), suffix='.dcamp-data', dir='.')
+				prefix='{}.'.format(self.level), suffix='.dcamp-data', dir='./logs/')
 		self.logger.debug('writing data to %s' % self.data_file.name)
 
 		# pub metrics on this sockets; only non-root level nodes will pub (to the parent)
@@ -92,8 +93,8 @@ class Filter(Service):
 
 	def __send_hug(self):
 		if self.level in ['branch', 'leaf']:
-			metric = DataMsg.DATA(self.endpoint, 'HUGZ', time1=now_msecs())
-			metric.send(self.pubs_socket)
+			hug = DataMsg.HUGZ(self.endpoint)
+			hug.send(self.pubs_socket)
 			self.hugz_cnt += 1
 
 	def _post_poll(self, items):
