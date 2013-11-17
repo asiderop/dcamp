@@ -10,7 +10,7 @@ from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
 from dcamp.service.service import Service
-from dcamp.types.config import DCConfig
+from dcamp.types.config import DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 
 class Node(Service):
@@ -144,7 +144,7 @@ class Node(Service):
 		# if level == root, start Root role.
 		if 'root' == level:
 			assert 'config-file' in response.properties
-			config = DCConfig()
+			config = DCConfig_Mixin()
 			config.read_file(open(response['config-file']))
 			self.role_pipe, peer = zpipe(self.ctx)
 			self.role = Root(peer, config)

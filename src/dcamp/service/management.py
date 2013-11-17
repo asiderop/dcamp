@@ -8,7 +8,7 @@ import dcamp.types.messages.topology as TopoMsg
 
 from dcamp.service.service import Service
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.topo import TopoTree, TopoNode
+from dcamp.types.topo import TopoTree_Mixin, TopoNode
 
 class Management(Service):
 	'''
@@ -43,7 +43,7 @@ class Management(Service):
 		# topo-node contains (endpoint, role, group, parent, children, last-seen)
 		# topo keys come from tree.get_topo_key(node)
 
-		self.tree = TopoTree(self.endpoint, self.uuid)
+		self.tree = TopoTree_Mixin(self.endpoint, self.uuid)
 		self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 
 		# { group: collector-topo-node }

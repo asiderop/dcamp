@@ -11,7 +11,7 @@ __all__ = [
 		'TopoError',
 		'DuplicateNodeError',
 		'TopoNode',
-		'TopoTree',
+		'TopoTree_Mixin',
 	]
 
 class TopoError(Exception):
@@ -67,7 +67,7 @@ class TopoNode(object):
 		return ASSIGN(self.parent.endpoint, self.level, self.group)
 
 @Prefixable
-class TopoTree(object):
+class TopoTree_Mixin(object):
 	pass
 
 	def __init__(self, root_ep, root_id):

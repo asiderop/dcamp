@@ -6,7 +6,7 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.types.config import DCParsingError, DCConfig
+from dcamp.types.config import DCParsingError, DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 
 def Address(string):
@@ -85,7 +85,7 @@ def do_app(args):
 	return dapp.exec()
 
 def do_config(args):
-	config = DCConfig()
+	config = DCConfig_Mixin()
 
 	if args.validate:
 		try:

@@ -9,7 +9,7 @@ class DCParsingError(ConfigParserError):
 	pass
 
 @Prefixable
-class DCConfig(ConfigParser):
+class DCConfig_Mixin(ConfigParser):
 	def __init__(self):
 		self.logger = logging.getLogger('dcamp.types.config')
 		ConfigParser.__init__(self, allow_no_value=True, delimiters=('='))
@@ -24,7 +24,7 @@ class DCConfig(ConfigParser):
 
 	@staticmethod
 	def validate(file):
-		config = DCConfig()
+		config = DCConfig_Mixin()
 		config.read_file(file)
 
 	def read_file(self, f, source=None):
