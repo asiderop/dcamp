@@ -1,4 +1,6 @@
-import logging, zmq
+import logging
+
+from zmq import Context, Poller, POLLIN, ZMQError, ETERM # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 from dcamp.util.decorators import Runnable
@@ -10,7 +12,7 @@ class Role(object):
 
 	def __init__(self,
 			pipe):
-		self.ctx = zmq.Context.instance()
+		self.ctx = Context.instance()
 		self.__control_pipe = pipe
 
 		self.logger = logging.getLogger('dcamp.role.'+ self.__class__.__name__)
@@ -56,8 +58,8 @@ class Role(object):
 					self.__send_control('WTF')
 					self.logger.error('unknown control command: %s' % msg)
 
-			except zmq.ZMQError as e:
-				if e.errno == zmq.ETERM:
+			except ZMQError as e:
+				if e.errno == ETERM:
 					self.logger.debug('received ETERM')
 					self.error_state()
 					break
@@ -76,10 +78,10 @@ class Role(object):
 		attempts = 0
 
 		# send commands
-		poller = zmq.Poller()
+		poller = Poller()
 		for pipe in self.__services:
 			pipe.send_string('STOP')
-			poller.register(pipe, zmq.POLLIN)
+			poller.register(pipe, POLLIN)
 
 		while self.__some_alive() and attempts < self.MAX_SERVICE_STOP_ATTEMPTS:
 			attempts += 1

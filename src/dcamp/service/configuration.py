@@ -1,5 +1,7 @@
-import logging, zmq, random
+import logging, random
 from time import time, sleep
+
+from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER # pylint: disable-msg=E0611
 
 import dcamp.types.messages.configuration as ConfigMsg
 from dcamp.types.specs import EndpntSpec
@@ -72,21 +74,21 @@ class Configuration(Service):
 			assert len(self.topics) > 0
 
 			# 1) subscribe to udpates from parent
-			self.update_sub = self.ctx.socket(zmq.SUB)
+			self.update_sub = self.ctx.socket(SUB)
 			for t in self.topics:
-				self.update_sub.setsockopt_string(zmq.SUBSCRIBE, t)
+				self.update_sub.setsockopt_string(SUBSCRIBE, t)
 			self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
 
-			self.poller.register(self.update_sub, zmq.POLLIN)
+			self.poller.register(self.update_sub, POLLIN)
 
 			# 2) request snapshot(s) from parent
-			self.kvsync_req = self.ctx.socket(zmq.DEALER)
+			self.kvsync_req = self.ctx.socket(DEALER)
 			self.kvsync_req.connect(self.parent.connect_uri(EndpntSpec.CONFIG_SNAPSHOT))
 			for t in self.topics:
 				icanhaz = ConfigMsg.ICANHAZ(t)
 				icanhaz.send(self.kvsync_req)
 
-			self.poller.register(self.kvsync_req, zmq.POLLIN)
+			self.poller.register(self.kvsync_req, POLLIN)
 
 			self.state = Configuration.STATE_SYNC
 
@@ -124,13 +126,13 @@ class Configuration(Service):
 	def __setup_outbound(self):
 		if self.level in ['branch', 'root']:
 			# 3) publish updates to children (bind)
-			self.update_pub = self.ctx.socket(zmq.PUB)
+			self.update_pub = self.ctx.socket(PUB)
 			self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
 
 			# 4) service snapshot requests to children (bind)
-			self.kvsync_rep = self.ctx.socket(zmq.ROUTER)
+			self.kvsync_rep = self.ctx.socket(ROUTER)
 			self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
-			self.poller.register(self.kvsync_rep, zmq.POLLIN)
+			self.poller.register(self.kvsync_rep, POLLIN)
 
 			# process pending updates; this will trigger kvpub updates for each message
 			# processed

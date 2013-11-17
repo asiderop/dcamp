@@ -12,7 +12,7 @@ import builtins, datetime
 
 # zmq.jsonapi ensures bytes, instead of unicode:
 import zmq.utils.jsonapi as jsonapi
-from zmq import DEALER, ROUTER, NOBLOCK
+from zmq import DEALER, ROUTER, NOBLOCK # pylint: disable-msg=E0611
 
 from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
 

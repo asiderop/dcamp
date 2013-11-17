@@ -2,8 +2,8 @@
 @author: Alexander
 '''
 import logging
-import zmq
 
+from zmq import Context, PUB, REP, ZMQError # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 import dcamp.types.messages.topology as TopoMsg
@@ -19,7 +19,7 @@ class App:
 	'''
 
 	def __init__(self, args):
-		self.ctx = zmq.Context.instance()
+		self.ctx = Context.instance()
 
 		# set default options for all sockets
 		self.ctx.linger = 0
@@ -52,12 +52,12 @@ class App:
 
 		# @todo: this can raise exceptions
 
-		pub = self.ctx.socket(zmq.PUB)
+		pub = self.ctx.socket(PUB)
 		root_ep = config.root['endpoint']
 		connect_str = root_ep.connect_uri(EndpntSpec.TOPO_BASE)
 		pub.connect(connect_str)
 
-		rep = self.ctx.socket(zmq.REP)
+		rep = self.ctx.socket(REP)
 		bind_addr = rep.bind_to_random_port("tcp://*")
 
 		# subtract 1 so the TOPO_JOIN port calculated by the remote node matches the
@@ -108,7 +108,7 @@ class App:
 		role = None
 		try:
 			role = Base(peer, self.args.address)
-		except zmq.ZMQError as e:
+		except ZMQError as e:
 			self.logger.debug('exception while starting base role:', exc_info=True )
 			self.logger.error('Unable to start base node: %s' % e)
 			self.logger.error('Is one already running on the given address?')

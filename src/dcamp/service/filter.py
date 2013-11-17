@@ -1,4 +1,7 @@
-import logging, zmq, tempfile, sys, psutil, os
+import logging, tempfile, sys, psutil, os
+
+from zmq import PUB, SUB, SUBSCRIBE, PUSH, PULL, Again # pylint: disable-msg=E0611
+from zmq.devices import ThreadProxy
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec, MetricCollection
@@ -32,7 +35,7 @@ class Filter(Service):
 
 		# pull metrics on this socket; all levels will pull (either internally from the
 		# sensor service or externally from child filter service's)
-		self.pull_socket = self.ctx.socket(zmq.PULL)
+		self.pull_socket = self.ctx.socket(PULL)
 		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 		self.poller.register(self.pull_socket)
 
@@ -44,15 +47,15 @@ class Filter(Service):
 		# pub metrics on this sockets; only non-root level nodes will pub (to the parent)
 		self.pubs_socket = None
 		if self.level in ['branch', 'leaf']:
-			self.pubs_socket = self.ctx.socket(zmq.PUB)
+			self.pubs_socket = self.ctx.socket(PUB)
 			self.pubs_socket.connect(self.parent.connect_uri(EndpntSpec.DATA_SUB))
 
 		# sub metrics from child(ren) and push them to pull socket; only non-leaf levels
 		# will sub->push
 		self.proxy = None
 		if self.level in ['branch', 'root']:
-			self.proxy = zmq.devices.ThreadProxy(zmq.SUB, zmq.PUSH)
-			self.proxy.setsockopt_in(zmq.SUBSCRIBE, b'')
+			self.proxy = ThreadProxy(SUB, PUSH)
+			self.proxy.setsockopt_in(SUBSCRIBE, b'')
 			self.proxy.bind_in(self.endpoint.bind_uri(EndpntSpec.DATA_SUB))
 			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 			self.proxy.start()
@@ -105,7 +108,7 @@ class Filter(Service):
 				# read all messages on socket, i.e. keep reading until there is nothing
 				# left to process
 				try: data = DataMsg.DATA.recv(self.pull_socket)
-				except zmq.Again as e: break
+				except Again as e: break
 
 				self.pull_cnt += 1
 				self.data_file.write(data.log_str() + '\n')

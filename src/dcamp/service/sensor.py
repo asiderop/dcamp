@@ -1,4 +1,6 @@
-import logging, zmq, sys, psutil
+import logging, sys, psutil
+
+from zmq import PUSH # pylint: disable-msg=E0611
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec, MetricCollection
@@ -23,7 +25,7 @@ class Sensor(Service):
 		self.push_cnt = 0
 
 		# we push metrics on this socket (to filter service)
-		self.metrics_socket = self.ctx.socket(zmq.PUSH)
+		self.metrics_socket = self.ctx.socket(PUSH)
 		self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 
 		self.next_collection = now_secs() + 5 # units: seconds

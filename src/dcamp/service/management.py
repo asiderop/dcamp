@@ -1,5 +1,7 @@
-import logging, zmq
+import logging
 from time import time
+
+from zmq import REP, PUB, POLLIN # pylint: disable-msg=E0611
 
 from dcamp.types.messages.common import WTF
 import dcamp.types.messages.topology as TopoMsg
@@ -51,11 +53,11 @@ class Management(Service):
 		# setup service for polling.
 
 		# we receive join requests on this socket
-		self.join_socket = self.ctx.socket(zmq.REP)
+		self.join_socket = self.ctx.socket(REP)
 		self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.TOPO_JOIN))
 
 		# we send topo discovery messages on this socket
-		self.disc_socket = self.ctx.socket(zmq.PUB)
+		self.disc_socket = self.ctx.socket(PUB)
 
 		for group in self.config.groups.values():
 			for ep in group.endpoints:
@@ -70,7 +72,7 @@ class Management(Service):
 		self.marco_msg = TopoMsg.MARCO(self.endpoint, self.uuid)
 		self.pubnext = time()
 
-		self.poller.register(self.join_socket, zmq.POLLIN)
+		self.poller.register(self.join_socket, POLLIN)
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup

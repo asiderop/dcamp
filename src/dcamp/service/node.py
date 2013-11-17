@@ -1,5 +1,6 @@
-import logging, time, threading, zmq
+import logging, time, threading
 
+from zmq import REQ, SUB, SUBSCRIBE, POLLIN # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 import dcamp.types.messages.topology as TopoMsg
@@ -39,8 +40,8 @@ class Node(Service):
 		self.logger.debug('binding to %s' % self.topo_endpoint)
 
 		# @todo these sockets need a better naming convention.
-		self.topo_socket = self.ctx.socket(zmq.SUB)
-		self.topo_socket.setsockopt_string(zmq.SUBSCRIBE, '')
+		self.topo_socket = self.ctx.socket(SUB)
+		self.topo_socket.setsockopt_string(SUBSCRIBE, '')
 
 		self.topo_socket.bind(self.topo_endpoint)
 
@@ -54,7 +55,7 @@ class Node(Service):
 
 		self.state = Node.BASE
 
-		self.poller.register(self.topo_socket, zmq.POLLIN)
+		self.poller.register(self.topo_socket, POLLIN)
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
@@ -78,9 +79,9 @@ class Node(Service):
 
 			# @todo: do we care which state we are in?
 			if Node.BASE == self.state:
-				self.control_socket = self.ctx.socket(zmq.REQ)
+				self.control_socket = self.ctx.socket(REQ)
 				self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
-				self.poller.register(self.control_socket, zmq.POLLIN)
+				self.poller.register(self.control_socket, POLLIN)
 				self.polo_msg.send(self.control_socket)
 				self.reqcnt += 1
 				self.state = Node.JOIN
