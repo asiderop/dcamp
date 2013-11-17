@@ -2,23 +2,74 @@ from collections import namedtuple
 from datetime import datetime
 from operator import xor
 
-from dcamp.util.functions import seconds_to_str
+from dcamp.util.functions import seconds_to_str, now_msecs, str_to_seconds
 
 __all__ = [
-		'EndpntSpec',
-		'FilterSpec',
-		'GroupSpec',
-		'MetricSpec',
-		'SerializableSpecTypes',
-		'MetricCollection',
-	]
+	'EndpntSpec',
+	'FilterSpec',
+	'GroupSpec',
+	'MetricSpec',
+	'SerializableSpecTypes',
+	'ThreshSpec',
+	'MetricCollection',
+]
 
 GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
-class MetricSpec(namedtuple('MetricSpec', ['config', 'rate', 'threshold', 'detail', 'param'])):
+class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
+	'''Class representing a Threshold specification'''
+
+	def check(self, data):
+		if self.op in ['<', '>']:
+			return self.__limit(data)
+		elif self.op in ['+', '*']:
+			return self.__time(data)
+		raise NotImplementedError('unknown threshold operation')
+
+	def __str__(self):
+		return '%s%s' % (self.op,
+				self.op in ['<', '>'] and self.value or seconds_to_str(self.value))
+
+	def __limit(self, data):
+		return data.calculated >= self.value
+
+	def __time(self, data):
+		return data.time1 + (self.value * 1000) > now_msecs()
+
+	@classmethod
+	def from_str(cls, given):
+		assert isinstance(given, str)
+
+		errmsg = None
+
+		op = given[0]
+		val_str = given[1:]
+		value = None
+
+		if op in ['+', '*']:
+			try:
+				value = str_to_seconds(val_str)
+			except NotImplementedError as e:
+				errmsg = 'time-based threshold specification contains invalid time'
+
+		elif op in ['>', '<']:
+			try:
+				value = float(val_str)
+			except ValueError as e:
+				errmsg = 'value-based threshold specification contains invalid value'
+
+		else:
+			errmsg = 'invalid op for threshold specification'
+
+		if errmsg:
+			raise ValueError('%s: [%s]' % (errmsg, given))
+
+		return cls(op, value)
+
+class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', 'detail', 'param'])):
 	''' Class Representing a Metric Specification '''
 	def __str__(self):
-		return "%s(detail='%s', rate='%s', threshold='%s' param='%s')" % (self.config,
+		return "%s(detail='%s', rate='%s', threshold='%s' param='%s')" % (self.config_name,
 				self.detail, seconds_to_str(self.rate), self.threshold, self.param or '')
 
 class MetricCollection(namedtuple('MetricCollection', 'epoch, spec, last_time, last_value')):

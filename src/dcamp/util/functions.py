@@ -1,17 +1,15 @@
-'''
-dCAMP Utility Functions module
-'''
 from time import time
 
-# round down to most recent second -- designed for collection scheduling
-now_secs = lambda: int(time())
-# round up/down to nearest millisecond -- designed for collection records
-now_msecs = lambda: int(round(time() * 1000))
+def now_secs():
+	'''round down to most recent second -- designed for collection scheduling'''
+	return int(time())
+def now_msecs():
+	'''round up/down to nearest millisecond -- designed for collection records'''
+	return int(round(time() * 1000))
 
-def is_str_or_none(val):
-	return isinstance(val, (str, type(None)))
-def is_int_or_none(val):
-	return isinstance(val, (int, type(None)))
+def isInstance_orNone(gvalue, gtype):
+	'''returns whether given value is an instance of the given type or None'''
+	return isinstance(gvalue, (gtype, type(None)))
 
 def seconds_to_str(seconds):
 	'''
@@ -47,23 +45,39 @@ def str_to_seconds(string):
 		raise NotImplementedError('invalid time unit given--valid units: %s' % valid_units)
 
 def plural(count, ending='s', word=None):
-	return (word or '') + (count == 1.0 and '' or ending)
+	'''return plural form of given word based on given count'''
+	return (word or '') + (count != 1.0 and ending or '')
 
-def bytes_to_str(given, use_short=True):
+def format_bytes(given, use_short=True, num_or_suffix='both'):
 	'''
-	Converts given number of bytes (int) into a human-friendly string.
+	Converts given number of bytes (int) into a human-friendly format.
+
+	Use num_or_suffix to dictate the output format:
+	  + "num"    --> returns given bytes as float (in possibly larger units)
+	  + "suffix" --> returns units of "num"
+	  + "both"   --> returns "%.2f%s" % (num, suffix)
 	'''
 	long_units  = [ '', 'Kilo', 'Mega', 'Giga', 'Tera', 'Peta'] # with 'byte' suffix
 	short_units = ['B',   'Kb',   'Mb',   'Gb',   'Tb',   'Pb']
 
-	num_orders = 0
-	while round(given, 2) >= 1024.0:
-		num_orders += 1
-		given /= 1024.0
+	assert isinstance(given, (int, float))
+	assert num_or_suffix in ['num', 'suffix', 'both']
 
-	result = '{:.2f} '.format(given)
+	num_orders = 0
+	num = float(given)
+	while round(num, 2) >= 1024.0:
+		num_orders += 1
+		num /= 1024.0
+
+	suffix = None
 	if use_short:
-		result += short_units[num_orders]
+		suffix = short_units[num_orders]
 	else:
-		result += long_units[num_orders] + plural(given, word='byte')
-	return result
+		suffix = long_units[num_orders] + plural(num, word='byte')
+
+	if 'num' == num_or_suffix:
+		return num
+	elif 'suffix' == num_or_suffix:
+		return suffix
+	else:
+		return '{:.2f}{}'.format(num, use_short and suffix or ' '+ suffix)

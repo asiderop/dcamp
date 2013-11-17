@@ -5,7 +5,7 @@ import logging
 
 from dcamp.types.messages.common import DCMsg, _PROPS
 from dcamp.types.specs import EndpntSpec
-from dcamp.util.functions import bytes_to_str, is_int_or_none, is_str_or_none, now_msecs
+from dcamp.util.functions import format_bytes, isInstance_orNone, now_msecs
 
 __all__ = [ 'DATA' ]
 
@@ -43,10 +43,10 @@ class DATA(DCMsg, _PROPS):
 		assert 'type' in properties, 'missing metric "type" key'
 		assert self.m_type in DATA.mtypes, 'given metric "type" not valid'
 
-		assert is_int_or_none(time1)
-		assert is_int_or_none(value1)
-		assert is_int_or_none(time2)
-		assert is_int_or_none(value2)
+		assert isInstance_orNone(time1)
+		assert isInstance_orNone(value1)
+		assert isInstance_orNone(time2)
+		assert isInstance_orNone(value2)
 
 		# TODO: add more verifications of parameters based on given m_type
 
@@ -72,35 +72,44 @@ class DATA(DCMsg, _PROPS):
 		return 'HUGZ' == self['type']
 
 	def __calc(self):
+		'''returns float representing calculated value of data message'''
 		result = None
 		if self.m_type in ['basic', 'sum']:
-			result = '%d' % (self.value1)
+			result = float(self.value1)
 		elif self.m_type in ['average', 'percent']:
-			val = self.value1 / self.value2
+			result = self.value1 / self.value2
 			if 'percent' == self.m_type:
-				val *= 100
-			result = '%d' % (val)
-			if 'percent' == self.m_type:
-				result += '%'
-			elif 'average' == self.m_type:
-				result += ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
+				result *= 100
 		elif self.m_type in ['rate']:
-			result = '%s / sec' % bytes_to_str((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3)
+			result = format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
 		else:
 			raise NotImplemented()
 
 		return result
 
+	def __suffix(self):
+		if 'percent' == self.m_type:
+			return '%'
+		elif 'average' == self.m_type:
+			return ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
+		elif 'rate' == self.m_type:
+			return '%s / sec' % format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='suffix')
+		else:
+			return ''
+
+	def accumulate(self, new_data):
+		pass
+
 	def log_str(self):
 		if self.is_hugz:
 			return '%d\t%s\t%s' % (self.time1, self.source, self.m_type)
 		else:
-			return '%d\t%s\t%s\t%s' % (self.time1, self.source, self.detail, self.__calc())
+			return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.__calc(), self.__suffix())
 
 	def __str__(self):
 		if self.is_hugz:
 			return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
-		return '%s -- %s @ %d = %s' % (self.source, self.detail, self.time1, self.__calc())
+		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.__calc())
 
 	@property
 	def frames(self):

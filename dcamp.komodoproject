@@ -234,7 +234,7 @@
 </preference-set>
 </preference-set>
   <string id="lastInvocation">Project</string>
-  <string id="lastTestPlanName_pref">New test plan #1</string>
+  <string id="lastTestPlanName_pref">Unit Testing</string>
   <boolean id="lintClearOnTextChange">0</boolean>
   <long id="lintDelay">1000</long>
   <boolean id="lintEOLs">1</boolean>
@@ -290,15 +290,16 @@
   <boolean id="showLineNumbers">1</boolean>
   <boolean id="showWhitespace">1</boolean>
 <preference-set id="testPlans">
-<preference-set id="New test plan #1">
+<preference-set id="Unit Testing">
   <string id="command_line"></string>
-  <string relative="url" id="directory">src/</string>
-  <string id="language">Python - unittest</string>
+  <string relative="url" id="directory">src/test/</string>
+  <string id="language">Python3 - unittest</string>
 </preference-set>
 </preference-set>
   <string id="tidy_accessibility">0</string>
   <string id="tidy_configpath"></string>
   <string id="tidy_errorlevel">errors</string>
+  <boolean id="useSmartTabs">0</boolean>
   <boolean id="useTabs">1</boolean>
   <string id="userEnvironmentStartupOverride"></string>
   <long id="ySlop">2</long>

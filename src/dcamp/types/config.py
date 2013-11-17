@@ -1,7 +1,7 @@
 import logging
 from configparser import ConfigParser, Error as ConfigParserError
 
-from dcamp.types.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec
+from dcamp.types.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec, ThreshSpec
 from dcamp.util.decorators import Prefixable
 import dcamp.util.functions as Util
 
@@ -73,10 +73,16 @@ class DCConfig(ConfigParser):
 
 		# process all metric specifications
 		for name in self.metric_sections:
+
 			rate = Util.str_to_seconds(self[name]['rate'])
-			threshold = self[name]['threshold'] if 'threshold' in self[name] else ''
-			metric = self[name]['metric']
-			result[name] = MetricSpec(name, rate, threshold, metric, None)
+
+			threshold = None
+			if 'threshold' in self[name]:
+				threshold = ThreshSpec.from_str(self[name]['threshold'])
+
+			detail = self[name]['metric']
+
+			result[name] = MetricSpec(name, rate, threshold, detail, None)
 
 		self.metrics = result
 

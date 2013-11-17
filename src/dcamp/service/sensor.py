@@ -17,7 +17,6 @@ class Sensor(Service):
 		self.endpoint = endpoint
 
 		# goal: sort by next collection time
-		# [ ( next-collection-epoch-secs, spec ), ... ]
 		self.metric_specs = []
 		self.metric_seqid = -1
 
@@ -61,7 +60,7 @@ class Sensor(Service):
 			collection = self.metric_specs.pop(0)
 			assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
 
-			(msg, collection) = self.__do_sample(collection)
+			(msg, collection) = self.__process(collection)
 			if msg is not None:
 				msg.send(self.metrics_socket)
 				self.push_cnt += 1
@@ -108,7 +107,7 @@ class Sensor(Service):
 				# check for new metric specs every five seconds
 				self.next_collection = now_secs() + 5
 
-	def __do_sample(self, collection):
+	def __process(self, collection):
 		''' returns tuple of (data-msg, metric-collection) '''
 		# TODO: move this to another class?
 
@@ -116,6 +115,7 @@ class Sensor(Service):
 		props = {}
 		props['detail'] = collection.spec.detail
 		props['config-name'] = collection.spec.config_name
+		props['config-seqid'] = self.metric_seqid
 
 		# local vars for easier access
 		detail = collection.spec.detail
