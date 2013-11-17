@@ -86,7 +86,7 @@ class Management(Service_Mixin):
 		self.join_socket.close()
 		self.disc_socket.close()
 		del self.join_socket, self.disc_socket
-		super()._cleanup()
+		Service_Mixin._cleanup(self)
 
 	def _pre_poll(self):
 		if self.pubnext < time():

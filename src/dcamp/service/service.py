@@ -40,7 +40,7 @@ class Service_Mixin(threading.Thread):
 	def _pre_poll(self):
 		pass
 	def _post_poll(self, items):
-		raise NotImplemented('subclass must implement _post_poll()')
+		raise NotImplementedError('subclass must implement _post_poll()')
 
 	def _do_control(self):
 		'''

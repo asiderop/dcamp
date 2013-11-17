@@ -38,7 +38,7 @@ class Sensor(Service_Mixin):
 		self.metrics_socket.close()
 		del self.metrics_socket
 
-		super()._cleanup()
+		Service_Mixin._cleanup(self)
 
 	def _pre_poll(self):
 		self.__check_config_for_metric_updates()

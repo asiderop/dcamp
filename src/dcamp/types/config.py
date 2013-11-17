@@ -28,7 +28,7 @@ class DCConfig_Mixin(ConfigParser):
 		config.read_file(file)
 
 	def read_file(self, f, source=None):
-		super().read_file(f, source)
+		ConfigParser.read_file(self, f, source)
 
 		sections = list(self)
 		sections.remove('DEFAULT')

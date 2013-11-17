@@ -163,7 +163,7 @@ class Configuration(Service_Mixin):
 		if self.kvsync_rep is not None:
 			self.kvsync_rep.close()
 		del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
-		super()._cleanup()
+		Service_Mixin._cleanup(self)
 
 	def _post_poll(self, items):
 		if self.update_sub in items:

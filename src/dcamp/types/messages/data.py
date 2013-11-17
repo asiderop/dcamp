@@ -43,10 +43,10 @@ class DATA(DCMsg, _PROPS):
 		assert 'type' in properties, 'missing metric "type" key'
 		assert self.m_type in DATA.mtypes, 'given metric "type" not valid'
 
-		assert isInstance_orNone(time1)
-		assert isInstance_orNone(value1)
-		assert isInstance_orNone(time2)
-		assert isInstance_orNone(value2)
+		assert isInstance_orNone(time1, int)
+		assert isInstance_orNone(value1, int)
+		assert isInstance_orNone(time2, int)
+		assert isInstance_orNone(value2, int)
 
 		# TODO: add more verifications of parameters based on given m_type
 
@@ -83,7 +83,7 @@ class DATA(DCMsg, _PROPS):
 		elif self.m_type in ['rate']:
 			result = format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
 		else:
-			raise NotImplemented()
+			raise NotImplementedError()
 
 		return result
 

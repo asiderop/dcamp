@@ -66,7 +66,7 @@ class Node(Service_Mixin):
 		if self.control_socket:
 			self.control_socket.close()
 		del self.topo_socket, self.control_socket
-		super()._cleanup()
+		Service_Mixin._cleanup(self)
 
 	def _post_poll(self, items):
 		if self.topo_socket in items:

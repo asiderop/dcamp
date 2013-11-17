@@ -14,7 +14,7 @@ from dcamp.types.specs import EndpntSpec
 #       these two just be combined?
 
 __all__ = [
-		'gen_uuid'
+		'gen_uuid',
 		'MARCO',
 		'POLO',
 		'CONTROL',
