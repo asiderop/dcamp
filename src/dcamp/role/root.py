@@ -1,11 +1,11 @@
 from zhelpers import zpipe
 
-from dcamp.role.role import Role
+from dcamp.role.role import Role_Mixin
 from dcamp.service.management import Management
 from dcamp.service.configuration import Configuration
 from dcamp.service.filter import Filter
 
-class Root(Role):
+class Root(Role_Mixin):
 	'''
 	Root Role
 	'''
@@ -13,7 +13,7 @@ class Root(Role):
 	def __init__(self,
 			control_pipe,
 			config):
-		Role.__init__(self, control_pipe)
+		Role_Mixin.__init__(self, control_pipe)
 
 		local_ep = config.root['endpoint']
 

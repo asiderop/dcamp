@@ -5,9 +5,9 @@ from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER # pylint: disable-ms
 
 import dcamp.types.messages.configuration as ConfigMsg
 from dcamp.types.specs import EndpntSpec
-from dcamp.service.service import Service
+from dcamp.service.service import Service_Mixin
 
-class Configuration(Service):
+class Configuration(Service_Mixin):
 	'''
 	Configuration Service --
 	'''
@@ -23,7 +23,7 @@ class Configuration(Service):
 			parent_ep,	# from where we receive config updates/snapshots
 			local_ep,	# this is us
 			):
-		Service.__init__(self, control_pipe)
+		Service_Mixin.__init__(self, control_pipe)
 		assert level in ['root', 'branch', 'leaf']
 		assert isinstance(parent_ep, (EndpntSpec, type(None)))
 		assert isinstance(local_ep, EndpntSpec)

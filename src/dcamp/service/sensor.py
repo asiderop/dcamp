@@ -4,16 +4,16 @@ from zmq import PUSH # pylint: disable-msg=E0611
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec, MetricCollection
-from dcamp.service.service import Service
+from dcamp.service.service import Service_Mixin
 from dcamp.util.functions import now_secs, now_msecs
 
-class Sensor(Service):
+class Sensor(Service_Mixin):
 
 	def __init__(self,
 			control_pipe,
 			config_service,
 			endpoint):
-		Service.__init__(self, control_pipe)
+		Service_Mixin.__init__(self, control_pipe)
 
 		self.config_service = config_service
 		self.endpoint = endpoint

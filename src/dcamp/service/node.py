@@ -9,11 +9,11 @@ from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
-from dcamp.service.service import Service
+from dcamp.service.service import Service_Mixin
 from dcamp.types.config import DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 
-class Node(Service):
+class Node(Service_Mixin):
 	'''
 	Node Service -- provides functionality for boot strapping into dCAMP system.
 
@@ -27,7 +27,7 @@ class Node(Service):
 	def __init__(self,
 			pipe,
 			endpoint):
-		Service.__init__(self, pipe)
+		Service_Mixin.__init__(self, pipe)
 
 		self.endpoint = endpoint
 		self.uuid = TopoMsg.gen_uuid()

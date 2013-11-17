@@ -5,7 +5,7 @@ from zmq import Context, Poller, POLLIN, ZMQError, ETERM # pylint: disable-msg=E
 from dcamp.util.decorators import Runnable
 
 @Runnable
-class Service(threading.Thread):
+class Service_Mixin(threading.Thread):
 
 	def __init__(self, pipe):
 		threading.Thread.__init__(self)

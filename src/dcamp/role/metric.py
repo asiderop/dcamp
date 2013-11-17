@@ -1,12 +1,12 @@
 from zhelpers import zpipe
 
-from dcamp.role.role import Role
+from dcamp.role.role import Role_Mixin
 
 from dcamp.service.configuration import Configuration
 from dcamp.service.filter import Filter
 from dcamp.service.sensor import Sensor
 
-class Metric(Role):
+class Metric(Role_Mixin):
 	'''
 	Metric Role
 	'''
@@ -17,7 +17,7 @@ class Metric(Role):
 			parent_ep,
 			local_ep,
 			):
-		Role.__init__(self, control_pipe)
+		Role_Mixin.__init__(self, control_pipe)
 
 		### add services
 

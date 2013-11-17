@@ -6,7 +6,7 @@ from zhelpers import zpipe
 from dcamp.util.decorators import Runnable
 
 @Runnable
-class Role(object):
+class Role_Mixin(object):
 
 	MAX_SERVICE_STOP_ATTEMPTS = 5
 

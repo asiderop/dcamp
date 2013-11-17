@@ -5,10 +5,10 @@ from zmq.devices import ThreadProxy
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec, MetricCollection
-from dcamp.service.service import Service
+from dcamp.service.service import Service_Mixin
 from dcamp.util.functions import now_secs, now_msecs
 
-class Filter(Service):
+class Filter(Service_Mixin):
 
 	def __init__(self,
 			control_pipe,
@@ -16,7 +16,7 @@ class Filter(Service):
 			config_service,
 			local_ep,
 			parent_ep):
-		Service.__init__(self, control_pipe)
+		Service_Mixin.__init__(self, control_pipe)
 		assert level in ['root', 'branch', 'leaf']
 		assert isinstance(parent_ep, (EndpntSpec, type(None)))
 		assert isinstance(local_ep, EndpntSpec)

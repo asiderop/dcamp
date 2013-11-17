@@ -6,11 +6,11 @@ from zmq import REP, PUB, POLLIN # pylint: disable-msg=E0611
 from dcamp.types.messages.common import WTF
 import dcamp.types.messages.topology as TopoMsg
 
-from dcamp.service.service import Service
+from dcamp.service.service import Service_Mixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTree_Mixin, TopoNode
 
-class Management(Service):
+class Management(Service_Mixin):
 	'''
 	Management Service -- provides functionality for interacting with and controlling
 	dCAMP.
@@ -23,7 +23,7 @@ class Management(Service):
 			config_service,
 			config,
 			):
-		Service.__init__(self, role_pipe)
+		Service_Mixin.__init__(self, role_pipe)
 
 		# TODO: use config_service as full state representation; add accessor methods to
 		#       make it convenient and remove the self.config and self.tree members.
