@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+
+import _set_path
+import sys, pylint
+
+sys.argv.append('dcamp')
+pylint.run_pylint()

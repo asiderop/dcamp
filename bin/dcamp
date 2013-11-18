@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+
+import _set_path
+from dcamp.cli import main
+
+exit(main())

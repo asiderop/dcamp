@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+
+import _set_path
+import sys
+from unittest import main
+
+opts = [
+		sys.argv[0],
+		'discover',
+		_set_path.SRCDIR,
+	]
+
+main(argv=opts, verbosity=2)
