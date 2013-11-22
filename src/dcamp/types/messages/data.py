@@ -71,7 +71,8 @@ class DATA(DCMsg, _PROPS):
 	def is_hugz(self):
 		return 'HUGZ' == self['type']
 
-	def __calc(self):
+	@property
+	def calculated(self):
 		'''returns float representing calculated value of data message'''
 		result = None
 		if self.m_type in ['basic', 'sum']:
@@ -87,7 +88,8 @@ class DATA(DCMsg, _PROPS):
 
 		return result
 
-	def __suffix(self):
+	@property
+	def suffix(self):
 		if 'percent' == self.m_type:
 			return '%'
 		elif 'average' == self.m_type:
@@ -104,12 +106,12 @@ class DATA(DCMsg, _PROPS):
 		if self.is_hugz:
 			return '%d\t%s\t%s' % (self.time1, self.source, self.m_type)
 		else:
-			return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.__calc(), self.__suffix())
+			return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.calculated, self.suffix)
 
 	def __str__(self):
 		if self.is_hugz:
 			return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
-		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.__calc())
+		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.calculated)
 
 	@property
 	def frames(self):

@@ -26,9 +26,9 @@ class Filter(Service_Mixin):
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
-		# goal: sort by next collection time
 		# [ ( next-collection-epoch-secs, spec ), ... ]
 		self.metric_specs = []
+		# goal: sort by next pub time
 		self.metric_seqid = -1
 
 		(self.pull_cnt, self.pubs_cnt, self.hugz_cnt) = (0, 0, 0)
@@ -60,7 +60,7 @@ class Filter(Service_Mixin):
 			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
 			self.proxy.start()
 
-		self.next_push = sys.maxsize # units: seconds
+		self.next_pub = sys.maxsize # units: seconds
 		self.hug_int = 5 # units: seconds
 		self.next_hug = 0 # units: seconds
 
@@ -87,8 +87,8 @@ class Filter(Service_Mixin):
 		self.__check_config_for_metric_updates()
 
 		now = now_secs()
-		if self.next_push <= now:
-			self.__push_metrics()
+		if self.next_pub <= now:
+			self.__pub_metrics()
 		elif self.next_hug <= now:
 			self.__send_hug()
 
@@ -137,18 +137,18 @@ class Filter(Service_Mixin):
 
 			del data
 
-	def __push_metrics(self):
+	def __pub_metrics(self):
 
-		collected = []
+		pubbed = []
 		while True:
-			collection = self.metric_specs.pop(0)
-			assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
+			pub = self.metric_specs.pop(0)
+			assert pub.epoch <= now_secs(), 'next metric is not scheduled for pub'
 
-			(msg, collection) = self.__do_sample(collection)
+			(msg, pub) = self.__process(pub)
 			if msg is not None:
 				msg.send(self.metrics_socket)
-				self.push_cnt += 1
-			collected.append(collection)
+				self.pub_cnt += 1
+			pubbed.append(pub)
 
 			if len(self.metric_specs) == 0:
 				# no more work
@@ -158,10 +158,10 @@ class Filter(Service_Mixin):
 				# no more work scheduled
 				break
 
-		# add the collected metrics back into our list
-		self.metric_specs = sorted(self.metric_specs + collected)
-		# set the new collection wakeup
-		self.next_push = self.metric_specs[0].epoch
+		# add the pubbed metrics back into our list
+		self.metric_specs = sorted(self.metric_specs + pubbed)
+		# set the new pub wakeup
+		self.next_pub = self.metric_specs[0].epoch
 
 	def __check_config_for_metric_updates(self):
 		(specs, seq) = self.config_service.get_metric_specs()
@@ -183,7 +183,7 @@ class Filter(Service_Mixin):
 		# just sent a message, so reset hugz
 		wakeup = self.next_hug = now_secs() + self.hug_int
 		if len(self.metric_specs) > 0:
-			wakeup = min(self.next_push, self.next_hug)
+			wakeup = min(self.next_pub, self.next_hug)
 
 		# wakeup is in secs; subtract current msecs to get next wakeup epoch
 		val = max(0, (wakeup * 1e3) - now_msecs())

@@ -3,5 +3,8 @@
 import _set_path
 import sys, pylint
 
+sys.argv.append('--indent-string="\\t"')
+sys.argv.append('--max-line-length=90')
+sys.argv.append('--disable=similarities')
 sys.argv.append('dcamp')
 pylint.run_pylint()
