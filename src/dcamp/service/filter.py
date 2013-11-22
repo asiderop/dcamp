@@ -26,9 +26,9 @@ class Filter(Service_Mixin):
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
-		# [ ( next-collection-epoch-secs, spec ), ... ]
-		self.metric_specs = []
 		# goal: sort by next pub time
+		# { config-name: metric-spec }
+		self.metric_specs = {}
 		self.metric_seqid = -1
 
 		(self.pull_cnt, self.pubs_cnt, self.hugz_cnt) = (0, 0, 0)
@@ -115,25 +115,33 @@ class Filter(Service_Mixin):
 
 				# forward metric to parent
 				if self.level in ['branch', 'leaf']:
+					# if unknown metric, just drop it
+					if data['config-seqid'] != self.metric_seqid:
+						self.logger.warn('unknown config seq-id (%d); dropping data' % data['config-seq-id'])
+						continue
+
+					# lookup metric spec
+					metric = self.metric_specs.get(data['config-name'], None)
+
+					if metric is None:
+						self.logger.warn('unknown metric config-name (%s); dropping data' % data['config-name'])
+						continue
+
 					'''
 					XXX: need full metric spec to do filtering; how do we share metric
 						 specs across Sensor/Filter service such that the data messages
 						 can be mapped back to the metric spec? The Configuration service
 						 is shared...perhaps use the seq-id as a unique identifier?
 
-					if check_threshold()
-					    send-data()
-					def check_threshold(t, value):
-					    if t is None:
-					        return True
-					    elif t.limit is not None:
-					        return t.limit.op(t.limit.value, value)
-					    else:
-					        assert t.time is not None
-					        save-value(t, value)
+					XXX: do threshold filtering; add to list of to-be-pubbed-later; drop samples?
 					'''
-					data.send(self.pubs_socket)
-					self.pubs_cnt += 1
+
+					if metric.threshold is None or metric.threshold.check(data):
+						data.send(self.pubs_socket)
+						self.pubs_cnt += 1
+					else:
+						# save-value(threshold, value)
+						self.logger.debug('thresholded by %s : %s' % (metric.threshold, data))
 
 			del data
 
@@ -166,7 +174,9 @@ class Filter(Service_Mixin):
 	def __check_config_for_metric_updates(self):
 		(specs, seq) = self.config_service.get_metric_specs()
 		if seq > self.metric_seqid:
-			self.metric_specs = specs[:] # copy spec list
+			self.metric_specs = {}
+			for s in specs:
+				self.metric_specs[s.config_name] = s
 			self.metric_seqid = seq
 			self.logger.debug('new metric specs: %s' % self.metric_specs)
 			# XXX: trigger new metric setup
