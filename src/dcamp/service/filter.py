@@ -81,6 +81,9 @@ class Filter(Service_Mixin):
 
 		del self.pull_socket, self.pubs_socket, self.proxy
 
+		self.pr.disable()
+		self.pr.dump_stats('filter.stats')
+
 		Service_Mixin._cleanup(self)
 
 	def _pre_poll(self):
@@ -143,7 +146,7 @@ class Filter(Service_Mixin):
 						# save-value(threshold, value)
 						self.logger.debug('thresholded by %s : %s' % (metric.threshold, data))
 
-			del data
+				del data
 
 	def __pub_metrics(self):
 

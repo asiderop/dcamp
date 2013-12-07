@@ -4,12 +4,17 @@ from zmq import Context, Poller, POLLIN, ZMQError, ETERM # pylint: disable-msg=E
 
 from dcamp.util.decorators import Runnable
 
+import cProfile
+
 @Runnable
 class Service_Mixin(threading.Thread):
 
 	def __init__(self, pipe):
 		threading.Thread.__init__(self)
 		self.ctx = Context.instance()
+
+		self.pr = cProfile.Profile()
+
 		self.__control_pipe = pipe
 
 		self.logger = logging.getLogger('dcamp.service.'+ self.__class__.__name__)
@@ -57,6 +62,7 @@ class Service_Mixin(threading.Thread):
 
 	def run(self):
 		self.run_state()
+		self.pr.enable()
 		while self.in_running_state:
 			try:
 				self._pre_poll()

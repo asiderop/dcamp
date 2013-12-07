@@ -38,6 +38,9 @@ class Sensor(Service_Mixin):
 		self.metrics_socket.close()
 		del self.metrics_socket
 
+		self.pr.disable()
+		self.pr.dump_stats('sensor.stats')
+
 		Service_Mixin._cleanup(self)
 
 	def _pre_poll(self):
