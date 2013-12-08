@@ -50,11 +50,20 @@ class DCConfig_Mixin(ConfigParser):
 
 		# the order of these calls matters
 
+		self.isvalid = False
+		self.__num_errors = 0
+		self.__num_warns = 0
+
 		self.__validate()
 
-		self.__create_root()
-		self.__create_metrics()
-		self.__create_groups()
+		if self.isvalid:
+			self.__create_root()
+			self.__create_metrics()
+			self.__create_groups()
+
+		if self.__num_errors > 0:
+			raise DCParsingError('%d parsing errors in dcamp config file; '
+					'see above error messages for details' % (self.__num_errors))
 
 		self.__create_kvdict()
 
@@ -80,6 +89,14 @@ class DCConfig_Mixin(ConfigParser):
 			if 'threshold' in self[name]:
 				threshold = ThreshSpec.from_str(self[name]['threshold'])
 
+				if threshold.is_timed:
+					if threshold.value < rate:
+						self.__eprint('time-based threshold shorter than sample rate: %s'
+								% name)
+					elif threshold.value % rate != 0:
+						self.__eprint('time-based threshold indivisible by sample rate: %s'
+								% name)
+
 			detail = self[name]['metric']
 
 			result[name] = MetricSpec(name, rate, threshold, detail, None)
@@ -92,7 +109,7 @@ class DCConfig_Mixin(ConfigParser):
 
 		result = {}
 
-		# process all group sepcifications
+		# process all group specifications
 		for name in self.group_sections:
 			endpoints = []
 			metrics = []
@@ -164,9 +181,6 @@ class DCConfig_Mixin(ConfigParser):
 		'''
 		@todo turn each of these checks into a test routine / issue #24
 		'''
-		self.__num_errors = 0
-		self.__num_warns = 0
-
 		# { host : [ port ] }
 		endpoints = {}
 
@@ -233,8 +247,5 @@ class DCConfig_Mixin(ConfigParser):
 		if len(unused_metrics) > 0:
 			self.__wprint('unused metric specification:', unused_metrics)
 
-		if self.__num_errors > 0:
-			raise DCParsingError('%d parsing errors in dcamp config file; '
-					'see above error messages for details' % (self.__num_errors))
-		else:
+		if 0 == self.__num_errors:
 			self.isvalid = True

@@ -250,7 +250,7 @@
   <boolean id="lint_coffee_script">1</boolean>
   <boolean id="lint_python3_with_pychecker3">0</boolean>
   <boolean id="lint_python3_with_pyflakes3">0</boolean>
-  <boolean id="lint_python3_with_pylint3">1</boolean>
+  <boolean id="lint_python3_with_pylint3">0</boolean>
   <boolean id="lint_python3_with_standard_python">1</boolean>
   <boolean id="lint_python_with_pychecker">0</boolean>
   <boolean id="lint_python_with_pyflakes">0</boolean>
@@ -271,7 +271,7 @@
   <string id="pychecker3_wrapper_location"></string>
   <string id="pychecker_checking_rcfile"></string>
   <string id="pychecker_wrapper_location"></string>
-  <string id="pylint3_checking_rcfile"></string>
+  <string relative="path" id="pylint3_checking_rcfile">pylintrc</string>
   <string id="pylint_checking_rcfile"></string>
   <string id="python3DefaultInterpreter">/usr/local/bin/python3</string>
   <string relative="path" id="python3ExtraPaths">src</string>
