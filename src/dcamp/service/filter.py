@@ -107,7 +107,7 @@ class Filter(Service_Mixin):
 
 				# read all messages on socket, i.e. keep reading until there is nothing
 				# left to process
-				try: data = DataMsg.DATA.recv(self.pull_socket)
+				try: data = DataMsg._DATA.recv(self.pull_socket)
 				except Again as e: break
 
 				self.pull_cnt += 1

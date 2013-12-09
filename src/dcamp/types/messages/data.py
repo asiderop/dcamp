@@ -7,9 +7,17 @@ from dcamp.types.messages.common import DCMsg, _PROPS
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import format_bytes, isInstance_orNone, now_msecs
 
-__all__ = [ 'DATA' ]
+__all__ = [
+	'DATA_HUGZ',
+	'DATA_BASIC',
+	'DATA_SUM',
+	'DATA_AVERAGE',
+	'DATA_PERCENT',
+	'DATA_RATE',
+	'_DATA',
+	]
 
-class DATA(DCMsg, _PROPS):
+class _DATA(DCMsg, _PROPS):
 	'''
 	Frame 0: data source (leaf or collector node endpoint), as 0MQ string
 	Frame 1: properties, as 0MQ string
@@ -24,15 +32,6 @@ class DATA(DCMsg, _PROPS):
 	config     = "config-name=" <string>
 	'''
 
-	mtypes = [
-		'HUGZ',
-		'basic',
-		'sum',
-		'average',
-		'percent',
-		'rate',
-	]
-
 	def __init__(self, source, properties,
 			time1=None, value1=None, time2=None, value2=None):
 		DCMsg.__init__(self)
@@ -40,8 +39,12 @@ class DATA(DCMsg, _PROPS):
 
 		assert isinstance(source, EndpntSpec)
 
+		# validate given type
 		assert 'type' in properties, 'missing metric "type" key'
-		assert self.m_type in DATA.mtypes, 'given metric "type" not valid'
+		assert self.m_type in _MTYPES.keys(), 'given metric "type" not valid'
+
+		# validate class was constructed with type-appropriate sub-class
+		assert isinstance(self, _MTYPES[self.m_type])
 
 		assert isInstance_orNone(time1, int)
 		assert isInstance_orNone(value1, int)
@@ -68,50 +71,22 @@ class DATA(DCMsg, _PROPS):
 		return self.get('config-name', None)
 
 	@property
-	def is_hugz(self):
-		return 'HUGZ' == self['type']
-
-	@property
 	def calculated(self):
 		'''returns float representing calculated value of data message'''
-		result = None
-		if self.m_type in ['basic', 'sum']:
-			result = float(self.value1)
-		elif self.m_type in ['average', 'percent']:
-			result = self.value1 / self.value2
-			if 'percent' == self.m_type:
-				result *= 100
-		elif self.m_type in ['rate']:
-			result = format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
-		else:
-			raise NotImplementedError()
-
-		return result
+		raise NotImplementedError('sub-class implementation missing')
 
 	@property
 	def suffix(self):
-		if 'percent' == self.m_type:
-			return '%'
-		elif 'average' == self.m_type:
-			return ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
-		elif 'rate' == self.m_type:
-			return '%s / sec' % format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='suffix')
-		else:
-			return ''
+		return ''
 
 	def accumulate(self, new_data):
 		pass
 
-	def log_str(self):
-		if self.is_hugz:
-			return '%d\t%s\t%s' % (self.time1, self.source, self.m_type)
-		else:
-			return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.calculated, self.suffix)
-
 	def __str__(self):
-		if self.is_hugz:
-			return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
 		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.calculated)
+
+	def log_str(self):
+		return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.calculated, self.suffix)
 
 	@property
 	def frames(self):
@@ -143,8 +118,61 @@ class DATA(DCMsg, _PROPS):
 		return cls(source, props, time1, value1, time2, value2)
 
 def HUGZ(endpoint):
-	return DATA(
+	return DATA_HUGZ(
 			source=endpoint,
 			properties={'type': 'HUGZ'},
 			time1=now_msecs()
 		)
+
+class DATA_HUGZ(_DATA):
+	def __str__(self):
+		return '%s -- HUGZ @ %d' % (str(self.source), self.time1)
+
+	def log_str(self):
+		return '%d\t%s\t%s' % (self.time1, self.source, self.m_type)
+
+class DATA_BASIC(_DATA):
+	@property
+	def calculated(self):
+		return float(self.value1)
+
+class DATA_SUM(_DATA):
+	@property
+	def calculated(self):
+		return float(self.value1)
+
+class DATA_AVERAGE(_DATA):
+	@property
+	def suffix(self):
+		return ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
+
+	@property
+	def calculated(self):
+		return (self.value1 / self.value2)
+
+class DATA_PERCENT(_DATA):
+	@property
+	def suffix(self):
+		return '%'
+
+	@property
+	def calculated(self):
+		return (self.value1 / self.value2) * 100
+
+class DATA_RATE(_DATA):
+	@property
+	def suffix(self):
+		return '%s / sec' % format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='suffix')
+
+	@property
+	def calculated(self):
+		return format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
+
+_MTYPES = {
+	'HUGZ': DATA_HUGZ,
+	'basic': DATA_BASIC,
+	'sum': DATA_SUM,
+	'average': DATA_AVERAGE,
+	'percent': DATA_PERCENT,
+	'rate': DATA_RATE,
+}

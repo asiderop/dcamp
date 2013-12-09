@@ -125,9 +125,11 @@ class Sensor(Service_Mixin):
 		last_v = collection.last_value
 
 		first = (last_t, last_v) == (0, 0)
+		message = None
 
 		if 'CPU' == detail:
 			props['type'] = 'percent'
+			message = DataMsg.DATA_PERCENT
 
 			time1 = now_msecs()
 			# percent is accurate to one decimal point
@@ -139,6 +141,7 @@ class Sensor(Service_Mixin):
 
 		elif 'DISK' == detail:
 			props['type'] = 'rate'
+			message = DataMsg.DATA_RATE
 
 			time1 = last_t
 			value1 = last_v
@@ -152,6 +155,7 @@ class Sensor(Service_Mixin):
 
 		elif 'NETWORK' == detail:
 			props['type'] = 'rate'
+			message = DataMsg.DATA_RATE
 
 			time1 = last_t
 			value1 = last_v
@@ -165,6 +169,7 @@ class Sensor(Service_Mixin):
 
 		elif 'MEMORY' == detail:
 			props['type'] = 'percent'
+			message = DataMsg.DATA_PERCENT
 
 			time1 = now_msecs()
 			vmem = psutil.virtual_memory()
@@ -176,7 +181,7 @@ class Sensor(Service_Mixin):
 
 		m = None
 		if not first:
-			m = DataMsg.DATA(self.endpoint, props,
+			m = message(self.endpoint, props,
 					time1=time1, value1=value1,
 					time2=time2, value2=value2,
 				)
