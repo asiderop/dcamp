@@ -80,7 +80,8 @@ class _DATA(DCMsg, _PROPS):
 		return ''
 
 	def accumulate(self, new_data):
-		pass
+		'''adds new_data to this data'''
+		raise NotImplementedError('sub-class implementation missing')
 
 	def __str__(self):
 		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.calculated)
@@ -136,28 +137,63 @@ class DATA_BASIC(_DATA):
 	def calculated(self):
 		return float(self.value1)
 
+	def accumulate(self, new_data):
+		''' always returns single, point-in-time value '''
+		self.value1 = new_data.value1
+		self.time1 = new_data.time1
+
 class DATA_SUM(_DATA):
+	@property
+	def suffix(self):
+		suff = ' total'
+		if self.time2 is not None:
+			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
+		return suff
+
 	@property
 	def calculated(self):
 		return float(self.value1)
 
+	def accumulate(self, new_data):
+		''' returns sum of all values between time1 and time2 '''
+		self.value1 += new_data.value1
+		self.time2 = new_data.time1
+
 class DATA_AVERAGE(_DATA):
 	@property
 	def suffix(self):
-		return ' for %.2f sec' % ((self.time2 - self.time1) / 1e3)
+		suff = ' average'
+		if self.time2 is not None:
+			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
+		return suff
 
 	@property
 	def calculated(self):
 		return (self.value1 / self.value2)
 
+	def accumulate(self, new_data):
+		''' returns average of values between time1 and time2 '''
+		self.value1 += new_data.value1
+		self.value2 += new_data.value2
+		self.time2 = new_data.time1
+
 class DATA_PERCENT(_DATA):
 	@property
 	def suffix(self):
-		return '%'
+		suff = '%'
+		if self.time2 is not None:
+			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
+		return suff
 
 	@property
 	def calculated(self):
 		return (self.value1 / self.value2) * 100
+
+	def accumulate(self, new_data):
+		''' returns percent of values between time1 and time2 '''
+		self.value1 += new_data.value1
+		self.value2 += new_data.value2
+		self.time2 = new_data.time1
 
 class DATA_RATE(_DATA):
 	@property
@@ -167,6 +203,11 @@ class DATA_RATE(_DATA):
 	@property
 	def calculated(self):
 		return format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
+
+	def accumulate(self, new_data):
+		''' returns rate of change between time1 and time2 '''
+		self.value2 = new_data.value2
+		self.time2 = new_data.time2
 
 _MTYPES = {
 	'HUGZ': DATA_HUGZ,

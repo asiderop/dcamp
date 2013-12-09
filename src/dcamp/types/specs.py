@@ -23,17 +23,29 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 		if self.op in ['<', '>']:
 			return self.__limit(data)
 		elif self.op in ['+', '*']:
-			return self.__time(data)
+			return self.__timed(data)
 		raise NotImplementedError('unknown threshold operation')
 
 	def __str__(self):
 		return '%s%s' % (self.op,
 				self.op in ['<', '>'] and self.value or seconds_to_str(self.value))
 
-	def __limit(self, data):
-		return data.calculated >= self.value
+	@property
+	def is_limit(self):
+		return self.op in ['<', '>']
 
-	def __time(self, data):
+	@property
+	def is_timed(self):
+		return self.op in ['+', '*']
+
+	def __limit(self, data):
+		if '<' == self.op:
+			return data.calculated <= self.value
+		elif '>' == self.op:
+			return data.calculated >= self.value
+		raise NotImplementedError('unknown limit operation')
+
+	def __timed(self, data):
 		return data.time1 + (self.value * 1000) > now_msecs()
 
 	@classmethod
