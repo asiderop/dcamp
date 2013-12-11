@@ -81,6 +81,11 @@ class _DATA(DCMsg, _PROPS):
 
 	def accumulate(self, new_data):
 		'''adds new_data to this data'''
+		assert self.source == new_data.source
+		assert self.m_type == new_data.m_type
+		return self._accumulate(new_data)
+
+	def _accumulate(self, new_data):
 		raise NotImplementedError('sub-class implementation missing')
 
 	def __str__(self):
@@ -137,7 +142,7 @@ class DATA_BASIC(_DATA):
 	def calculated(self):
 		return float(self.value1)
 
-	def accumulate(self, new_data):
+	def _accumulate(self, new_data):
 		''' always returns single, point-in-time value '''
 		self.value1 = new_data.value1
 		self.time1 = new_data.time1
@@ -154,7 +159,7 @@ class DATA_SUM(_DATA):
 	def calculated(self):
 		return float(self.value1)
 
-	def accumulate(self, new_data):
+	def _accumulate(self, new_data):
 		''' returns sum of all values between time1 and time2 '''
 		self.value1 += new_data.value1
 		self.time2 = new_data.time1
@@ -171,10 +176,11 @@ class DATA_AVERAGE(_DATA):
 	def calculated(self):
 		return (self.value1 / self.value2)
 
-	def accumulate(self, new_data):
+	def _accumulate(self, new_data):
 		''' returns average of values between time1 and time2 '''
 		self.value1 += new_data.value1
 		self.value2 += new_data.value2
+		assert new_data.time2 is None # XXX: how does this crap work?
 		self.time2 = new_data.time1
 
 class DATA_PERCENT(_DATA):
@@ -189,7 +195,7 @@ class DATA_PERCENT(_DATA):
 	def calculated(self):
 		return (self.value1 / self.value2) * 100
 
-	def accumulate(self, new_data):
+	def _accumulate(self, new_data):
 		''' returns percent of values between time1 and time2 '''
 		self.value1 += new_data.value1
 		self.value2 += new_data.value2
@@ -204,7 +210,7 @@ class DATA_RATE(_DATA):
 	def calculated(self):
 		return format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
 
-	def accumulate(self, new_data):
+	def _accumulate(self, new_data):
 		''' returns rate of change between time1 and time2 '''
 		self.value2 = new_data.value2
 		self.time2 = new_data.time2
