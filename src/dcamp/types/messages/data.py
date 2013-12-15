@@ -30,6 +30,10 @@ class _DATA(DCMsg, _PROPS):
 	type       = "type=" ( "HUGZ" / "basic" / "sum" / "average" / "percent" / "rate" )
 	detail     = "detail=" <string>
 	config     = "config-name=" <string>
+
+	_DATA.time represents the time at which this data message represents. If
+	this data message represents a time range, _DATA.time is the end time and
+	_DATA.base_time is the start time.
 	'''
 
 	def __init__(self, source, properties,
@@ -89,7 +93,7 @@ class _DATA(DCMsg, _PROPS):
 		raise NotImplementedError('sub-class implementation missing')
 
 	def __str__(self):
-		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.calculated)
+		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time2, self.calculated)
 
 	def log_str(self):
 		return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.calculated, self.suffix)
@@ -180,7 +184,8 @@ class DATA_AVERAGE(_DATA):
 		''' returns average of values between time1 and time2 '''
 		self.value1 += new_data.value1
 		self.value2 += new_data.value2
-		assert new_data.time2 is None # XXX: how does this crap work?
+		assert new_data.time2 is None
+		assert new_data.time1 > self.time2
 		self.time2 = new_data.time1
 
 class DATA_PERCENT(_DATA):
@@ -199,6 +204,8 @@ class DATA_PERCENT(_DATA):
 		''' returns percent of values between time1 and time2 '''
 		self.value1 += new_data.value1
 		self.value2 += new_data.value2
+		assert new_data.time2 is None
+		assert new_data.time1 > self.time2
 		self.time2 = new_data.time1
 
 class DATA_RATE(_DATA):

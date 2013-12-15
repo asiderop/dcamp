@@ -4,7 +4,7 @@ from zmq import PUB, SUB, SUBSCRIBE, PUSH, PULL, Again # pylint: disable-msg=E06
 from zmq.devices import ThreadProxy
 
 import dcamp.types.messages.data as DataMsg
-from dcamp.types.specs import EndpntSpec, MetricCollection
+from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service_Mixin
 from dcamp.util.functions import now_secs, now_msecs
 
@@ -26,8 +26,7 @@ class Filter(Service_Mixin):
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
-		# goal: sort by next pub time
-		# { config-name: metric-spec }
+		# { config-name: (metric-spec, cached-or-None }
 		self.metric_specs = {}
 		self.metric_seqid = -1
 
@@ -87,9 +86,7 @@ class Filter(Service_Mixin):
 		self.__check_config_for_metric_updates()
 
 		now = now_secs()
-		if self.next_pub <= now:
-			self.__pub_metrics()
-		elif self.next_hug <= now:
+		if self.next_hug <= now:
 			self.__send_hug()
 
 		self.poller_timer = self.__get_next_wakeup()
@@ -117,66 +114,50 @@ class Filter(Service_Mixin):
 				if self.level in ['branch', 'leaf']:
 					# if unknown metric, just drop it
 					if data['config-seqid'] != self.metric_seqid:
-						self.logger.warn('unknown config seq-id (%d); dropping data' % data['config-seq-id'])
+						self.logger.warn('unknown config seq-id (%d); dropping data'
+								% data['config-seq-id'])
 						continue
 
 					# lookup metric spec
-					metric = self.metric_specs.get(data['config-name'], None)
+					(metric, cache) = self.metric_specs.get(data['config-name'], (None, None))
 
 					if metric is None:
-						self.logger.warn('unknown metric config-name (%s); dropping data' % data['config-name'])
+						self.logger.warn('unknown metric config-name (%s); dropping data'
+								% data['config-name'])
 						continue
 
-					'''
-					XXX: need full metric spec to do filtering; how do we share metric
-						 specs across Sensor/Filter service such that the data messages
-						 can be mapped back to the metric spec? The Configuration service
-						 is shared...perhaps use the seq-id as a unique identifier?
+					# do threshold filtering
+					if metric.threshold is not None:
+						if metric.threshold.is_timed:
+							# add to local cache and get updated message
+							if cache is not None:
+								assert '+' == metric.threshold.op, 'Issue 49'
+								data = cache.accumulate(data)
+							self.metric_specs[data['config-name']] = (metric, data)
 
-					XXX: do threshold filtering; add to list of to-be-pubbed-later; drop samples?
-					'''
+							# XXX: clear cache when sending?
 
-					if metric.threshold is None or metric.threshold.check(data):
+						# check threshold and drop messages
+						if not metric.threshold.check(data):
+							self.logger.debug('thresholded by %s : %s'
+									% (metric.threshold, data))
+							data = None
+
+					# forward message to parent
+					if data is not None:
 						data.send(self.pubs_socket)
 						self.pubs_cnt += 1
-					else:
-						# save-value(threshold, value)
-						self.logger.debug('thresholded by %s : %s' % (metric.threshold, data))
 
-			del data
-
-	def __pub_metrics(self):
-
-		pubbed = []
-		while True:
-			pub = self.metric_specs.pop(0)
-			assert pub.epoch <= now_secs(), 'next metric is not scheduled for pub'
-
-			(msg, pub) = self.__process(pub)
-			if msg is not None:
-				msg.send(self.metrics_socket)
-				self.pub_cnt += 1
-			pubbed.append(pub)
-
-			if len(self.metric_specs) == 0:
-				# no more work
-				break
-
-			if self.metric_specs[0].epoch > now_secs():
-				# no more work scheduled
-				break
-
-		# add the pubbed metrics back into our list
-		self.metric_specs = sorted(self.metric_specs + pubbed)
-		# set the new pub wakeup
-		self.next_pub = self.metric_specs[0].epoch
+				del data
 
 	def __check_config_for_metric_updates(self):
 		(specs, seq) = self.config_service.get_metric_specs()
 		if seq > self.metric_seqid:
+			# TODO: instead of clearing the list, try to keep old specs that have not
+			#       changed?
 			self.metric_specs = {}
 			for s in specs:
-				self.metric_specs[s.config_name] = s
+				self.metric_specs[s.config_name] = (s, None)
 			self.metric_seqid = seq
 			self.logger.debug('new metric specs: %s' % self.metric_specs)
 			# XXX: trigger new metric setup
@@ -191,11 +172,9 @@ class Filter(Service_Mixin):
 		'''
 
 		# just sent a message, so reset hugz
-		wakeup = self.next_hug = now_secs() + self.hug_int
-		if len(self.metric_specs) > 0:
-			wakeup = min(self.next_pub, self.next_hug)
+		self.next_hug = now_secs() + self.hug_int
 
-		# wakeup is in secs; subtract current msecs to get next wakeup epoch
-		val = max(0, (wakeup * 1e3) - now_msecs())
+		# next_hug is in secs; subtract current msecs to get next wakeup epoch
+		val = max(0, (next_hug * 1e3) - now_msecs())
 		self.logger.debug('next wakeup in %dms' % val)
 		return val
