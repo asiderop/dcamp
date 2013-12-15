@@ -37,7 +37,7 @@ class _DATA(DCMsg, _PROPS):
 	'''
 
 	def __init__(self, source, properties,
-			time1=None, value1=None, time2=None, value2=None):
+			time1=None, value1=None, value2=None):
 		DCMsg.__init__(self)
 		_PROPS.__init__(self, properties)
 
@@ -52,7 +52,6 @@ class _DATA(DCMsg, _PROPS):
 
 		assert isInstance_orNone(time1, int)
 		assert isInstance_orNone(value1, int)
-		assert isInstance_orNone(time2, int)
 		assert isInstance_orNone(value2, int)
 
 		# TODO: add more verifications of parameters based on given m_type
@@ -61,7 +60,6 @@ class _DATA(DCMsg, _PROPS):
 
 		self.time1 = time1
 		self.value1 = value1
-		self.time2 = time2
 		self.value2 = value2
 
 	@property
@@ -83,17 +81,8 @@ class _DATA(DCMsg, _PROPS):
 	def suffix(self):
 		return ''
 
-	def accumulate(self, new_data):
-		'''adds new_data to this data'''
-		assert self.source == new_data.source
-		assert self.m_type == new_data.m_type
-		return self._accumulate(new_data)
-
-	def _accumulate(self, new_data):
-		raise NotImplementedError('sub-class implementation missing')
-
 	def __str__(self):
-		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time2, self.calculated)
+		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time1, self.calculated)
 
 	def log_str(self):
 		return '%d\t%s\t%s\t%.2f%s' % (self.time1, self.source, self.detail, self.calculated, self.suffix)
@@ -105,7 +94,6 @@ class _DATA(DCMsg, _PROPS):
 				self._encode_dict(self.properties),
 				self._encode_int(self.time1),
 				self._encode_int(self.value1),
-				self._encode_int(self.time2),
 				self._encode_int(self.value2),
 			]
 
@@ -114,7 +102,7 @@ class _DATA(DCMsg, _PROPS):
 		assert isinstance(msg, list)
 
 		# make sure we have six frames
-		if 6 != len(msg):
+		if 5 != len(msg):
 			raise ValueError('wrong number of frames')
 
 		source = EndpntSpec.decode(msg[0])
@@ -122,10 +110,9 @@ class _DATA(DCMsg, _PROPS):
 
 		time1 = DCMsg._decode_int(msg[2])
 		value1 = DCMsg._decode_int(msg[3])
-		time2 = DCMsg._decode_int(msg[4])
-		value2 = DCMsg._decode_int(msg[5])
+		value2 = DCMsg._decode_int(msg[4])
 
-		return cls(source, props, time1, value1, time2, value2)
+		return cls(source, props, time1, value1, value2)
 
 def HUGZ(endpoint):
 	return DATA_HUGZ(
@@ -146,81 +133,43 @@ class DATA_BASIC(_DATA):
 	def calculated(self):
 		return float(self.value1)
 
-	def _accumulate(self, new_data):
-		''' always returns single, point-in-time value '''
-		self.value1 = new_data.value1
-		self.time1 = new_data.time1
-
 class DATA_SUM(_DATA):
 	@property
 	def suffix(self):
-		suff = ' total'
-		if self.time2 is not None:
-			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
-		return suff
+		return ' total'
 
 	@property
 	def calculated(self):
 		return float(self.value1)
 
-	def _accumulate(self, new_data):
-		''' returns sum of all values between time1 and time2 '''
-		self.value1 += new_data.value1
-		self.time2 = new_data.time1
-
 class DATA_AVERAGE(_DATA):
 	@property
 	def suffix(self):
-		suff = ' average'
-		if self.time2 is not None:
-			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
-		return suff
+		return ' average'
 
 	@property
 	def calculated(self):
 		return (self.value1 / self.value2)
 
-	def _accumulate(self, new_data):
-		''' returns average of values between time1 and time2 '''
-		self.value1 += new_data.value1
-		self.value2 += new_data.value2
-		assert new_data.time2 is None
-		assert new_data.time1 > self.time2
-		self.time2 = new_data.time1
-
 class DATA_PERCENT(_DATA):
 	@property
 	def suffix(self):
-		suff = '%'
-		if self.time2 is not None:
-			suff += ' after %.2f sec' % ((self.time2 - self.time1) / 1e3)
-		return suff
+		return '%'
 
 	@property
 	def calculated(self):
 		return (self.value1 / self.value2) * 100
 
-	def _accumulate(self, new_data):
-		''' returns percent of values between time1 and time2 '''
-		self.value1 += new_data.value1
-		self.value2 += new_data.value2
-		assert new_data.time2 is None
-		assert new_data.time1 > self.time2
-		self.time2 = new_data.time1
-
 class DATA_RATE(_DATA):
 	@property
 	def suffix(self):
-		return '%s / sec' % format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='suffix')
+		#return '%s / sec' % format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='suffix')
+		pass
 
 	@property
 	def calculated(self):
-		return format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
-
-	def _accumulate(self, new_data):
-		''' returns rate of change between time1 and time2 '''
-		self.value2 = new_data.value2
-		self.time2 = new_data.time2
+		#return format_bytes((self.value2 - self.value1) / (self.time2 - self.time1) * 1e3, num_or_suffix='num')
+		pass
 
 _MTYPES = {
 	'HUGZ': DATA_HUGZ,
