@@ -65,10 +65,10 @@ class _DATA(DCMsg, _PROPS):
 	def config_name(self):
 		return self.get('config-name', None)
 
-	def __verify_compatibility(self, given):
-		assert self.source == given.source, 'different source; maybe invalid'
-		assert self.m_type == given.m_type, 'different message type'
-		assert self.time < given.time, 'wrong sample order'
+	def __is_compatible(self, given):
+		return (self.source == given.source and
+			self.m_type == given.m_type and
+			self.time < given.time)
 
 	def print(self, given):
 		'''
@@ -83,7 +83,7 @@ class _DATA(DCMsg, _PROPS):
 		must be from the same source, have the same message type, and have a later
 		timestamp. Return value is a float representation of calculated result.
 		'''
-		self.__verify_compatibility(given)
+		assert self.__is_compatible(given)
 		return self._calculate(given)
 
 	def suffix(self, given):
@@ -92,19 +92,18 @@ class _DATA(DCMsg, _PROPS):
 		must be from the same source, have the same message type, and have a later
 		timestamp. Return value is a float representation of calculated result.
 		'''
-		self.__verify_compatibility(given)
+		assert self.__is_compatible(given)
 		return self._suffix(given)
 
 	def _calculate(self, given):
 		raise NotImplementedError('sub-class implementation missing')
-	def _suffix(self):
+	def _suffix(self, given):
 		raise NotImplementedError('sub-class implementation missing')
 
-	# XXX: cleanup these two methods
 	def __str__(self):
-		return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time, self._calculate)
+		return '%s -- %s @ %d = %d' % (self.source, self.detail, self.time, self.value)
 	def log_str(self):
-		return '%d\t%s\t%s\t%.2f%s' % (self.time, self.source, self.detail, self._calculate, self.suffix)
+		return '%d\t%s\t%s\t%d' % (self.time, self.source, self.detail, self.value)
 
 	@property
 	def frames(self):
@@ -161,6 +160,11 @@ class DATA_BASIC(_DATA):
 		return ''
 
 class DATA_AVERAGE(_DATA):
+	def __str__(self):
+		return '%s / %d' % (_DATA.__str__(self), self.base_value)
+	def log_str(self):
+		return '%s\t%d' % (_DATA.log_str(self), self.base_value)
+
 	def _suffix(self, given):
 		return 'average'
 
@@ -168,6 +172,11 @@ class DATA_AVERAGE(_DATA):
 		return float( (given.value - self.value) / (given.base_value - self.base_value) )
 
 class DATA_PERCENT(_DATA):
+	def __str__(self):
+		return '%s / %d' % (_DATA.__str__(self), self.base_value)
+	def log_str(self):
+		return '%s\t%d' % (_DATA.log_str(self), self.base_value)
+
 	def _suffix(self, given):
 		return '%'
 
