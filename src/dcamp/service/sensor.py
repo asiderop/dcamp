@@ -95,7 +95,7 @@ class Sensor(Service_Mixin):
 					specs.remove(collection.spec)
 
 			# add all new metric specs, starting collection now
-			new_specs = [MetricCollection(0, elem, 0, 0) for elem in specs]
+			new_specs = [MetricCollection(0, elem) for elem in specs]
 
 			self.metric_specs = sorted(new_specs)
 			self.metric_seqid = seq
@@ -113,7 +113,8 @@ class Sensor(Service_Mixin):
 		''' returns tuple of (data-msg, metric-collection) '''
 		# TODO: move this to another class?
 
-		(time1, value1, time2, value2) = (None, None, None, None)
+		(time, value, base_value) = (None, None, None)
+
 		props = {}
 		props['detail'] = collection.spec.detail
 		props['config-name'] = collection.spec.config_name
@@ -121,72 +122,48 @@ class Sensor(Service_Mixin):
 
 		# local vars for easier access
 		detail = collection.spec.detail
-		last_t = collection.last_time
-		last_v = collection.last_value
-
-		first = (last_t, last_v) == (0, 0)
 		message = None
 
 		if 'CPU' == detail:
 			props['type'] = 'percent'
 			message = DataMsg.DATA_PERCENT
 
-			time1 = now_msecs()
+			time = now_msecs()
 			# percent is accurate to one decimal point
-			value1 = int(psutil.cpu_percent(interval=0) * 10)
-			value2 = 1000
-
-			# fake last time/value since they are not needed
-			(last_t, last_v) = (1, 1)
+			value = int(psutil.cpu_percent(interval=0) * 10)
+			base_value = 1000
 
 		elif 'DISK' == detail:
 			props['type'] = 'rate'
 			message = DataMsg.DATA_RATE
 
-			time1 = last_t
-			value1 = last_v
-
-			time2 = now_msecs()
 			disk = psutil.disk_io_counters()
-			value2 = disk.read_bytes + disk.write_bytes
 
-			last_t = time2
-			last_v = value2
+			time = now_msecs()
+			value = disk.read_bytes + disk.write_bytes
 
 		elif 'NETWORK' == detail:
 			props['type'] = 'rate'
 			message = DataMsg.DATA_RATE
 
-			time1 = last_t
-			value1 = last_v
-
-			time2 = now_msecs()
 			net = psutil.net_io_counters()
-			value2 = net.bytes_sent + net.bytes_recv
 
-			last_t = time2
-			last_v = value2
+			time = now_msecs()
+			value = net.bytes_sent + net.bytes_recv
 
 		elif 'MEMORY' == detail:
 			props['type'] = 'percent'
 			message = DataMsg.DATA_PERCENT
 
-			time1 = now_msecs()
 			vmem = psutil.virtual_memory()
-			value1 = vmem.used
-			value2 = vmem.total
 
-			# fake last time/value since they are not needed
-			(last_t, last_v) = (1, 1)
+			time = now_msecs()
+			value = vmem.used
+			base_value = vmem.total
 
-		m = None
-		if not first:
-			m = message(self.endpoint, props,
-					time1=time1, value1=value1,
-					time2=time2, value2=value2,
-				)
+		m = message(self.endpoint, props, time, value, base_value)
 
 		# create new collection with next collection time
-		c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, last_t, last_v)
+		c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
 
 		return (m, c)

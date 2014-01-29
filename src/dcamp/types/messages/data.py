@@ -126,20 +126,31 @@ class _DATA(DCMsg, _PROPS):
 		source = EndpntSpec.decode(msg[0])
 		props = _PROPS._decode_dict(msg[1])
 
+		# validate given type
+		assert 'type' in props, 'missing metric "type" key'
+		assert props['type'] in _MTYPES.keys(), 'given metric "type" not valid'
+
+		real_class = _MTYPES[props['type']]
+
 		time = DCMsg._decode_int(msg[2])
+
+		# HUGZ have a special/minimal constructor
+		if real_class == DATA_HUGZ:
+			return real_class(source, time)
+
 		value = DCMsg._decode_int(msg[3])
 		base_value = DCMsg._decode_int(msg[4])
 
-		return cls(source, props, time, value, base_value)
-
-def HUGZ(endpoint):
-	return DATA_HUGZ(
-			source=endpoint,
-			properties={'type': 'HUGZ'},
-			time=now_msecs()
-		)
+		return real_class(source, props, time, value, base_value)
 
 class DATA_HUGZ(_DATA):
+	def __init__(self, the_source, the_time=None):
+		super().__init__(
+				source=the_source,
+				properties={'type': 'HUGZ'},
+				time=the_time or now_msecs()
+			)
+
 	def _calculate(self, given):
 		raise NotImplementedError('HUGZ have no value')
 

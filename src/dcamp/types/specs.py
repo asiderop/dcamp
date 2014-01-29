@@ -40,9 +40,9 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 
 	def __limit(self, data):
 		if '<' == self.op:
-			return data.calculated <= self.value
+			return data.calculate() <= self.value
 		elif '>' == self.op:
-			return data.calculated >= self.value
+			return data.calculate() >= self.value
 		raise NotImplementedError('unknown limit operation')
 
 	def __timed(self, data):
@@ -84,7 +84,7 @@ class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', '
 		return "%s(detail='%s', rate='%s', threshold='%s' param='%s')" % (self.config_name,
 				self.detail, seconds_to_str(self.rate), self.threshold, self.param or '')
 
-class MetricCollection(namedtuple('MetricCollection', 'epoch, spec, last_time, last_value')):
+class MetricCollection(namedtuple('MetricCollection', 'epoch, spec')):
 	''' Class Representing a Metric Collection Specification '''
 	pass
 

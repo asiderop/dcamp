@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from unittest import TestCase
+from unittest import TestCase, main
 from time import sleep
 
 from dcamp.types.specs import EndpntSpec

@@ -93,7 +93,7 @@ class Filter(Service_Mixin):
 
 	def __send_hug(self):
 		if self.level in ['branch', 'leaf']:
-			hug = DataMsg.HUGZ(self.endpoint)
+			hug = DataMsg.DATA_HUGZ(self.endpoint)
 			hug.send(self.pubs_socket)
 			self.hugz_cnt += 1
 
@@ -106,8 +106,12 @@ class Filter(Service_Mixin):
 				# left to process
 				try: data = DataMsg._DATA.recv(self.pull_socket)
 				except Again as e: break
-
 				self.pull_cnt += 1
+
+				if data.is_error:
+					self.logger.error('received error message: %s' % data)
+					continue
+
 				self.data_file.write(data.log_str() + '\n')
 
 				# forward metric to parent
@@ -126,12 +130,13 @@ class Filter(Service_Mixin):
 								% data['config-name'])
 						continue
 
-					# do threshold filtering
+					# XXX: do threshold filtering
 					if metric.threshold is not None:
+
 						if metric.threshold.is_timed:
 							# add to local cache and get updated message
 							if cache is not None:
-								assert '+' == metric.threshold.op, 'Issue 49'
+								assert '+' == metric.threshold.op, 'Issue #49'
 								data = cache.accumulate(data)
 							self.metric_specs[data['config-name']] = (metric, data)
 
@@ -175,6 +180,6 @@ class Filter(Service_Mixin):
 		self.next_hug = now_secs() + self.hug_int
 
 		# next_hug is in secs; subtract current msecs to get next wakeup epoch
-		val = max(0, (next_hug * 1e3) - now_msecs())
+		val = max(0, (self.next_hug * 1e3) - now_msecs())
 		self.logger.debug('next wakeup in %dms' % val)
 		return val
