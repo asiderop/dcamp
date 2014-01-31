@@ -19,11 +19,11 @@ GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 	'''Class representing a Threshold specification'''
 
-	def check(self, data):
+	def check(self, value):
 		if self.op in ['<', '>']:
-			return self.__limit(data)
+			return self.__limit(value)
 		elif self.op in ['+', '*']:
-			return self.__timed(data)
+			return self.__timed(value)
 		raise NotImplementedError('unknown threshold operation')
 
 	def __str__(self):
@@ -38,15 +38,18 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 	def is_timed(self):
 		return self.op in ['+', '*']
 
-	def __limit(self, data):
+	def __limit(self, value):
+		assert self.is_limit
+
 		if '<' == self.op:
-			return data.calculate() <= self.value
+			return value <= self.value
 		elif '>' == self.op:
-			return data.calculate() >= self.value
+			return value >= self.value
 		raise NotImplementedError('unknown limit operation')
 
-	def __timed(self, data):
-		return data.time1 + (self.value * 1000) > now_msecs()
+	def __timed(self, value):
+		assert self.is_timed
+		return value + (self.value * 1000) > now_msecs()
 
 	@classmethod
 	def from_str(cls, given):

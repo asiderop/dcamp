@@ -26,7 +26,7 @@ class Filter(Service_Mixin):
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
-		# { config-name: (metric-spec, cached-or-None }
+		# { config-name: (metric-spec, cached-list }
 		self.metric_specs = {}
 		self.metric_seqid = -1
 
@@ -122,34 +122,49 @@ class Filter(Service_Mixin):
 								% data['config-seq-id'])
 						continue
 
-					# lookup metric spec
-					(metric, cache) = self.metric_specs.get(data['config-name'], (None, None))
+					# lookup metric spec, default is None and an empty cache list
+					(metric, cache) = self.metric_specs.get(data['config-name'], (None, []))
 
 					if metric is None:
 						self.logger.warn('unknown metric config-name (%s); dropping data'
 								% data['config-name'])
 						continue
 
-					# XXX: do threshold filtering
 					if metric.threshold is not None:
+						value = None
 
 						if metric.threshold.is_timed:
-							# add to local cache and get updated message
-							if cache is not None:
-								assert '+' == metric.threshold.op, 'Issue #49'
-								data = cache.accumulate(data)
-							self.metric_specs[data['config-name']] = (metric, data)
+							# add to local cache and run time check with first message
+							assert '*' == metric.threshold.op, 'only "hold" operation supported'
+							cache.append(data)
+							self.logger.debug('cache size: %d' % len(cache))
 
-							# XXX: clear cache when sending?
+							value = cache[0] # time-based threshold compares against the earliest time
 
-						# check threshold and drop messages
-						if not metric.threshold.check(data):
-							self.logger.debug('thresholded by %s : %s'
-									% (metric.threshold, data))
+						elif metric.threshold.is_limit:
+							# XXX: does not work on the first iteration
+							assert len(cache) == 1
+							value = data.calculate(cache[0])
+							cache[0] = data # replace cache with newest value for next calculation
+
+						# check threshold
+						assert value is not None
+						if not metric.threshold.check(value):
+							self.logger.debug('thresholded by %s : %s' % (metric.threshold, data))
 							data = None
 
-					# forward message to parent
-					if data is not None:
+						# forward message(s) to parent
+						else:
+							for message in cache:
+								message.send(self.pubs_socket)
+								self.pubs_cnt += 1
+
+							# clear time-based cache after sending
+							if metric.threshold.is_timed:
+								cache = []
+
+					# no threshold, just send off the message
+					else:
 						data.send(self.pubs_socket)
 						self.pubs_cnt += 1
 
@@ -162,7 +177,7 @@ class Filter(Service_Mixin):
 			#       changed?
 			self.metric_specs = {}
 			for s in specs:
-				self.metric_specs[s.config_name] = (s, None)
+				self.metric_specs[s.config_name] = (s, [])
 			self.metric_seqid = seq
 			self.logger.debug('new metric specs: %s' % self.metric_specs)
 			# XXX: trigger new metric setup
