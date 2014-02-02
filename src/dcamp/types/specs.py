@@ -49,7 +49,7 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 
 	def __timed(self, value):
 		assert self.is_timed
-		return value + (self.value * 1000) > now_msecs()
+		return value + (self.value * 1000) <= now_msecs()
 
 	@classmethod
 	def from_str(cls, given):

@@ -10,6 +10,7 @@ from dcamp.util.functions import format_bytes, isInstance_orNone, now_msecs
 __all__ = [
 	'DATA_HUGZ',
 	'DATA_BASIC',
+	'DATA_DELTA',
 	'DATA_RATE',
 	'DATA_AVERAGE',
 	'DATA_PERCENT',
@@ -25,7 +26,7 @@ class _DATA(DCMsg, _PROPS):
 	Frame 4: base value, 8 bytes in network order; only for average and percent types
 
 	properties = *( type / detail / config )
-	type       = "type=" ( "HUGZ" / "basic" / "rate" / "average" / "percent" )
+	type       = "type=" ( "HUGZ" / "basic" / "delta" / "rate" / "average" / "percent" )
 	detail     = "detail=" <string>
 	config     = "config-name=" <string>
 	'''
@@ -75,7 +76,7 @@ class _DATA(DCMsg, _PROPS):
 		Return value is a string representation of the calculated value and a contextual
 		suffix.
 		'''
-		return '%.2f %s' % (self.calculate(given), self.suffix(given))
+		return '%.2f %s' % (self.calculate(given), self.suffix)
 
 	def calculate(self, given):
 		'''
@@ -86,18 +87,11 @@ class _DATA(DCMsg, _PROPS):
 		assert self.__is_compatible(given)
 		return self._calculate(given)
 
-	def suffix(self, given):
-		'''
-		Calculates a value based on this and the given data message. The given message
-		must be from the same source, have the same message type, and have a later
-		timestamp. Return value is a float representation of calculated result.
-		'''
-		assert self.__is_compatible(given)
-		return self._suffix(given)
-
 	def _calculate(self, given):
 		raise NotImplementedError('sub-class implementation missing')
-	def _suffix(self, given):
+
+	@property
+	def suffix(self):
 		raise NotImplementedError('sub-class implementation missing')
 
 	def __str__(self):
@@ -154,7 +148,8 @@ class DATA_HUGZ(_DATA):
 	def _calculate(self, given):
 		raise NotImplementedError('HUGZ have no value')
 
-	def _suffix(self, given):
+	@property
+	def suffix(self):
 		raise NotImplementedError('HUGZ have no suffix')
 
 	def __str__(self):
@@ -164,10 +159,19 @@ class DATA_HUGZ(_DATA):
 		return '%d\t%s\t%s' % (self.time, self.source, self.m_type)
 
 class DATA_BASIC(_DATA):
+	def _calculate(self, given=None):
+		return float(self.value)
+
+	@property
+	def suffix(self):
+		return ''
+
+class DATA_DELTA(_DATA):
 	def _calculate(self, given):
 		return float(given.value - self.value)
 
-	def _suffix(self, given):
+	@property
+	def suffix(self):
 		return ''
 
 class DATA_AVERAGE(_DATA):
@@ -176,7 +180,8 @@ class DATA_AVERAGE(_DATA):
 	def log_str(self):
 		return '%s\t%d' % (_DATA.log_str(self), self.base_value)
 
-	def _suffix(self, given):
+	@property
+	def suffix(self):
 		return 'average'
 
 	def _calculate(self, given):
@@ -188,7 +193,8 @@ class DATA_PERCENT(_DATA):
 	def log_str(self):
 		return '%s\t%d' % (_DATA.log_str(self), self.base_value)
 
-	def _suffix(self, given):
+	@property
+	def suffix(self):
 		return '%'
 
 	def _calculate(self, given):
@@ -198,15 +204,17 @@ class DATA_RATE(_DATA):
 	def __the_rate(self, given):
 		return float( (given.value - self.value) / (given.time - self.time) * 1e3 )
 
-	def _suffix(self, given):
-		return '%s / sec' % format_bytes(self.__the_rate(given), num_or_suffix='suffix')
+	@property
+	def suffix(self):
+		return '/ sec'
 
 	def _calculate(self, given):
-		return format_bytes(self.__the_rate(given), num_or_suffix='num')
+		return self.__the_rate(given)
 
 _MTYPES = {
 	'HUGZ': DATA_HUGZ,
 	'basic': DATA_BASIC,
+	'delta': DATA_DELTA,
 	'rate': DATA_RATE,
 	'average': DATA_AVERAGE,
 	'percent': DATA_PERCENT,

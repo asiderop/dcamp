@@ -65,7 +65,7 @@ class Filter(Service_Mixin):
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
-		self.logger.debug("%d pulls; %d pubs; %d hugz; %s metrics" %
+		self.logger.debug("%d pulls; %d pubs; %d hugz; metrics= [\n%s]" %
 				(self.pull_cnt, self.pubs_cnt, self.hugz_cnt, self.metric_specs))
 
 		self.data_file.close()
@@ -114,7 +114,7 @@ class Filter(Service_Mixin):
 
 				self.data_file.write(data.log_str() + '\n')
 
-				# forward metric to parent
+				# process message (i.e. do the filtering) and then forward to parent
 				if self.level in ['branch', 'leaf']:
 					# if unknown metric, just drop it
 					if data['config-seqid'] != self.metric_seqid:
@@ -130,45 +130,49 @@ class Filter(Service_Mixin):
 								% data['config-name'])
 						continue
 
-					if metric.threshold is not None:
-						value = None
+					cache.append(data)
+					self.logger.debug('cache size: %d' % len(cache))
+					self.__filter_and_send(metric, cache)
 
-						if metric.threshold.is_timed:
-							# add to local cache and run time check with first message
-							assert '*' == metric.threshold.op, 'only "hold" operation supported'
-							cache.append(data)
-							self.logger.debug('cache size: %d' % len(cache))
+	def __filter_and_send(self, metric, cache):
+		do_send = True
+		saved = cache[-1] # save most recent message
 
-							value = cache[0] # time-based threshold compares against the earliest time
+		if metric.threshold is not None:
+			value = None
+			if metric.threshold.is_timed:
+				# add to local cache and run time check with first message
+				assert '*' == metric.threshold.op, 'only "hold" operation supported'
+				value = cache[0].time # time-based threshold compares against the earliest time
 
-						elif metric.threshold.is_limit:
-							# XXX: does not work on the first iteration
-							assert len(cache) == 1
-							value = data.calculate(cache[0])
-							cache[0] = data # replace cache with newest value for next calculation
+			elif metric.threshold.is_limit:
+				# if first collection, just add to cache and skip further processing
+				if len(cache) == 1:
+					return
 
-						# check threshold
-						assert value is not None
-						if not metric.threshold.check(value):
-							self.logger.debug('thresholded by %s : %s' % (metric.threshold, data))
-							data = None
+				assert len(cache) == 2
+				value = cache[0].calculate(cache[1])
 
-						# forward message(s) to parent
-						else:
-							for message in cache:
-								message.send(self.pubs_socket)
-								self.pubs_cnt += 1
+			# check threshold
+			assert value is not None
+			if not metric.threshold.check(value):
+				self.logger.debug('%s failed filter (%s): %.2f' % (metric.config_name,
+						metric.threshold, value))
+				do_send = False
 
-							# clear time-based cache after sending
-							if metric.threshold.is_timed:
-								cache = []
+		if do_send:
+			# forward message(s) to parent
+			for message in cache:
+				message.send(self.pubs_socket)
+				self.pubs_cnt += 1
 
-					# no threshold, just send off the message
-					else:
-						data.send(self.pubs_socket)
-						self.pubs_cnt += 1
+			# clear cache since we just sent all the messages
+			cache.clear()
 
-				del data
+		# limit-based thresholds need the previous data message for calculations
+		if metric.threshold is None or metric.threshold.is_limit:
+			cache.clear()
+			cache.append(saved)
 
 	def __check_config_for_metric_updates(self):
 		(specs, seq) = self.config_service.get_metric_specs()
