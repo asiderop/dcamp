@@ -129,9 +129,10 @@ class Sensor(Service_Mixin):
 			message = DataMsg.DATA_PERCENT
 
 			time = now_msecs()
-			# percent is accurate to one decimal point
-			value = int(psutil.cpu_percent(interval=0) * 10)
-			base_value = 1000
+			# cpu_times() is accurate to two decimal points
+			cpu_times = psutil.cpu_times()
+			value = int( ( sum(cpu_times) - cpu_times.idle ) * 1e2 )
+			base_value = int( sum(cpu_times) * 1e2 )
 
 		elif 'DISK' == detail:
 			props['type'] = 'rate'
@@ -158,7 +159,7 @@ class Sensor(Service_Mixin):
 			vmem = psutil.virtual_memory()
 
 			time = now_msecs()
-			value = vmem.used
+			value = vmem.total - vmem.available
 			base_value = vmem.total
 
 		m = message(self.endpoint, props, time, value, base_value)
