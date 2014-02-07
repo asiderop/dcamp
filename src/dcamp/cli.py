@@ -27,9 +27,13 @@ def main():
 			action="store_true")
 	parser.add_argument("-d", "--debug",
 			dest="debug",
-			help="make %(prog)s uber verbose",
+			help="make all %(prog)s modules uber verbose",
 			action="store_true")
-	parser.set_defaults(verbose=False, debug=False)
+	parser.add_argument("--debug-module",
+			dest="debug_mods",
+			help="make given %(prog)s module uber verbose",
+			action="append")
+	parser.set_defaults(verbose=False, debug=False, debug_mods=[])
 
 	# configuration file
 	parser_file = ArgumentParser(add_help=False)
@@ -73,6 +77,10 @@ def main():
 	if (args.debug): # not an elif--always set debug level if given
 		logger.setLevel(logging.DEBUG)
 		logger.debug('set logging level to debug')
+	for mod in args.debug_mods:
+		mod_logger = logging.getLogger(mod)
+		mod_logger.setLevel(logging.DEBUG)
+		mod_logger.debug('set "%s" logging level to debug' % mod)
 
 	if args.command is None:
 		parser.print_usage()

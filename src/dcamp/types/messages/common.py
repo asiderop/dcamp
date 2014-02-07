@@ -15,9 +15,11 @@ import zmq.utils.jsonapi as jsonapi
 from zmq import DEALER, ROUTER, NOBLOCK # pylint: disable-msg=E0611
 
 from dcamp.types.specs import SerializableSpecTypes, EndpntSpec
+import dcamp.util.functions as Funcs
 
 # TODO: use a new log level instead
 verbose_debug = True
+dev_mode = True
 
 class DCMsg(object):
 	'''
@@ -89,10 +91,12 @@ class DCMsg(object):
 		return UUID(bytes=buffer)
 
 	def send(self, socket):
-		self.logger.debug('S:%s' % (self.name))
+		logger = Funcs.get_logger_from_caller(self.logger)
+
+		logger.debug('S:%s' % (self.name))
 		if verbose_debug:
 			for part in str(self).split('\n'):
-				self.logger.debug('  '+ part)
+				logger.debug('  '+ part)
 
 		parts = self.frames
 		if DEALER == socket.socket_type:
@@ -125,10 +129,12 @@ class DCMsg(object):
 
 		msg._peer_id = peer_id
 
-		cls.logger.debug('R:%s' % (msg.name))
+		logger = Funcs.get_logger_from_caller(cls.logger)
+
+		logger.debug('R:%s' % (msg.name))
 		if verbose_debug:
 			for part in str(msg).split('\n'):
-				cls.logger.debug('  '+ part)
+				logger.debug('  '+ part)
 
 		return msg
 
