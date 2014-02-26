@@ -40,7 +40,7 @@ class Filter(Service_Mixin):
 
 		os.makedirs('./logs/', exist_ok=True)
 		self.data_file = tempfile.NamedTemporaryFile(mode='w', delete=False,
-				prefix='{}.'.format(self.level), suffix='.dcamp-data', dir='./logs/')
+				prefix='{}-{}.'.format(self.level, self.endpoint), suffix='.dcamp-data', dir='./logs/')
 		self.logger.debug('writing data to %s' % self.data_file.name)
 
 		# pub metrics on this sockets; only non-root level nodes will pub (to the parent)
