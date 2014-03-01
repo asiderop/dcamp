@@ -60,9 +60,9 @@ class App:
 		rep = self.ctx.socket(REP)
 		bind_addr = rep.bind_to_random_port("tcp://*")
 
-		# subtract 1 so the TOPO_JOIN port calculated by the remote node matches the
+		# subtract TOPO_JOIN offset so the port calculated by the remote node matches the
 		# random port to which we just bound
-		ep = EndpntSpec("localhost", bind_addr - 1)
+		ep = EndpntSpec("localhost", bind_addr - EndpntSpec.TOPO_JOIN)
 		self.logger.debug('bound to %s + 1' % str(ep))
 
 		marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid())
