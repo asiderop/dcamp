@@ -35,7 +35,7 @@ class Filter(Service_Mixin):
 		# pull metrics on this socket; all levels will pull (either internally from the
 		# sensor service or externally from child filter service's)
 		self.pull_socket = self.ctx.socket(PULL)
-		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
+		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 		self.poller.register(self.pull_socket)
 
 		os.makedirs('./logs/', exist_ok=True)
@@ -47,7 +47,7 @@ class Filter(Service_Mixin):
 		self.pubs_socket = None
 		if self.level in ['branch', 'leaf']:
 			self.pubs_socket = self.ctx.socket(PUB)
-			self.pubs_socket.connect(self.parent.connect_uri(EndpntSpec.DATA_SUB))
+			self.pubs_socket.connect(self.parent.connect_uri(EndpntSpec.DATA_EXTERNAL))
 
 		# sub metrics from child(ren) and push them to pull socket; only non-leaf levels
 		# will sub->push
@@ -55,8 +55,8 @@ class Filter(Service_Mixin):
 		if self.level in ['branch', 'root']:
 			self.proxy = ThreadProxy(SUB, PUSH)
 			self.proxy.setsockopt_in(SUBSCRIBE, b'')
-			self.proxy.bind_in(self.endpoint.bind_uri(EndpntSpec.DATA_SUB))
-			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
+			self.proxy.bind_in(self.endpoint.bind_uri(EndpntSpec.DATA_EXTERNAL))
+			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 			self.proxy.start()
 
 		self.next_pub = sys.maxsize # units: seconds

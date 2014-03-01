@@ -54,7 +54,7 @@ class App:
 
 		pub = self.ctx.socket(PUB)
 		root_ep = config.root['endpoint']
-		connect_str = root_ep.connect_uri(EndpntSpec.TOPO_BASE)
+		connect_str = root_ep.connect_uri(EndpntSpec.BASE)
 		pub.connect(connect_str)
 
 		rep = self.ctx.socket(REP)

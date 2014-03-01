@@ -61,7 +61,7 @@ class Management(Service_Mixin):
 
 		for group in self.config.groups.values():
 			for ep in group.endpoints:
-				self.disc_socket.connect(ep.connect_uri(EndpntSpec.TOPO_BASE))
+				self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
 
 		self.reqcnt = 0
 		self.repcnt = 0

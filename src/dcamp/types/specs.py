@@ -101,30 +101,39 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 
 	### port offsets (for binding)
 
-	TOPO_BASE = 0			# SUB topo discovery PUB from mgmt service
-	TOPO_JOIN = 1			# REP assignment to node service topo join REQ
+	BASE            = 0 # Management (PUB) ------connects-to--> Node (SUB)
+	CONTROL         = 1 # Master (DEALER) -------connects-to--> Slave (ROUTER)
+	                    #   + Election: Collector ---commands--> Collector
+	                    #   + User:     CLI ---------commands--> Management
+	                    #   + Normal:   Management --commands--> Node
 
-	# XXX: user control of system goes to root role; use mgmt or config service?
-	ROOT_CONTROL = 2		# REP to commands from cli REQ
-	CONFIG_CONTROL = 12		# SUB commands from parent PUB
+	TOPO_JOIN       = 2 # Node (REQ) ------------connects-to--> Management (REP)
 
-	CONFIG_UPDATE = 10	 	# PUB updates to child SUB
-	CONFIG_SNAPSHOT = 11	# REP snapshots to child REQ
+	CONFIG_UPDATE   = 3 # Child (SUB) -----------connects-to--> Parent (PUB)
+	CONFIG_SNAPSHOT = 4 # Child (DEALER) --------connects-to--> Parent (ROUTER)
 
-	DATA_SUB = 20			# SUB metrics from child PUB
-	DATA_PUSH_PULL = 21		# PUSH/PULL metrics between sensor and filter services (intra-node)
+	DATA_EXTERNAL   = 5 # Child (PUB) -----------connects-to--> Parent (SUB)
+	DATA_INTERNAL   = 6 # Sensor|Filter (PUSH) --connects-to--> Filter (PULL)
+
+	__RESERVED7__   = 7
+	__RESERVED8__   = 8
+	__RESERVED9__   = 9
 
 	_valid_offsets = [
-		TOPO_BASE,
+		BASE,
+		CONTROL,
+
 		TOPO_JOIN,
-		ROOT_CONTROL,
 
 		CONFIG_UPDATE,
 		CONFIG_SNAPSHOT,
-		CONFIG_CONTROL,
 
-		DATA_SUB,
-		DATA_PUSH_PULL,
+		DATA_EXTERNAL,
+		DATA_INTERNAL,
+
+		__RESERVED7__,
+		__RESERVED8__,
+		__RESERVED9__,
 	]
 
 	def __str__(self):

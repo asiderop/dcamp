@@ -36,7 +36,7 @@ class Node(Service_Mixin):
 		####
 		# setup service for polling.
 
-		self.topo_endpoint = self.endpoint.bind_uri(EndpntSpec.TOPO_BASE)
+		self.topo_endpoint = self.endpoint.bind_uri(EndpntSpec.BASE)
 		self.logger.debug('binding to %s' % self.topo_endpoint)
 
 		# @todo these sockets need a better naming convention.

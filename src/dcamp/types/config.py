@@ -235,11 +235,13 @@ class DCConfig_Mixin(ConfigParser):
 				self.__eprint('[%s] section contains no nodes or subnets' % (group))
 
 		# ensure no overlapping ports
+		MAX_OFFSET = len(EndpntSpec._valid_offsets)
 		for (host, ports) in endpoints.items():
 			prev = ports[0];
 			for p in sorted(ports[1:]):
-				if (prev + 29) >= p:
-					self.__eprint('endpoint port overlap on host %s: %d and %d' % (host, prev, p))
+				if (prev + MAX_OFFSET) > p:
+					self.__eprint('endpoint port overlap on host %s: %d and %d; must be %d or more apart' %
+							(host, prev, p, MAX_OFFSET))
 				prev = p
 
 		# warn if some metric specs not used

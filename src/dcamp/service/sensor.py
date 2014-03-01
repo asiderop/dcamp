@@ -26,7 +26,7 @@ class Sensor(Service_Mixin):
 
 		# we push metrics on this socket (to filter service)
 		self.metrics_socket = self.ctx.socket(PUSH)
-		self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_PUSH_PULL, 'inproc'))
+		self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 
 		self.next_collection = now_secs() + 5 # units: seconds
 
