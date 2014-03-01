@@ -4,3 +4,4 @@ thesis/out/
 /build
 /logs
 /debug
+.simulation.cfg

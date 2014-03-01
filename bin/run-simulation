@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+
+from subprocess import Popen, DEVNULL, STDOUT
+from sys import stderr
+from os.path import join, isdir, isfile
+from os import mkdir
+from signal import SIGINT
+
+# config
+NUM_GROUPS = 9
+NODES_PER_HOST = 100
+HOSTNAMES = [ 'localhost' ]
+START_PORT = 50000
+PORTS_PER_NODE = 10
+
+HEARTBEAT = '5s'
+METRICS = '''
+[proc]
+rate = 1s
+threshold = *60s
+metric = CPU
+
+[disk]
+rate = 10s
+threshold = >500000
+metric = DISK
+
+[net]
+rate = 10s
+threshold = *120s
+metric = NETWORK
+
+[mem]
+rate = 30s
+metric = MEMORY
+'''
+
+# paths
+BASE_DIR = '/Volumes/Repositories/Personal/dcamp'
+DCAMP = join(BASE_DIR, 'bin/dcamp')
+CONFIG = join(BASE_DIR, '.simulation.cfg')
+DEBUG_DIR = join(BASE_DIR, 'debug/')
+
+def log(msg):
+	print(msg, file=stderr)
+	
+class Simulator(object):
+
+	action = None
+	state = 'dead'
+	procs = []
+	addresses = []
+
+	def __init__(self):
+		if isfile(CONFIG):
+			log("WARN: config file already exists; overwriting")
+
+		for host in HOSTNAMES:
+			port = START_PORT
+			for idx in range(NODES_PER_HOST):
+				self.addresses.append('%s:%d' % (host, port))
+				port += PORTS_PER_NODE
+
+		with open(CONFIG, 'w') as out:
+			# root section
+			out.write('[root]\nendpoint = %s\nheartbeat = %s' %
+					(self.addresses[0], HEARTBEAT))
+
+			start_address = 1
+			per_group = int((len(self.addresses) - 1) / NUM_GROUPS) + 1
+			for idx in range(NUM_GROUPS):
+
+				# group heading
+				out.write('\n[group%d]\n' % idx)
+
+				# group endpoint listings
+				end_address = start_address + per_group
+				if end_address > len(self.addresses):
+					end_address = len(self.addresses)
+				self.write_addresses(out, start_address, end_address)
+				log('INFO: group %d has %d nodes' % (idx, end_address - start_address))
+				start_address += per_group
+
+				# group metrics
+				out.write('\nproc\ndisk\nmem\nnet\n')
+
+			# metric specs
+			out.write(METRICS)
+	
+	def write_addresses(self, out, start, end):
+		for address in self.addresses[start:end]:
+			out.write(address + '\n')
+		
+	def launch_base_nodes(self):
+		if 'dead' != self.state:
+			return
+		if not isdir(DEBUG_DIR):
+			mkdir(DEBUG_DIR)
+		for a in self.addresses:
+			fout = open(join(DEBUG_DIR, a + '.out'), 'w')
+			p = Popen([DCAMP, '-d', 'base', '-a', a], stdout=fout, stderr=STDOUT)
+			self.procs.append((p, fout))
+		self.state = 'ready'
+
+	def launch_root_node(self):
+		if 'ready' != self.state:
+			return
+		Popen([DCAMP, '-d', 'root', '-f', CONFIG]).wait()
+		self.state = 'running'
+
+	def kill_all_nodes(self):
+		if 'dead' == self.state:
+			return
+		for (p, fout) in self.procs:
+			p.send_signal(SIGINT)
+		for (p, fout) in self.procs:
+			p.wait()
+			fout.close()
+		self.procs.clear()
+		self.state = 'dead'
+
+	def run(self):
+		try:
+			while True:
+				self.action = input("%s. what do? [kill|base|root]: " % self.state)
+
+				if self.action not in ['kill', 'base', 'root']:
+					log("ERRR: unknown option")
+
+				# launch base nodes
+				if 'base' == self.action:
+					self.launch_base_nodes()
+
+				if 'root' == self.action:
+					self.launch_root_node()
+
+				if 'kill' == self.action:
+					self.kill_all_nodes()
+
+		except KeyboardInterrupt:
+			self.kill_all_nodes()
+
+		print("\nGood bye!")
+
+s = Simulator()
+s.run()
