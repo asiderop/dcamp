@@ -66,6 +66,10 @@ class _DATA(DCMsg, _PROPS):
 	def config_name(self):
 		return self.get('config-name', None)
 
+	@property
+	def is_hugz(self):
+		return isinstance(self, DATA_HUGZ)
+
 	def __is_compatible(self, given):
 		return (self.source == given.source and
 			self.m_type == given.m_type and

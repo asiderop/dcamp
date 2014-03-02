@@ -57,6 +57,10 @@ class Sensor(Service_Mixin):
 
 	def __collect_and_push_metrics(self):
 
+		if len(self.metric_specs) == 0:
+			self.next_collection = now_secs() + 5
+			return
+
 		collected = []
 		while True:
 			collection = self.metric_specs.pop(0)

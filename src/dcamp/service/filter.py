@@ -59,9 +59,9 @@ class Filter(Service_Mixin):
 			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 			self.proxy.start()
 
-		self.next_pub = sys.maxsize # units: seconds
 		self.hug_int = 5 # units: seconds
-		self.next_hug = 0 # units: seconds
+		self.next_hug = now_secs() + self.hug_int # units: seconds
+		self.last_pub = now_secs() # units: seconds
 
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
@@ -85,17 +85,19 @@ class Filter(Service_Mixin):
 	def _pre_poll(self):
 		self.__check_config_for_metric_updates()
 
-		now = now_secs()
-		if self.next_hug <= now:
-			self.__send_hug()
+		if self.level in ['branch', 'leaf']:
+			if self.next_hug <= now_secs():
+				self.__send_hug()
 
-		self.poller_timer = self.__get_next_wakeup()
+			self.poller_timer = self.__get_next_wakeup()
 
 	def __send_hug(self):
-		if self.level in ['branch', 'leaf']:
-			hug = DataMsg.DATA_HUGZ(self.endpoint)
-			hug.send(self.pubs_socket)
-			self.hugz_cnt += 1
+		assert(self.level in ['branch', 'leaf'])
+
+		hug = DataMsg.DATA_HUGZ(self.endpoint)
+		hug.send(self.pubs_socket)
+		self.hugz_cnt += 1
+		self.last_pub = now_secs()
 
 	def _post_poll(self, items):
 		if self.pull_socket in items:
@@ -113,6 +115,10 @@ class Filter(Service_Mixin):
 					continue
 
 				self.data_file.write(data.log_str() + '\n')
+
+				if data.is_hugz:
+					# noted. moving on...
+					continue
 
 				# process message (i.e. do the filtering) and then forward to parent
 				if self.level in ['branch', 'leaf']:
@@ -135,6 +141,7 @@ class Filter(Service_Mixin):
 					self.__filter_and_send(metric, cache)
 
 	def __filter_and_send(self, metric, cache):
+		assert(self.level in ['branch', 'leaf'])
 		do_send = True
 		saved = cache[-1] # save most recent message
 
@@ -166,6 +173,8 @@ class Filter(Service_Mixin):
 				message.send(self.pubs_socket)
 				self.pubs_cnt += 1
 
+			self.last_pub = now_secs()
+
 			# clear cache since we just sent all the messages
 			cache.clear()
 
@@ -194,9 +203,10 @@ class Filter(Service_Mixin):
 		@returns next wakeup time
 		@pre should only be called immediately after sending a message
 		'''
+		assert(self.level in ['branch', 'leaf'])
 
-		# just sent a message, so reset hugz
-		self.next_hug = now_secs() + self.hug_int
+		# reset hugz given that we just sent a message (maybe)
+		self.next_hug = self.last_pub + self.hug_int
 
 		# next_hug is in secs; subtract current msecs to get next wakeup epoch
 		val = max(0, (self.next_hug * 1e3) - now_msecs())
