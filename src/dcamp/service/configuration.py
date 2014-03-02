@@ -1,5 +1,6 @@
 import logging, random
 from time import time, sleep
+from threading import Lock
 
 from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER # pylint: disable-msg=E0611
 
@@ -35,7 +36,15 @@ class Configuration(Service_Mixin):
 
 		self.state = None
 
-		# No special locking is needed for the kvdict / seq_num members.
+		# While no special locking is needed for the kvdict / seq_num members w.r.t.
+		# multiple writers (only the Management service can write changes), reading the
+		# dict while a change is being made will cause a RuntimeError to be raised. We
+		# could solve this by making a copy of the dict everytime a snapshot request is
+		# being made, but we will just use a Lock object instead.
+		#
+		# The Lock only needs to be held while sending a snapshot (i.e. iterating across
+		# the entire dictionary) and writing changes to the dictionary. Getting individual
+		# elements does not require the Lock.
 		#
 		# WRITE: If level is root, there will be no sub messages to process, so only one
 		#        thread (the Management service thread) will ever write to the kvdict and
@@ -45,6 +54,7 @@ class Configuration(Service_Mixin):
 		#        snapshot, the clients will still get the new value.
 
 		# { key : ( value, seq-num ) }
+		self.kvlock = Lock()
 		self.kvdict = {}
 		self.kv_seq = -1
 
@@ -202,9 +212,10 @@ class Configuration(Service_Mixin):
 		if not ignore_sequence:
 			self.kv_seq = update.sequence
 
-		self.kvdict[update.key] = (update.value, update.sequence)
-		if update.value is None:
-			del self.kvdict[update.key]
+		with self.kvlock:
+			self.kvdict[update.key] = (update.value, update.sequence)
+			if update.value is None:
+				del self.kvdict[update.key]
 
 		# this should be None if still in SYNC state
 		if self.update_pub is not None:
@@ -252,13 +263,14 @@ class Configuration(Service_Mixin):
 
 		# send all the key-value pairs in our dict
 		max_seq = -1
-		for (k, (v, s)) in self.kvdict.items():
-			# skip keys not in the requested subtree
-			if not k.startswith(subtree):
-				continue
-			max_seq = max([max_seq, s])
-			snap = ConfigMsg.KVSYNC(k, v, s, peer_id)
-			snap.send(self.kvsync_rep)
+		with self.kvlock:
+			for (k, (v, s)) in self.kvdict.items():
+				# skip keys not in the requested subtree
+				if not k.startswith(subtree):
+					continue
+				max_seq = max([max_seq, s])
+				snap = ConfigMsg.KVSYNC(k, v, s, peer_id)
+				snap.send(self.kvsync_rep)
 
 		# send final message, closing the kvsync session
 		snap = ConfigMsg.KTHXBAI(self.kv_seq, peer_id, subtree)
