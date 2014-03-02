@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+BASEDIR=`dirname $0`/..
+DCAMP=$BASEDIR/bin/dcamp
+
+if [ $# -ne 1 ]; then
+	echo "usage: `basename $0` <base-r|base-c|base-m|start>"
+	exit 65
+fi
+
+case "$1" in
+
+	base-r)
+		$DCAMP -d base -a localhost:55500 ;;
+
+	base-c)
+		$DCAMP -d base -a localhost:55700 ;;
+
+	base-m)
+		$DCAMP -d base -a localhost:55730 ;;
+
+	start)
+		$DCAMP -d root -f $BASEDIR/dcamp.cfg ;;
+
+esac
