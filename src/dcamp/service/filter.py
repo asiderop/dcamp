@@ -114,6 +114,13 @@ class Filter(Service_Mixin):
 								% data.config_seqid)
 						continue
 
+					# if non-local data, just send it off to the parent
+					if data.source != self.endpoint:
+						assert(self.level in ['branch'])
+						data.send(self.pubs_socket)
+						self.pubs_cnt += 1
+						continue
+
 					# lookup metric spec, default is None and an empty cache list
 					(metric, cache) = self.metric_specs.get(data.config_name, (None, []))
 

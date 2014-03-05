@@ -96,6 +96,7 @@ class Simulator(object):
 			return
 		if not isdir(DEBUG_DIR):
 			mkdir(DEBUG_DIR)
+		log('INFO: launching %d nodes' % len(self.addresses))
 		for a in self.addresses:
 			fout = open(join(DEBUG_DIR, a + '.out'), 'w')
 			p = Popen([DCAMP, '-d', 'base', '-a', a], stdout=fout, stderr=STDOUT)
@@ -113,9 +114,10 @@ class Simulator(object):
 			return
 		for (p, fout) in self.procs:
 			p.send_signal(SIGINT)
-		for (p, fout) in self.procs:
+		for (p, fout) in list(self.procs):
 			p.wait()
 			fout.close()
+			self.procs.remove((p, fout))
 		self.procs.clear()
 		self.state = 'dead'
 
