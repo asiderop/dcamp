@@ -91,7 +91,9 @@ class DCMsg(object):
 		return UUID(bytes=buffer)
 
 	def send(self, socket):
-		logger = Funcs.get_logger_from_caller(self.logger)
+		logger = self.logger
+		if dev_mode:
+			logger = Funcs.get_logger_from_caller(self.logger)
 
 		logger.debug('S:%s' % (self.name))
 		if verbose_debug:
@@ -129,7 +131,9 @@ class DCMsg(object):
 
 		msg._peer_id = peer_id
 
-		logger = Funcs.get_logger_from_caller(cls.logger)
+		logger = cls.logger
+		if dev_mode:
+			logger = Funcs.get_logger_from_caller(cls.logger)
 
 		logger.debug('R:%s' % (msg.name))
 		if verbose_debug:

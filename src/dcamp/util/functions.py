@@ -82,12 +82,10 @@ def format_bytes(given, use_short=True, num_or_suffix='both'):
 	else:
 		return '{:.2f}{}'.format(num, use_short and suffix or ' '+ suffix)
 
-dev_mode = True
 def get_logger_from_caller(default):
-	if dev_mode:
-		import inspect
-		caller = inspect.stack()[2][0] # we want this method's caller's caller
-		if 'self' in caller.f_locals:
-			return caller.f_locals['self'].logger
+	import inspect
+	caller = inspect.stack()[2][0] # we want this method's caller's caller
+	if 'self' in caller.f_locals:
+		return caller.f_locals['self'].logger
 
 	return default
