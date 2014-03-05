@@ -101,19 +101,19 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
 
 	### port offsets (for binding)
 
-	BASE            = 0 # Management (PUB) ------connects-to--> Node (SUB)
-	CONTROL         = 1 # Master (DEALER) -------connects-to--> Slave (ROUTER)
-	                    #   + Election: Collector ---commands--> Collector
-	                    #   + User:     CLI ---------commands--> Management
-	                    #   + Normal:   Management --commands--> Node
+	BASE            = 0 # Management (PUB) -----------connects-to--> Node (SUB)
+	CONTROL         = 1 # Master (DEALER) ------------connects-to--> Slave (ROUTER)
+	                    #   + Election: Collector ----commands--> Collector
+	                    #   + User:     CLI ----------commands--> Management
+	                    #   + Normal:   Management ---commands--> Node
 
-	TOPO_JOIN       = 2 # Node (REQ) ------------connects-to--> Management (REP)
+	TOPO_JOIN       = 2 # Node (REQ) -----------------connects-to--> Management (REP)
 
-	CONFIG_UPDATE   = 3 # Child (SUB) -----------connects-to--> Parent (PUB)
-	CONFIG_SNAPSHOT = 4 # Child (DEALER) --------connects-to--> Parent (ROUTER)
+	CONFIG_UPDATE   = 3 # Child (SUB) ----------------connects-to--> Parent (PUB)
+	CONFIG_SNAPSHOT = 4 # Child (DEALER) -------------connects-to--> Parent (ROUTER)
 
-	DATA_EXTERNAL   = 5 # Child (PUB) -----------connects-to--> Parent (SUB)
-	DATA_INTERNAL   = 6 # Sensor|Filter (PUSH) --connects-to--> Filter (PULL)
+	DATA_EXTERNAL   = 5 # Filter (PUB) ---------------connects-to--> Aggregation (SUB)
+	DATA_INTERNAL   = 6 # Sensor|Aggregation (PUSH) --connects-to--> Filter (PULL)
 
 	__RESERVED7__   = 7
 	__RESERVED8__   = 8

@@ -1,7 +1,6 @@
-import logging, tempfile, sys, psutil, os
+import tempfile, os
 
-from zmq import PUB, SUB, SUBSCRIBE, PUSH, PULL, Again # pylint: disable-msg=E0611
-from zmq.devices import ThreadProxy
+from zmq import PUB, PULL, Again # pylint: disable-msg=E0611
 
 import dcamp.types.messages.data as DataMsg
 from dcamp.types.specs import EndpntSpec
@@ -32,8 +31,8 @@ class Filter(Service_Mixin):
 
 		(self.pull_cnt, self.pubs_cnt, self.hugz_cnt) = (0, 0, 0)
 
-		# pull metrics on this socket; all levels will pull (either internally from the
-		# sensor service or externally from child filter service's)
+		# pull metrics on this socket; all levels will pull (either from the
+		# sensor service or the aggregation service)
 		self.pull_socket = self.ctx.socket(PULL)
 		self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 		self.poller.register(self.pull_socket)
@@ -48,16 +47,6 @@ class Filter(Service_Mixin):
 		if self.level in ['branch', 'leaf']:
 			self.pubs_socket = self.ctx.socket(PUB)
 			self.pubs_socket.connect(self.parent.connect_uri(EndpntSpec.DATA_EXTERNAL))
-
-		# sub metrics from child(ren) and push them to pull socket; only non-leaf levels
-		# will sub->push
-		self.proxy = None
-		if self.level in ['branch', 'root']:
-			self.proxy = ThreadProxy(SUB, PUSH)
-			self.proxy.setsockopt_in(SUBSCRIBE, b'')
-			self.proxy.bind_in(self.endpoint.bind_uri(EndpntSpec.DATA_EXTERNAL))
-			self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
-			self.proxy.start()
 
 		self.hug_int = 5 # units: seconds
 		self.next_hug = now_secs() + self.hug_int # units: seconds
@@ -74,11 +63,7 @@ class Filter(Service_Mixin):
 		if self.level in ['branch', 'leaf']:
 			self.pubs_socket.close()
 
-		if self.level in ['branch', 'root']:
-			assert self.proxy is not None
-			self.proxy.join()
-
-		del self.pull_socket, self.pubs_socket, self.proxy
+		del self.pull_socket, self.pubs_socket
 
 		Service_Mixin._cleanup(self)
 

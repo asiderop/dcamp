@@ -1,9 +1,10 @@
 from zhelpers import zpipe
 
 from dcamp.role.role import Role_Mixin
-from dcamp.service.management import Management
 from dcamp.service.configuration import Configuration
+from dcamp.service.management import Management
 from dcamp.service.filter import Filter
+from dcamp.service.aggregation import Aggregation
 
 class Root(Role_Mixin):
 	'''
@@ -28,3 +29,4 @@ class Root(Role_Mixin):
 
 		self._add_service(Management, config_service, config)
 		self._add_service(Filter, 'root', config_service, local_ep, None)
+		self._add_service(Aggregation, 'root', config_service, local_ep, None)

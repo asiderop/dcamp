@@ -4,7 +4,7 @@ from dcamp.role.role import Role_Mixin
 
 from dcamp.service.configuration import Configuration
 from dcamp.service.filter import Filter
-from dcamp.service.sensor import Sensor
+from dcamp.service.aggregation import Aggregation
 
 class Collector(Role_Mixin):
 	'''
@@ -29,4 +29,4 @@ class Collector(Role_Mixin):
 			)
 
 		self._add_service(Filter, 'branch', config_service, local_ep, parent_ep)
-		self._add_service(Sensor, config_service, local_ep)
+		self._add_service(Aggregation, 'branch', config_service, local_ep, parent_ep)
