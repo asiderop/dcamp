@@ -118,22 +118,23 @@ class Filter(Service_Mixin):
 
 				if data.is_hugz:
 					# noted. moving on...
+					self.logger.debug('received hug.')
 					continue
 
 				# process message (i.e. do the filtering) and then forward to parent
 				if self.level in ['branch', 'leaf']:
 					# if unknown metric, just drop it
-					if data['config-seqid'] != self.metric_seqid:
+					if data.config_seqid != self.metric_seqid:
 						self.logger.warn('unknown config seq-id (%d); dropping data'
-								% data['config-seq-id'])
+								% data.config_seqid)
 						continue
 
 					# lookup metric spec, default is None and an empty cache list
-					(metric, cache) = self.metric_specs.get(data['config-name'], (None, []))
+					(metric, cache) = self.metric_specs.get(data.config_name, (None, []))
 
 					if metric is None:
 						self.logger.warn('unknown metric config-name (%s); dropping data'
-								% data['config-name'])
+								% data.config_name)
 						continue
 
 					cache.append(data)

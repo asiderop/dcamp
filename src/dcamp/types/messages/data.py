@@ -25,10 +25,11 @@ class _DATA(DCMsg, _PROPS):
 	Frame 3: value, 8 bytes in network order
 	Frame 4: base value, 8 bytes in network order; only for average and percent types
 
-	properties = *( type / detail / config )
+	properties = *( type / detail / config / seqid )
 	type       = "type=" ( "HUGZ" / "basic" / "delta" / "rate" / "average" / "percent" )
 	detail     = "detail=" <string>
 	config     = "config-name=" <string>
+	seqid      = "config-seqid=" <integer>
 	'''
 
 	def __init__(self, source, properties, time=None, value=None, base_value=None):
@@ -65,6 +66,9 @@ class _DATA(DCMsg, _PROPS):
 	@property
 	def config_name(self):
 		return self.get('config-name', None)
+	@property
+	def config_seqid(self):
+		return self.get('config-seqid', None)
 
 	@property
 	def is_hugz(self):
