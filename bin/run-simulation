@@ -43,7 +43,7 @@ DEBUG_DIR = join(BASE_DIR, 'debug/')
 
 def log(msg):
 	print(msg, file=stderr)
-	
+
 class Simulator(object):
 
 	action = None
@@ -86,11 +86,11 @@ class Simulator(object):
 
 			# metric specs
 			out.write(METRICS)
-	
+
 	def write_addresses(self, out, start, end):
 		for address in self.addresses[start:end]:
 			out.write(address + '\n')
-		
+
 	def launch_base_nodes(self):
 		if 'dead' != self.state:
 			return
@@ -138,9 +138,15 @@ class Simulator(object):
 					self.kill_all_nodes()
 
 		except KeyboardInterrupt:
-			self.kill_all_nodes()
+			try:
+				log('\nINFO: killing nodes...')
+				self.kill_all_nodes()
+			except KeyboardInterrupt:
+				# maybe a process was blocked on a socket...kill it again
+				log('\nINFO: really killing nodes...')
+				self.kill_all_nodes()
 
-		print("\nGood bye!")
+		log("\nGood bye!")
 
 s = Simulator()
 s.run()
