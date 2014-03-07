@@ -1,8 +1,8 @@
 from zmq import SUB, SUBSCRIBE, PUSH # pylint: disable-msg=E0611
-from zmq.devices import ThreadProxy
 
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service_Mixin
+import dcamp.types.messages.data as DataMsg
 
 class Aggregation(Service_Mixin):
 
@@ -22,20 +22,35 @@ class Aggregation(Service_Mixin):
 		self.parent = parent_ep
 		self.endpoint = local_ep
 
+		(self.sub_cnt, self.push_cnt) = (0, 0)
+
 		# sub metrics from child(ren) and push them to pull socket
-		# TODO: replace this with actual SUB/PUSH sockets so aggregation can be performed
-		self.proxy = ThreadProxy(SUB, PUSH)
-		self.proxy.setsockopt_in(SUBSCRIBE, b'')
-		self.proxy.bind_in(self.endpoint.bind_uri(EndpntSpec.DATA_EXTERNAL))
-		self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
-		self.proxy.start()
+		self.sub = self.ctx.socket(SUB)
+		self.sub.setsockopt(SUBSCRIBE, b'')
+		self.sub.bind(self.endpoint.bind_uri(EndpntSpec.DATA_EXTERNAL))
+
+		self.push = self.ctx.socket(PUSH)
+		self.push.connect(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 
 	def _post_poll(self, items):
-		pass
+		if self.sub in items:
+			while True:
+				try: msg = DataMsg._DATA.recv(self.sub)
+				except Again as e: break
+
+				msg = DataMsg._DATA.recv(self.sub)
+				self.sub_cnt += 1
+				msg.send(self.push)
+				self.push_cnt += 1
 
 	def _cleanup(self):
 
-		self.proxy.join()
-		del self.proxy
+		# service exiting; return some status info and cleanup
+		self.logger.debug("%d subs; %d pushes" %
+				(self.sub_cnt, self.push_cnt))
+
+		self.sub.close()
+		self.push.close()
+		del self.sub, self.push
 
 		Service_Mixin._cleanup(self)

@@ -1,4 +1,4 @@
-import logging, time, threading
+import threading
 
 from zmq import REQ, SUB, SUBSCRIBE, POLLIN # pylint: disable-msg=E0611
 from zhelpers import zpipe
@@ -21,7 +21,6 @@ class Node(Service_Mixin):
 	'''
 
 	BASE = 0
-	JOIN = 1
 	PLAY = 4
 
 	def __init__(self,
@@ -77,14 +76,12 @@ class Node(Service_Mixin):
 				self.logger.error('topo message error: %s' % marco_msg.errstr)
 				return
 
-			# @todo: do we care which state we are in?
-			if Node.BASE == self.state:
-				self.control_socket = self.ctx.socket(REQ)
-				self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
-				self.poller.register(self.control_socket, POLLIN)
-				self.polo_msg.send(self.control_socket)
-				self.reqcnt += 1
-				self.state = Node.JOIN
+			# @todo: add some security here so not just anyone can shutdown the root node
+			self.control_socket = self.ctx.socket(REQ)
+			self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+			self.poller.register(self.control_socket, POLLIN)
+			self.polo_msg.send(self.control_socket)
+			self.reqcnt += 1
 
 		elif self.control_socket in items:
 			response = TopoMsg.CONTROL.recv(self.control_socket)
@@ -111,6 +108,8 @@ class Node(Service_Mixin):
 				response = self.role_pipe.recv_string()
 				assert 'OKAY' == response
 
+				self.logger.debug('received STOP OKAY from %s role' % self.role)
+
 				self.role = None
 				self.role_pipe.close()
 				del self.role_pipe
@@ -123,16 +122,17 @@ class Node(Service_Mixin):
 					self.logger.error('role is still alive!')
 				del self.role_thread
 
+				self.logger.debug('node stopped; back to BASE')
+
 				self.state = Node.BASE
 
 			else:
 				self.logger.error('unknown control command: %s' % response.command)
-				self.state = Node.BASE
 				return
 
 	def __handle_assignment(self, response):
 		# @todo need to handle re-assignment
-		if Node.JOIN != self.state:
+		if Node.BASE != self.state:
 			self.logger.warning('received re-assignment; ignoring')
 			return
 
@@ -148,7 +148,6 @@ class Node(Service_Mixin):
 			config.read_file(open(response['config-file']))
 			self.role_pipe, peer = zpipe(self.ctx)
 			self.role = Root(peer, config)
-			self.state = Node.PLAY
 
 		# if level == branch, start Collector role.
 		elif 'branch' == level:
@@ -157,7 +156,6 @@ class Node(Service_Mixin):
 					response['group'],
 					response['parent'],
 					self.endpoint)
-			self.state = Node.PLAY
 
 		# if level == leaf, start Metrics role.
 		elif 'leaf' == level:
@@ -166,11 +164,9 @@ class Node(Service_Mixin):
 					response['group'],
 					response['parent'],
 					self.endpoint)
-			self.state = Node.PLAY
 
 		else:
 			self.logger.error('unknown assignment level: %s' % level)
-			self.state = Node.BASE
 			return
 
 		self.__play_role()
@@ -182,3 +178,4 @@ class Node(Service_Mixin):
 		self.logger.debug('starting Role: %s' % self.role)
 		self.role_thread = threading.Thread(target=self.role.play)
 		self.role_thread.start()
+		self.state = Node.PLAY
