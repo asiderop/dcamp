@@ -10,11 +10,9 @@ from dcamp.types.specs import EndpntSpec
 # @todo: need to include UUIDs in each message so nodes can distinguish between multiple
 #        invocations of the same endpoint
 
-# TODO: the MARCO and POLO message types are really the same message structure. Should
-#       these two just be combined?
-
 __all__ = [
 		'gen_uuid',
+
 		'MARCO',
 		'POLO',
 		'CONTROL',
@@ -54,6 +52,9 @@ class TOPO(DCMsg):
 		ep = EndpntSpec.decode(msg[0])
 		id = DCMsg._decode_uuid(msg[1])
 		return cls(ep, id)
+
+# @todo: The MARCO and POLO message types are really the same message structure. These two
+#        message classes should just be combined.
 
 class MARCO(TOPO):
 	def __init__(self, root_endpoint, root_uuid):

@@ -5,7 +5,7 @@ from datetime import datetime
 
 from dcamp.util.decorators import Prefixable
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.messages.topology import ASSIGN
+import dcamp.types.messages.topology as TopoMsg
 
 __all__ = [
 		'TopoError',
@@ -64,7 +64,7 @@ class TopoNode(object):
 		self.last_seen = datetime.now()
 
 	def assignment(self):
-		return ASSIGN(self.parent.endpoint, self.level, self.group)
+		return TopoMsg.ASSIGN(self.parent.endpoint, self.level, self.group)
 
 @Prefixable
 class TopoTree_Mixin(object):

@@ -141,11 +141,11 @@ class Simulator(object):
 
 		except KeyboardInterrupt:
 			try:
-				log('\nINFO: killing nodes...')
+				log('\nINFO: exiting...')
 				self.kill_all_nodes()
 			except KeyboardInterrupt:
 				# maybe a process was blocked on a socket...kill it again
-				log('\nINFO: really killing nodes...')
+				log('\nINFO: really exiting...')
 				self.kill_all_nodes()
 
 		log("\nGood bye!")

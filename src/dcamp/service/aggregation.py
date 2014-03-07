@@ -30,6 +30,9 @@ class Aggregation(Service_Mixin):
 		self.proxy.connect_out(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 		self.proxy.start()
 
+	def _post_poll(self, items):
+		pass
+
 	def _cleanup(self):
 
 		self.proxy.join()
