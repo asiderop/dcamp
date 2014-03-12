@@ -8,7 +8,7 @@ from dcamp.util.decorators import Runnable
 @Runnable
 class Role_Mixin(object):
 
-	MAX_SERVICE_STOP_ATTEMPTS = 5
+	MAX_SERVICE_STOP_ATTEMPTS = 10
 
 	def __init__(self,
 			pipe):
@@ -79,32 +79,31 @@ class Role_Mixin(object):
 
 		# send commands
 		poller = Poller()
-		for pipe in self.__services:
+		for (pipe, svc) in self.__services.items():
 			pipe.send_string('STOP')
+			self.logger.debug('sent STOP command to %s service' % (
+					svc.__class__.__name__))
 			poller.register(pipe, POLLIN)
 
 		while self.__some_alive() and attempts < self.MAX_SERVICE_STOP_ATTEMPTS:
 			attempts += 1
 
 			# poll for any replies
-			items = dict(poller.poll(100)) # wait 100ms for messages
+			items = dict(poller.poll(250)) # wait 250ms for messages; max 10x == 2s
 
 			# mark responding services as stopped
-			alive = list(self.__services.keys()) # make copy of key list
-			for pipe in alive:
+			alive = dict(self.__services) # make copy
+			for (pipe, svc) in alive.items():
 				if pipe in items:
 					reply = pipe.recv_string()
 					if 'STOPPED' == reply:
-						self.logger.debug('received STOPPED control reply')
+						self.logger.debug('received STOPPED control reply from %s service' % (
+								svc.__class__.__name__))
 						poller.unregister(pipe)
 						pipe.close()
 						del(self.__services[pipe])
 					else:
 						self.logger.debug('unknown control reply: %s' % reply)
-
-			# send stop command to remaining services
-			for pipe in self.__services:
-				pipe.send_string('STOP')
 
 	def __cleanup(self):
 		# stop our services cleanly (if we can)
