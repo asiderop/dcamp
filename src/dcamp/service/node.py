@@ -10,7 +10,7 @@ from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
 from dcamp.service.service import Service_Mixin
-from dcamp.types.config import DCConfig_Mixin
+from dcamp.types.config_file import DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 
 class Node(Service_Mixin):

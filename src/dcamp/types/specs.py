@@ -84,7 +84,7 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', 'detail', 'param'])):
 	''' Class Representing a Metric Specification '''
 	def __str__(self):
-		return "%s(detail='%s', rate='%s', threshold='%s' param='%s')" % (self.config_name,
+		return "%s(detail='%s', rate='%s', threshold='%s', param='%s')" % (self.config_name,
 				self.detail, seconds_to_str(self.rate), self.threshold, self.param or '')
 
 class MetricCollection(namedtuple('MetricCollection', 'epoch, spec')):

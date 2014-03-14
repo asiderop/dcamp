@@ -124,6 +124,7 @@ class Management(Service_Mixin):
 				else:
 					repmsg = WTF(0, 'too chatty; already POLOed')
 					remote.touch()
+
 			repmsg._peer_id = polo_msg._peer_id
 			repmsg.send(self.join_socket)
 			self.repcnt += 1

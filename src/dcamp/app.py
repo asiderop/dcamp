@@ -8,7 +8,7 @@ from zhelpers import zpipe
 
 import dcamp.types.messages.topology as TopoMsg
 
-from dcamp.types.config import DCConfig_Mixin
+from dcamp.types.config_file import DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.role.root import Root
 from dcamp.role.base import Base
