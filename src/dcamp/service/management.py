@@ -1,7 +1,7 @@
 import logging
 from time import time
 
-from zmq import REP, PUB, POLLIN # pylint: disable-msg=E0611
+from zmq import ROUTER, PUB, POLLIN # pylint: disable-msg=E0611
 
 from dcamp.types.messages.common import WTF
 import dcamp.types.messages.topology as TopoMsg
@@ -53,7 +53,7 @@ class Management(Service_Mixin):
 		# setup service for polling.
 
 		# we receive join requests on this socket
-		self.join_socket = self.ctx.socket(REP)
+		self.join_socket = self.ctx.socket(ROUTER)
 		self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.TOPO_JOIN))
 
 		# we send topo discovery messages on this socket
@@ -124,7 +124,7 @@ class Management(Service_Mixin):
 				else:
 					repmsg = WTF(0, 'too chatty; already POLOed')
 					remote.touch()
-
+			repmsg._peer_id = polo_msg._peer_id
 			repmsg.send(self.join_socket)
 			self.repcnt += 1
 

@@ -106,6 +106,7 @@ class DCMsg(object):
 		elif ROUTER == socket.socket_type:
 			assert self._peer_id is not None
 			parts.insert(0, self._peer_id) # ROUTER needs peer identity in first frame
+			parts.insert(1, b'') # ROUTER needs dilimiter in second frame
 
 		socket.send_multipart(parts)
 
@@ -114,7 +115,9 @@ class DCMsg(object):
 		frames = socket.recv_multipart(NOBLOCK)
 
 		peer_id = None
-		if ROUTER == socket.socket_type:
+		if DEALER == socket.socket_type:
+			assert b'' == frames.pop(0) # first frame is empty (i.e. delimiter)
+		elif ROUTER == socket.socket_type:
 			peer_id = frames.pop(0) # first frame from ROUTER is peer identity
 			assert b'' == frames.pop(0) # second frame is empty (i.e. delimiter)
 

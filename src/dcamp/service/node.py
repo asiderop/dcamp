@@ -1,6 +1,6 @@
 import threading
 
-from zmq import REQ, SUB, SUBSCRIBE, POLLIN # pylint: disable-msg=E0611
+from zmq import DEALER, SUB, SUBSCRIBE, POLLIN # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 import dcamp.types.messages.topology as TopoMsg
@@ -77,9 +77,10 @@ class Node(Service_Mixin):
 				return
 
 			# @todo: add some security here so not just anyone can shutdown the root node
-			self.control_socket = self.ctx.socket(REQ)
+			self.control_socket = self.ctx.socket(DEALER)
 			self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
 			self.poller.register(self.control_socket, POLLIN)
+			self.polo_msg._peer_id = marco_msg._peer_id
 			self.polo_msg.send(self.control_socket)
 			self.reqcnt += 1
 
