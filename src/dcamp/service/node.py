@@ -21,7 +21,16 @@ class Node(Service_Mixin):
 	'''
 
 	BASE = 0
+	BASE_OPEN = 1
 	PLAY = 4
+	PLAY_OPEN = 5
+
+	STATES = [
+		BASE,
+		BASE_OPEN,
+		PLAY,
+		PLAY_OPEN,
+	]
 
 	def __init__(self,
 			pipe,
@@ -45,6 +54,7 @@ class Node(Service_Mixin):
 		self.topo_socket.bind(self.topo_endpoint)
 
 		self.control_socket = None
+		self.control_uuid = None
 
 		self.subcnt = 0
 		self.reqcnt = 0
@@ -52,7 +62,7 @@ class Node(Service_Mixin):
 
 		self.role = None
 
-		self.state = Node.BASE
+		self.set_state(Node.BASE)
 
 		self.poller.register(self.topo_socket, POLLIN)
 
@@ -76,15 +86,25 @@ class Node(Service_Mixin):
 				self.logger.error('topo message error: %s' % marco_msg.errstr)
 				return
 
+			if self.control_uuid == marco_msg.uuid:
+				self.logger.debug('already POLOed this endpoint; ignoring')
+				return
+
 			# @todo: add some security here so not just anyone can shutdown the root node
+			self.control_uuid = marco_msg.uuid
+
 			self.control_socket = self.ctx.socket(DEALER)
 			self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
 			self.poller.register(self.control_socket, POLLIN)
 			self.polo_msg._peer_id = marco_msg._peer_id
 			self.polo_msg.send(self.control_socket)
 			self.reqcnt += 1
+			self.open_state()
 
 		elif self.control_socket in items:
+			assert self.in_open_state
+			self.close_state()
+
 			response = TopoMsg.CONTROL.recv(self.control_socket)
 			self.poller.unregister(self.control_socket)
 			self.control_socket.close()
@@ -94,14 +114,12 @@ class Node(Service_Mixin):
 
 			if response.is_error:
 				self.logger.error(response)
-				return
 
-			if 'assignment' == response.command:
+			elif 'assignment' == response.command:
 				self.__handle_assignment(response)
-				return
 
 			elif 'stop' == response.command:
-				if Node.PLAY != self.state:
+				if not self.in_play_state:
 					self.logger.error('role not running; nothing to stop')
 					return
 
@@ -124,16 +142,49 @@ class Node(Service_Mixin):
 				del self.role_thread
 
 				self.logger.debug('node stopped; back to BASE')
-
-				self.state = Node.BASE
+				self.set_state(Node.BASE)
 
 			else:
 				self.logger.error('unknown control command: %s' % response.command)
 				return
 
+	@property
+	def in_play_state(self):
+		return self.state in (Node.PLAY, Node.PLAY_OPEN)
+
+	@property
+	def in_open_state(self):
+		return self.state in (Node.BASE_OPEN, Node.PLAY_OPEN)
+
+	def set_state(self, state):
+		assert state in Node.STATES
+		self.state = state
+
+	def close_state(self):
+		assert self.in_open_state
+
+		new_state = None
+		if Node.BASE_OPEN == self.state:
+			new_state = Node.BASE
+		elif Node.PLAY_OPEN == self.state:
+			new_state = Node.PLAY
+
+		self.set_state(new_state)
+
+	def open_state(self):
+		assert not self.in_open_state
+
+		new_state = None
+		if Node.BASE == self.state:
+			new_state = Node.BASE_OPEN
+		elif Node.PLAY == self.state:
+			new_state = Node.PLAY_OPEN
+
+		self.set_state(new_state)
+
 	def __handle_assignment(self, response):
 		# @todo need to handle re-assignment
-		if Node.BASE != self.state:
+		if self.in_play_state:
 			self.logger.warning('received re-assignment; ignoring')
 			return
 
@@ -179,4 +230,4 @@ class Node(Service_Mixin):
 		self.logger.debug('starting Role: %s' % self.role)
 		self.role_thread = threading.Thread(target=self.role.play)
 		self.role_thread.start()
-		self.state = Node.PLAY
+		self.set_state(Node.PLAY)
