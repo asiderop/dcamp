@@ -1,25 +1,60 @@
 #!/usr/bin/env bash
 
+# alias runall='./bin/run-basic -x base-r; ./bin/run-basic -x base-c; ./bin/run-basic start; sleep 5; ./bin/run-basic -x base-m'
+
 BASEDIR=`dirname $0`/..
 DCAMP=$BASEDIR/bin/dcamp
+XTERM='xterm -r'
 
-if [ $# -ne 1 ]; then
-	echo "usage: `basename $0` <base-r|base-c|base-m|start>"
+USAGE="usage: `basename $0` [-x] <base-r|base-c|base-m|start>"
+
+if [ $# -lt 1 ]; then
+	echo $USAGE
 	exit 65
+fi
+
+X=1
+if [ "$1" == "-x" ]; then
+	X=0
+	shift
 fi
 
 case "$1" in
 
 	base-r)
-		$DCAMP -d base -a localhost:55500 ;;
+		MODS="--debug-module dcamp.service.Management --debug-module dcamp.service.Node --debug-module dcamp.role.Base --debug-module dcamp.role.Root"
+		if [ $X -eq 0 ]; then
+			$XTERM -geometry 131x50+0+0 -T root -e $DCAMP $MODS base -a localhost:55500 &
+		else
+			$DCAMP $MODS base -a localhost:55500
+		fi
+		;;
 
 	base-c)
-		$DCAMP -d base -a localhost:55700 ;;
+		MODS=""
+		if [ $X -eq 0 ]; then
+			$XTERM -geometry 131x50+0+400 -T collector -e $DCAMP $MODS -d base -a localhost:55700 &
+		else
+			$DCAMP $MODS -d base -a localhost:55700
+		fi
+		;;
 
 	base-m)
-		$DCAMP -d base -a localhost:55730 ;;
+		MODS=""
+		if [ $X -eq 0 ]; then
+			$XTERM -geometry 147x76-0+0 -T metric -e $DCAMP $MODS -d base -a localhost:55730 &
+		else
+			$DCAMP $MODS -d base -a localhost:55730
+		fi
+		;;
 
 	start)
-		$DCAMP -d root -f $BASEDIR/dcamp.cfg ;;
+		$DCAMP -d root -f $BASEDIR/dcamp.cfg
+		;;
+	
+	*)
+		echo $USAGE
+		exit 65
+		;;
 
 esac
