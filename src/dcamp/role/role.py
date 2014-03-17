@@ -1,4 +1,5 @@
-import logging
+from logging import getLogger
+from time import sleep
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM # pylint: disable-msg=E0611
 from zhelpers import zpipe
@@ -8,14 +9,12 @@ from dcamp.util.decorators import Runnable
 @Runnable
 class Role_Mixin(object):
 
-	MAX_SERVICE_STOP_ATTEMPTS = 10
-
 	def __init__(self,
 			pipe):
 		self.ctx = Context.instance()
 		self.__control_pipe = pipe
 
-		self.logger = logging.getLogger('dcamp.role.'+ self.__class__.__name__)
+		self.logger = getLogger('dcamp.role.%s' % self)
 
 		# { pipe: service, ...}
 		self.__services = {}
@@ -73,38 +72,6 @@ class Role_Mixin(object):
 		# role is exiting; cleanup
 		return self.__cleanup()
 
-	def __stop(self):
-		'''try to stop all of this Role's services'''
-		attempts = 0
-
-		# send commands
-		poller = Poller()
-		for (pipe, svc) in self.__services.items():
-			pipe.send_string('STOP')
-			self.logger.debug('sent STOP command to %s service' % (
-					svc.__class__.__name__))
-			poller.register(pipe, POLLIN)
-
-		while self.__some_alive() and attempts < self.MAX_SERVICE_STOP_ATTEMPTS:
-			attempts += 1
-
-			# poll for any replies
-			items = dict(poller.poll(250)) # wait 250ms for messages; max 10x == 2s
-
-			# mark responding services as stopped
-			alive = dict(self.__services) # make copy
-			for (pipe, svc) in alive.items():
-				if pipe in items:
-					reply = pipe.recv_string()
-					if 'STOPPED' == reply:
-						self.logger.debug('received STOPPED control reply from %s service' % (
-								svc.__class__.__name__))
-						poller.unregister(pipe)
-						pipe.close()
-						del(self.__services[pipe])
-					else:
-						self.logger.debug('unknown control reply: %s' % reply)
-
 	def __cleanup(self):
 		# stop our services cleanly (if we can)
 		if not self.in_errored_state:
@@ -124,9 +91,49 @@ class Role_Mixin(object):
 
 		self.logger.debug('role cleanup finished; exiting')
 
+	def __stop(self):
+		'''try to stop all of this Role's services'''
+
+		# send commands
+		poller = Poller()
+		for (pipe, svc) in self.__services.items():
+			pipe.send_string('STOP')
+			self.logger.debug('sent STOP command to %s service' % svc)
+			poller.register(pipe, POLLIN)
+
+		# give services a few seconds to cleanup and exit before checking responses
+		sleep(1)
+
+		max_attempts = len(self.__services)
+		attempts = 0
+
+		while self.__some_alive() and attempts < max_attempts:
+			attempts += 1
+
+			# poll for any replies
+			items = dict(poller.poll(60000)) # wait for messages
+
+			# mark responding services as stopped
+			alive = dict(self.__services) # make copy
+			for (pipe, svc) in alive.items():
+				if pipe in items:
+					reply = pipe.recv_string()
+					if 'STOPPED' == reply:
+						self.logger.debug('received STOPPED control reply from %s service' % svc)
+						svc.join(timeout=5) # the STOPPED response should be sent right before the service exits
+						if svc.is_alive():
+							self.logger.error('%s service is still alive; not waiting' % svc)
+						else:
+							self.logger.debug('%s service thread stopped' % svc)
+						poller.unregister(pipe)
+						pipe.close()
+						del(self.__services[pipe])
+					else:
+						self.logger.debug('unknown control reply: %s' % reply)
+
 	def __some_alive(self):
 		'''returns True if at least one service of this Role is still running'''
 		for service in self.__services.values():
-			if service.is_alive:
+			if service.is_alive():
 				return True
 		return False

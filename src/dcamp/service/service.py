@@ -1,23 +1,27 @@
-import logging, threading
+from logging import getLogger
+from threading import Thread
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM # pylint: disable-msg=E0611
 
 from dcamp.util.decorators import Runnable
 
 @Runnable
-class Service_Mixin(threading.Thread):
+class Service_Mixin(Thread):
 
 	def __init__(self, pipe):
-		threading.Thread.__init__(self)
+		Thread.__init__(self)
 		self.ctx = Context.instance()
 		self.__control_pipe = pipe
 
-		self.logger = logging.getLogger('dcamp.service.'+ self.__class__.__name__)
+		self.logger = getLogger('dcamp.service.%s' % self)
 
 		self.poller = Poller()
 		self.poller_timer = None
 
 		self.poller.register(self.__control_pipe, POLLIN)
+
+	def __str__(self):
+		return self.__class__.__name__
 
 	def __send_control(self, message):
 		self.__control_pipe.send_string(message)

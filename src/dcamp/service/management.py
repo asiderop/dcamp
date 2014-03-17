@@ -1,7 +1,7 @@
 import logging
 from time import time
 
-from zmq import ROUTER, PUB, POLLIN # pylint: disable-msg=E0611
+from zmq import ROUTER, PUB, POLLIN, Again # pylint: disable-msg=E0611
 
 from dcamp.types.messages.common import WTF
 import dcamp.types.messages.topology as TopoMsg
@@ -9,6 +9,7 @@ import dcamp.types.messages.topology as TopoMsg
 from dcamp.service.service import Service_Mixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTree_Mixin, TopoNode
+from dcamp.util.functions import now_secs
 
 class Management(Service_Mixin):
 	'''
@@ -75,6 +76,9 @@ class Management(Service_Mixin):
 		self.poller.register(self.join_socket, POLLIN)
 
 	def _cleanup(self):
+		if not self.in_errored_state:
+			self.__stop_all_nodes()
+
 		# service exiting; return some status info and cleanup
 		self.logger.debug("%d pubs; %d reqs; %d reps" %
 				(self.pubcnt, self.reqcnt, self.repcnt))
@@ -128,6 +132,76 @@ class Management(Service_Mixin):
 			repmsg._peer_id = polo_msg._peer_id
 			repmsg.send(self.join_socket)
 			self.repcnt += 1
+
+	def __stop_group(self, stop_group):
+		stop_socket = self.ctx.socket(PUB)
+
+		# TODO: use the Topo Tree instead of the config; indicates how many
+		#       nodes need to be stopped
+
+		found = False
+		for group in self.config.groups.values():
+			if group != stop_group:
+				continue
+			found = True
+			for ep in group.endpoints:
+				stop_socket.connect(ep.connect_uri(EndpntSpec.BASE))
+			break
+		assert found, "unknown group given to __stop_group()"
+
+		self.logger.debug('stopping nodes in group %s' % group)
+		num = self.__stop_nodes(stop_socket)
+		stop_socket.close()
+		self.logger.debug('%d nodes in group %s stopped' % (num, group))
+
+	def __stop_all_nodes(self):
+		size = len(self.tree) - 1 # don't count this (root) node
+		self.logger.debug('attempting to stop %d nodes' % size)
+		num = self.__stop_nodes(self.disc_socket)
+		self.logger.debug('%d nodes stopped' % (num))
+
+	def __stop_nodes(self, pub_sock):
+		assert PUB == pub_sock.socket_type
+
+		stop = TopoMsg.STOP()
+		control_sock = self.ctx.socket(ROUTER)
+		bind_addr = control_sock.bind_to_random_port("tcp://*")
+		num_rep = 0
+
+		# subtract TOPO_JOIN offset so the port calculated by the remote node matches the
+		# random port to which we just bound
+		ep = EndpntSpec("localhost", bind_addr - EndpntSpec.TOPO_JOIN)
+		marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid()) # new uuid so nodes response
+
+		# pub to all connected nodes
+		marco.send(pub_sock)
+
+		# poll for answers
+		#
+		# TODO: this will block the service for half a minute; combine this
+		#       will self.poller in case we are not stopping? blocking the mgmt
+		#       service might actually be good: nodes are not re-connected to
+		#       the system until all nodes have stopped?
+		timeout = now_secs() + 30
+		while timeout >= now_secs():
+			if control_sock.poll(timeout=1000) != 0:
+				while True:
+					polo = None
+					try: polo = TopoMsg.POLO.recv(control_sock)
+					except Again as e: break # nothing to read; go back to polling
+
+					assert polo is not None
+					if polo.is_error:
+						self.logger.error('received error from node: %s' % polo)
+						continue
+
+					# send STOP command
+					stop._peer_id = polo._peer_id
+					stop.send(control_sock)
+					num_rep += 1
+
+		control_sock.close()
+		return num_rep
 
 	def __assign(self, polo_msg):
 		'''

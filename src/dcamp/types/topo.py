@@ -74,6 +74,9 @@ class TopoTree_Mixin(object):
 		self.root = TopoNode(root_ep, root_id, level='root', group=None)
 		self.nodes = { root_ep: self.root }
 
+	def __len__(self):
+		return len(self.nodes)
+
 	def insert_endpoint(self, node_ep, node_id, level, group, parent):
 		if node_ep in self.nodes:
 			raise DuplicateNodeError('endpoint already exists: %s' % self.nodes[node_ep])

@@ -66,6 +66,40 @@ class Node(Service_Mixin):
 
 		self.poller.register(self.topo_socket, POLLIN)
 
+	@property
+	def in_play_state(self):
+		return self.state in (Node.PLAY, Node.PLAY_OPEN)
+
+	@property
+	def in_open_state(self):
+		return self.state in (Node.BASE_OPEN, Node.PLAY_OPEN)
+
+	def set_state(self, state):
+		assert state in Node.STATES
+		self.state = state
+
+	def close_state(self):
+		assert self.in_open_state
+
+		new_state = None
+		if Node.BASE_OPEN == self.state:
+			new_state = Node.BASE
+		elif Node.PLAY_OPEN == self.state:
+			new_state = Node.PLAY
+
+		self.set_state(new_state)
+
+	def open_state(self):
+		assert not self.in_open_state
+
+		new_state = None
+		if Node.BASE == self.state:
+			new_state = Node.BASE_OPEN
+		elif Node.PLAY == self.state:
+			new_state = Node.PLAY_OPEN
+
+		self.set_state(new_state)
+
 	def _cleanup(self):
 		# service exiting; return some status info and cleanup
 		self.logger.debug("%d subs; %d reqs; %d reps" %
@@ -129,7 +163,6 @@ class Node(Service_Mixin):
 
 				self.logger.debug('received STOP OKAY from %s role' % self.role)
 
-				self.role = None
 				self.role_pipe.close()
 				del self.role_pipe
 				self.role_pipe = None
@@ -138,8 +171,11 @@ class Node(Service_Mixin):
 
 				self.role_thread.join(timeout=60)
 				if self.role_thread.isAlive():
-					self.logger.error('role is still alive!')
+					self.logger.error('!!! %s role is still alive !!!' % self.role)
+				else:
+					self.logger.debug('%s role stopped' % self.role)
 				del self.role_thread
+				self.role = None
 
 				self.logger.debug('node stopped; back to BASE')
 				self.set_state(Node.BASE)
@@ -147,40 +183,6 @@ class Node(Service_Mixin):
 			else:
 				self.logger.error('unknown control command: %s' % response.command)
 				return
-
-	@property
-	def in_play_state(self):
-		return self.state in (Node.PLAY, Node.PLAY_OPEN)
-
-	@property
-	def in_open_state(self):
-		return self.state in (Node.BASE_OPEN, Node.PLAY_OPEN)
-
-	def set_state(self, state):
-		assert state in Node.STATES
-		self.state = state
-
-	def close_state(self):
-		assert self.in_open_state
-
-		new_state = None
-		if Node.BASE_OPEN == self.state:
-			new_state = Node.BASE
-		elif Node.PLAY_OPEN == self.state:
-			new_state = Node.PLAY
-
-		self.set_state(new_state)
-
-	def open_state(self):
-		assert not self.in_open_state
-
-		new_state = None
-		if Node.BASE == self.state:
-			new_state = Node.BASE_OPEN
-		elif Node.PLAY == self.state:
-			new_state = Node.PLAY_OPEN
-
-		self.set_state(new_state)
 
 	def __handle_assignment(self, response):
 		# @todo need to handle re-assignment
