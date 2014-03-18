@@ -131,6 +131,16 @@ class Role_Mixin(object):
 					else:
 						self.logger.debug('unknown control reply: %s' % reply)
 
+			# log some useful info
+			if len(self.__services) > 0:
+				msg = '%s services still alive after %d cycles; ' % (
+						[str(s) for s in self.__services.values()], attempts)
+				if attempts < max_attempts:
+					msg += 'waiting'
+				else:
+					msg += 'giving up'
+				self.logger.debug(msg)
+
 	def __some_alive(self):
 		'''returns True if at least one service of this Role is still running'''
 		for service in self.__services.values():

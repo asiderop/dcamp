@@ -140,27 +140,29 @@ class Management(Service_Mixin):
 		#       nodes need to be stopped
 
 		found = False
+		size = 0
 		for group in self.config.groups.values():
 			if group != stop_group:
 				continue
 			found = True
 			for ep in group.endpoints:
 				stop_socket.connect(ep.connect_uri(EndpntSpec.BASE))
+				size += 1
 			break
 		assert found, "unknown group given to __stop_group()"
 
-		self.logger.debug('stopping nodes in group %s' % group)
-		num = self.__stop_nodes(stop_socket)
+		self.logger.debug('attempting to stop %d nodes in group %s' % (size, group))
+		num = self.__stop_nodes(stop_socket, size)
 		stop_socket.close()
 		self.logger.debug('%d nodes in group %s stopped' % (num, group))
 
 	def __stop_all_nodes(self):
 		size = len(self.tree) - 1 # don't count this (root) node
 		self.logger.debug('attempting to stop %d nodes' % size)
-		num = self.__stop_nodes(self.disc_socket)
+		num = self.__stop_nodes(self.disc_socket, size)
 		self.logger.debug('%d nodes stopped' % (num))
 
-	def __stop_nodes(self, pub_sock):
+	def __stop_nodes(self, pub_sock, expected):
 		assert PUB == pub_sock.socket_type
 
 		stop = TopoMsg.STOP()
@@ -183,7 +185,7 @@ class Management(Service_Mixin):
 		#       service might actually be good: nodes are not re-connected to
 		#       the system until all nodes have stopped?
 		timeout = now_secs() + 30
-		while timeout >= now_secs():
+		while timeout >= now_secs() and num_rep < expected:
 			if control_sock.poll(timeout=1000) != 0:
 				while True:
 					polo = None
