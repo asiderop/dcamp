@@ -33,7 +33,7 @@ case "$1" in
 	base-c)
 		MODS=""
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 131x50+0+400 -T collector -e $DCAMP $MODS -d base -a localhost:55700 &
+			$XTERM -geometry 131x50+0+350 -T collector -e $DCAMP $MODS -d base -a localhost:55700 &
 		else
 			$DCAMP $MODS -d base -a localhost:55700
 		fi

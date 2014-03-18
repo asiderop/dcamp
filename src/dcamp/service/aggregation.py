@@ -1,4 +1,4 @@
-from zmq import SUB, SUBSCRIBE, PUSH # pylint: disable-msg=E0611
+from zmq import SUB, SUBSCRIBE, PUSH, Again # pylint: disable-msg=E0611
 
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service_Mixin
@@ -24,10 +24,11 @@ class Aggregation(Service_Mixin):
 
 		(self.sub_cnt, self.push_cnt) = (0, 0)
 
-		# sub metrics from child(ren) and push them to pull socket
+		# sub data from child(ren) and push them to Filter service
 		self.sub = self.ctx.socket(SUB)
 		self.sub.setsockopt(SUBSCRIBE, b'')
 		self.sub.bind(self.endpoint.bind_uri(EndpntSpec.DATA_EXTERNAL))
+		self.poller.register(self.sub)
 
 		self.push = self.ctx.socket(PUSH)
 		self.push.connect(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
@@ -38,7 +39,6 @@ class Aggregation(Service_Mixin):
 				try: msg = DataMsg._DATA.recv(self.sub)
 				except Again as e: break
 
-				msg = DataMsg._DATA.recv(self.sub)
 				self.sub_cnt += 1
 				msg.send(self.push)
 				self.push_cnt += 1
