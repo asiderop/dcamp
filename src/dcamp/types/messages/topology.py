@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from dcamp.types.messages.common import DCMsg, _PROPS, WTF
 from dcamp.types.specs import EndpntSpec
+from dcamp.util.functions import isInstance_orNone
 
 # @todo: need to include UUIDs in each message so nodes can distinguish between multiple
 #        invocations of the same endpoint
@@ -24,21 +25,26 @@ def gen_uuid():
 	return uuid4()
 
 class TOPO(DCMsg):
-	def __init__(self, ep, id):
+	def __init__(self, ep, id, content=None):
 		DCMsg.__init__(self)
 		assert isinstance(ep, EndpntSpec)
 		assert isinstance(id, UUID)
+		assert isInstance_orNone(content, str)
+
 		self.endpoint = ep
 		self.uuid = id
+		self.content = content
 
 	def __str__(self):
-		return '%s (%s)' % (self.endpoint, self.uuid)
+		return '%s (%s, content=%s)' % (self.endpoint, self.uuid, self.content) # or 'None')
 
 	@property
 	def frames(self):
+		content = self.content or ''
 		return [
 				self.endpoint.encode(),
 				self._encode_uuid(self.uuid),
+				content.encode(),
 			]
 
 	@classmethod
@@ -46,23 +52,27 @@ class TOPO(DCMsg):
 		assert isinstance(msg, list)
 
 		# make sure we have exactly two frames
-		if 2 != len(msg):
+		if 3 != len(msg):
 			raise ValueError('wrong number of frames')
 
 		ep = EndpntSpec.decode(msg[0])
 		id = DCMsg._decode_uuid(msg[1])
-		return cls(ep, id)
+		cont = msg[2].decode()
+		if len(cont) == 0:
+			cont = None
+
+		return cls(ep, id, cont)
 
 # @todo: The MARCO and POLO message types are really the same message structure. These two
 #        message classes should just be combined.
 
 class MARCO(TOPO):
-	def __init__(self, root_endpoint, root_uuid):
-		TOPO.__init__(self, root_endpoint, root_uuid)
+	def __init__(self, root_endpoint, root_uuid, content=None):
+		TOPO.__init__(self, root_endpoint, root_uuid, content)
 
 class POLO(TOPO):
-	def __init__(self, base_endpoint, base_uuid):
-		TOPO.__init__(self, base_endpoint, base_uuid)
+	def __init__(self, base_endpoint, base_uuid, content=None):
+		TOPO.__init__(self, base_endpoint, base_uuid, content)
 
 class CONTROL(DCMsg, _PROPS):
 	def __init__(self, command, properties=None):

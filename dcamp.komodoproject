@@ -67,7 +67,7 @@
   <boolean id="hyperlinksEnableGotoDefinition">1</boolean>
   <boolean id="hyperlinksEnabled">1</boolean>
   <string relative="path" id="import_dirname"></string>
-  <string id="import_exclude_matches">build;__pycache__;.komodotools;.git;thesis;.DS_Store;*.pyc;logs</string>
+  <string id="import_exclude_matches">build;__pycache__;.komodotools;.git;thesis;.DS_Store;*.pyc;logs;debug</string>
   <string id="import_include_matches"></string>
   <string id="jshintOptions"></string>
   <string id="jshint_linter_chooser">default</string>
