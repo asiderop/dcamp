@@ -43,12 +43,14 @@ def set_id(zsocket):
     identity = "%04x-%04x" % (randint(0, 0x10000), randint(0, 0x10000))
     zsocket.setsockopt(zmq.IDENTITY, identity)
 
+
 def socket_set_hwm(socket, hwm=-1):
     """libzmq 2/3 compatible sethwm"""
     try:
         socket.sndhwm = socket.rcvhwm = hwm
     except AttributeError:
         socket.hwm = hwm
+
 
 def zpipe(ctx):
     """build inproc pipe for talking to threads
@@ -66,4 +68,4 @@ def zpipe(ctx):
     iface = "inproc://%s" % binascii.hexlify(os.urandom(8)).decode()
     a.bind(iface)
     b.connect(iface)
-    return a,b
+    return a, b
