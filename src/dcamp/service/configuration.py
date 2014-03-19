@@ -1,29 +1,29 @@
-import logging, random
-from time import time, sleep
+from time import sleep
 from threading import Lock
 
 from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-msg=E0611
 
-import dcamp.types.messages.configuration as ConfigMsg
+import dcamp.types.messages.configuration as config_msg
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service_Mixin
 
 
 class Configuration(Service_Mixin):
-    '''
+    """
     Configuration Service --
-    '''
+    """
 
     # states
     STATE_SYNC = 0
     STATE_GOGO = 1
 
-    def __init__(self,
-                 control_pipe,  # control pipe for shutting down service
-                 level,
-                 group,
-                 parent_ep,  # from where we receive config updates/snapshots
-                 local_ep,  # this is us
+    def __init__(
+            self,
+            control_pipe,  # control pipe for shutting down service
+            level,
+            group,
+            parent_ep,  # from where we receive config updates/snapshots
+            local_ep,  # this is us
     ):
         Service_Mixin.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
@@ -96,7 +96,7 @@ class Configuration(Service_Mixin):
             self.kvsync_req = self.ctx.socket(DEALER)
             self.kvsync_req.connect(self.parent.connect_uri(EndpntSpec.CONFIG_SNAPSHOT))
             for t in self.topics:
-                icanhaz = ConfigMsg.ICANHAZ(t)
+                icanhaz = config_msg.ICANHAZ(t)
                 icanhaz.send(self.kvsync_req)
 
             self.poller.register(self.kvsync_req, POLLIN)
@@ -120,12 +120,12 @@ class Configuration(Service_Mixin):
 
     def __setitem__(self, k, v):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        item = ConfigMsg.KVPUB(k, v, self.kv_seq + 1)
+        item = config_msg.KVPUB(k, v, self.kv_seq + 1)
         self.__process_update_message(item)  # add to our kvdict and publish update
 
     def __delitem__(self, k):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        item = ConfigMsg.KVPUB(k, None, self.kv_seq + 1)
+        item = config_msg.KVPUB(k, None, self.kv_seq + 1)
         self.__process_update_message(item)  # remove from our kvdict and publish update
 
     def get_metric_specs(self, group=None):
@@ -150,7 +150,7 @@ class Configuration(Service_Mixin):
             # processed
             for update in self.pending_updates:
                 self.__process_update_message(update)
-            del (self.pending_updates)
+            del self.pending_updates
 
             self.state = Configuration.STATE_GOGO
 
@@ -187,7 +187,7 @@ class Configuration(Service_Mixin):
             self.__send_snapshot()
 
     def __recv_update(self):
-        update = ConfigMsg.CONFIG.recv(self.update_sub)
+        update = config_msg.CONFIG.recv(self.update_sub)
         self.subcnt += 1
 
         if update.is_error:
@@ -229,13 +229,13 @@ class Configuration(Service_Mixin):
         assert Configuration.STATE_SYNC == self.state
 
         # should either be KVSYNC or KTHXBAI
-        response = ConfigMsg.CONFIG.recv(self.kvsync_req)
+        response = config_msg.CONFIG.recv(self.kvsync_req)
 
         if response.is_error:
             self.logger.error(response)
             return
 
-        if ConfigMsg.CONFIG.KTHXBAI == response.ctype:
+        if config_msg.CONFIG.KTHXBAI == response.ctype:
             if response.value not in self.topics:
                 self.logger.error('received KTHXBAI of unexpected subtree: %s' % response.value)
                 return
@@ -247,7 +247,7 @@ class Configuration(Service_Mixin):
                 return
 
             self.kv_seq = max(self.kvsync_completed.values())
-            del (self.kvsync_completed)
+            del self.kvsync_completed
             self.__setup_outbound()
         else:
             self.__process_update_message(response, ignore_sequence=True)
@@ -255,13 +255,13 @@ class Configuration(Service_Mixin):
     def __send_snapshot(self):
         assert Configuration.STATE_GOGO == self.state
 
-        request = ConfigMsg.CONFIG.recv(self.kvsync_rep)
+        request = config_msg.CONFIG.recv(self.kvsync_rep)
 
         if request.is_error:
             self.logger.error(request)
             return
 
-        peer_id = request._peer_id
+        peer_id = request.peer_id
         subtree = request.value  # subtree stored as value in ICANHAZ message
 
         # send all the key-value pairs in our dict
@@ -272,9 +272,9 @@ class Configuration(Service_Mixin):
                 if not k.startswith(subtree):
                     continue
                 max_seq = max([max_seq, s])
-                snap = ConfigMsg.KVSYNC(k, v, s, peer_id)
+                snap = config_msg.KVSYNC(k, v, s, peer_id)
                 snap.send(self.kvsync_rep)
 
         # send final message, closing the kvsync session
-        snap = ConfigMsg.KTHXBAI(self.kv_seq, peer_id, subtree)
+        snap = config_msg.KTHXBAI(self.kv_seq, peer_id, subtree)
         snap.send(self.kvsync_rep)

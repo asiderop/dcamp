@@ -131,7 +131,7 @@ class Node(Service_Mixin):
             self.control_socket = self.ctx.socket(DEALER)
             self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
             self.poller.register(self.control_socket, POLLIN)
-            self.polo_msg._peer_id = marco_msg._peer_id
+            self.polo_msg.peer_id = marco_msg.peer_id
             self.polo_msg.send(self.control_socket)
             self.reqcnt += 1
             self.open_state()

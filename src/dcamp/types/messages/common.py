@@ -27,7 +27,7 @@ class DCMsg(object):
     logger = logging.getLogger("dcamp.dcmsg")
 
     def __init__(self, peer_id=None):
-        self._peer_id = peer_id
+        self.peer_id = peer_id
 
     def __iter__(self):
         return iter(self.frames)
@@ -103,8 +103,8 @@ class DCMsg(object):
         if DEALER == socket.socket_type:
             parts.insert(0, b'')  # DEALER needs empty first frame (i.e. delimiter)
         elif ROUTER == socket.socket_type:
-            assert self._peer_id is not None
-            parts.insert(0, self._peer_id)  # ROUTER needs peer identity in first frame
+            assert self.peer_id is not None
+            parts.insert(0, self.peer_id)  # ROUTER needs peer identity in first frame
             parts.insert(1, b'')  # ROUTER needs dilimiter in second frame
 
         socket.send_multipart(parts)
@@ -131,7 +131,7 @@ class DCMsg(object):
                 # finally, return WTF with original error string
                 msg = WTF(1, str(e))
 
-        msg._peer_id = peer_id
+        msg.peer_id = peer_id
 
         logger = cls.logger
         if dev_mode:

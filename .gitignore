@@ -5,3 +5,4 @@ thesis/out/
 /logs
 /debug
 .simulation.cfg
+workspace.xml

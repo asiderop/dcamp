@@ -78,21 +78,27 @@ class CONFIG(DCMsg, _PROPS):
         return cls(key, val, seq, uuid, properties=props)
 
 
-def ICANHAZ(subtree=None):
-    return CONFIG(key='ICANHAZ', value=subtree)
+class ICANHAZ(CONFIG):
+    def __init__(self, subtree=None):
+        CONFIG.__init__(self, key='ICANHAZ', value=subtree)
 
 
-def KVSYNC(k, v, seq, pid):
-    return CONFIG(key=k, value=v, sequence=seq, peer_id=pid)
+class KVSYNC(CONFIG):
+    def __init__(self, k, v, seq, pid):
+        CONFIG.__init__(self, key=k, value=v, sequence=seq, peer_id=pid)
 
 
-def KTHXBAI(seq, pid, subtree=None):
-    return CONFIG(key='KTHXBAI', value=subtree, sequence=seq, peer_id=pid)
+class KTHXBAI(CONFIG):
+    def __init__(self, seq, pid, subtree=None):
+        CONFIG.__init__(self, key='KTHXBAI', value=subtree, sequence=seq, peer_id=pid)
 
 
-def KVPUB(k, v, seq, uuid=None):
-    return CONFIG(key=k, value=v, sequence=seq, uuid=uuid)
+class KVPUB(CONFIG):
+    def __init__(self, k, v, seq, uuid=None):
+        CONFIG.__init__(self, key=k, value=v, sequence=seq, uuid=uuid)
 
 
-def HUGZ():  # TODO: add sequence numbers to heartbeats?
-    return CONFIG(key='HUGZ', sequence=0)
+class HUGZ(CONFIG):
+    """ TODO: add sequence numbers to heartbeats? """
+    def __init__(self, ):
+        CONFIG.__init__(self, key='HUGZ')
