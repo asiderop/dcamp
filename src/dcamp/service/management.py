@@ -1,31 +1,30 @@
-import logging
 from time import time
 
 from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 
 from dcamp.types.messages.common import WTF
-import dcamp.types.messages.topology as TopoMsg
+import dcamp.types.messages.topology as topo
 
-from dcamp.service.service import Service_Mixin
+from dcamp.service.service import Service
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTree_Mixin, TopoNode
 from dcamp.util.functions import now_secs
 
 
-class Management(Service_Mixin):
-    '''
+class Management(Service):
+    """
     Management Service -- provides functionality for interacting with and controlling
     dCAMP.
 
     @todo: how to handle joining nodes not part of config / issue #26
-    '''
+    """
 
     def __init__(self,
                  role_pipe,
                  config_service,
                  config,
-    ):
-        Service_Mixin.__init__(self, role_pipe)
+                 ):
+        Service.__init__(self, role_pipe)
 
         # TODO: use config_service as full state representation; add accessor methods to
         #       make it convenient and remove the self.config and self.tree members.
@@ -34,7 +33,7 @@ class Management(Service_Mixin):
         self.config_service = config_service
         self.config = config
         self.endpoint = self.config.root['endpoint']
-        self.uuid = TopoMsg.gen_uuid()
+        self.uuid = topo.gen_uuid()
 
         for (k, v) in self.config.kvdict.items():
             self.config_service[k] = v
@@ -71,7 +70,7 @@ class Management(Service_Mixin):
         self.pubint = self.config.root['heartbeat']
         self.pubcnt = 0
 
-        self.marco_msg = TopoMsg.MARCO(self.endpoint, self.uuid)
+        self.marco_msg = topo.MARCO(self.endpoint, self.uuid)
         self.pubnext = time()
 
         self.poller.register(self.join_socket, POLLIN)
@@ -91,7 +90,7 @@ class Management(Service_Mixin):
         self.join_socket.close()
         self.disc_socket.close()
         del self.join_socket, self.disc_socket
-        Service_Mixin._cleanup(self)
+        Service._cleanup(self)
 
     def _pre_poll(self):
         if self.pubnext < time():
@@ -103,13 +102,11 @@ class Management(Service_Mixin):
 
     def _post_poll(self, items):
         if self.join_socket in items:
-            polo_msg = TopoMsg.POLO.recv(self.join_socket)
+            polo_msg = topo.POLO.recv(self.join_socket)
             self.reqcnt += 1
 
-            repmsg = None
-
             if polo_msg.is_error:
-                errstr = 'invalid base endpoint received: %s' % (polo_msg.errstr)
+                errstr = 'invalid base endpoint received: {}'.format(polo_msg.errstr)
                 self.logger.error(errstr)
                 repmsg = WTF(0, errstr)
 
@@ -152,21 +149,21 @@ class Management(Service_Mixin):
             break
         assert found, "unknown group given to __stop_group()"
 
-        self.logger.debug('attempting to stop %d nodes in group %s' % (size, group))
+        self.logger.debug('attempting to stop %d nodes in group %s' % (size, stop_group))
         num = self.__stop_nodes(stop_socket, size)
         stop_socket.close()
-        self.logger.debug('%d nodes in group %s stopped' % (num, group))
+        self.logger.debug('%d nodes in group %s stopped' % (num, stop_group))
 
     def __stop_all_nodes(self):
         size = len(self.tree) - 1  # don't count this (root) node
-        self.logger.debug('attempting to stop %d nodes' % size)
+        self.logger.debug('attempting to stop {} nodes'.format(size))
         num = self.__stop_nodes(self.disc_socket, size)
-        self.logger.debug('%d nodes stopped' % (num))
+        self.logger.debug('{} nodes stopped'.format(num))
 
     def __stop_nodes(self, pub_sock, expected):
         assert PUB == pub_sock.socket_type
 
-        stop = TopoMsg.STOP()
+        stop = topo.STOP()
         control_sock = self.ctx.socket(ROUTER)
         bind_addr = control_sock.bind_to_random_port("tcp://*")
         num_rep = 0
@@ -174,7 +171,7 @@ class Management(Service_Mixin):
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.TOPO_JOIN)
-        marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid())  # new uuid so nodes response
+        marco = topo.MARCO(ep, topo.gen_uuid())  # new uuid so nodes response
 
         # pub to all connected nodes
         marco.send(pub_sock)
@@ -189,10 +186,9 @@ class Management(Service_Mixin):
         while timeout >= now_secs() and num_rep < expected:
             if control_sock.poll(timeout=1000) != 0:
                 while True:
-                    polo = None
                     try:
-                        polo = TopoMsg.POLO.recv(control_sock)
-                    except Again as e:
+                        polo = topo.POLO.recv(control_sock)
+                    except Again:
                         break  # nothing to read; go back to polling
 
                     assert polo is not None
@@ -209,23 +205,20 @@ class Management(Service_Mixin):
         return num_rep
 
     def __assign(self, polo_msg):
-        '''
+        """
         Method to handle assigning joining node to topology:
         * lookup node's group
         * promote to collector (if first in group)
         * assign its parent node
 
         Returns CONTROL or None
-        '''
+        """
 
         # lookup node group
         # @todo need to keep track of nodes which have already POLO'ed / issue #39
         for (group, spec) in self.config.groups.items():
             if polo_msg.endpoint in spec.endpoints:
                 self.logger.debug('found base group: %s' % group)
-
-                parent = None
-                level = ''
 
                 if group in self.collectors:
                     # group already exists, make sensor (leaf) node

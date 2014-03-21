@@ -2,7 +2,7 @@ import logging
 from configparser import ConfigParser, Error as ConfigParserError
 
 from dcamp.types.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec, ThreshSpec
-from dcamp.util.decorators import Prefixable
+from dcamp.util.decorators import prefixable
 import dcamp.util.functions as Util
 
 
@@ -10,7 +10,7 @@ class DCParsingError(ConfigParserError):
     pass
 
 
-@Prefixable
+@prefixable
 class DCConfig_Mixin(ConfigParser):
     def __init__(self):
         self.logger = logging.getLogger('dcamp.types.config')

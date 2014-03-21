@@ -1,5 +1,5 @@
 import logging
-from struct import pack, unpack, error as StructError
+from struct import pack, unpack, error as struct_error
 from uuid import UUID
 
 # imports for pickling
@@ -12,7 +12,7 @@ import zmq.utils.jsonapi as jsonapi
 from zmq import DEALER, ROUTER, NOBLOCK  # pylint: disable-msg=E0611
 
 from dcamp.types.specs import SerializableSpecTypes
-import dcamp.util.functions as Funcs
+import dcamp.util.functions as funcs
 
 # TODO: use a new log level instead
 verbose_debug = True
@@ -92,9 +92,9 @@ class DCMsg(object):
     def send(self, socket):
         logger = self.logger
         if dev_mode:
-            logger = Funcs.get_logger_from_caller(self.logger)
+            logger = funcs.get_logger_from_caller(self.logger)
 
-        logger.debug('S:%s' % (self.name))
+        logger.debug('S:{}'.format(self.name))
         if verbose_debug:
             for part in str(self).split('\n'):
                 logger.debug('  ' + part)
@@ -123,7 +123,7 @@ class DCMsg(object):
         try:
             # try to decode message with given class
             msg = cls.from_msg(frames)
-        except (ValueError, StructError) as e:
+        except (ValueError, struct_error) as e:
             try:
                 # otherwise, try decoding WTF message
                 msg = WTF.from_msg(frames)
@@ -135,9 +135,9 @@ class DCMsg(object):
 
         logger = cls.logger
         if dev_mode:
-            logger = Funcs.get_logger_from_caller(cls.logger)
+            logger = funcs.get_logger_from_caller(cls.logger)
 
-        logger.debug('R:%s' % (msg.name))
+        logger.debug('R:{}'.format(msg.name))
         if verbose_debug:
             for part in str(msg).split('\n'):
                 logger.debug('  ' + part)
@@ -198,7 +198,7 @@ class _PROPS(object):
                         raise ValueError('expected json list but found ' % type(value))
                     new_list = list()
                     for val in value:
-                        new_list.append(_PROPS.__value_from_type_tuple(value))
+                        new_list.append(_PROPS.__value_from_type_tuple(val))
                     result[key] = new_list
         return result
 
@@ -208,7 +208,7 @@ class _PROPS(object):
         # special case spec types (namedtuple) to use dict as values instead of list
         if type_name in SerializableSpecTypes:
             value = value._asdict()
-        return (type_name, value)
+        return type_name, value
 
     @staticmethod
     def __value_from_type_tuple(given):
@@ -262,10 +262,10 @@ class RestrictedUnpickler(pickle.Unpickler):
 
     def find_class(self, module, name):
         # Only allow safe classes from builtins.
-        if (    ( module in RestrictedUnpickler.SAFE_IMPORTS and
-                          name in RestrictedUnpickler.SAFE_IMPORTS[module] )
-                or module.startswith('dcamp.types')
-        ):
+        if ((module in RestrictedUnpickler.SAFE_IMPORTS and
+                name in RestrictedUnpickler.SAFE_IMPORTS[module])
+                or module.startswith('dcamp.types')):
+
             # TODO: is it inneficient to import the same module over and over?
             mod = importlib.import_module(module)
             return getattr(mod, name)

@@ -1,21 +1,22 @@
-import tempfile, os
+import tempfile
+from os import makedirs
 
 from zmq import PUB, PULL, Again  # pylint: disable-msg=E0611
 
-import dcamp.types.messages.data as DataMsg
+import dcamp.types.messages.data as data
 from dcamp.types.specs import EndpntSpec
-from dcamp.service.service import Service_Mixin
+from dcamp.service.service import Service
 from dcamp.util.functions import now_secs, now_msecs
 
 
-class Filter(Service_Mixin):
+class Filter(Service):
     def __init__(self,
                  control_pipe,
                  level,
                  config_service,
                  local_ep,
                  parent_ep):
-        Service_Mixin.__init__(self, control_pipe)
+        Service.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
         assert isinstance(local_ep, EndpntSpec)
@@ -37,7 +38,7 @@ class Filter(Service_Mixin):
         self.pull_socket.bind(self.endpoint.bind_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
         self.poller.register(self.pull_socket)
 
-        os.makedirs('./logs/', exist_ok=True)
+        makedirs('./logs/', exist_ok=True)
         self.data_file = tempfile.NamedTemporaryFile(mode='w', delete=False,
                                                      prefix='{}-{}.'.format(self.level, self.endpoint),
                                                      suffix='.dcamp-data', dir='./logs/')
@@ -66,7 +67,7 @@ class Filter(Service_Mixin):
 
         del self.pull_socket, self.pubs_socket
 
-        Service_Mixin._cleanup(self)
+        Service._cleanup(self)
 
     def _pre_poll(self):
         self.__check_config_for_metric_updates()
@@ -80,7 +81,7 @@ class Filter(Service_Mixin):
     def __send_hug(self):
         assert (self.level in ['branch', 'leaf'])
 
-        hug = DataMsg.DATA_HUGZ(self.endpoint)
+        hug = data.DataHugz(self.endpoint)
         hug.send(self.pubs_socket)
         self.hugz_cnt += 1
         self.last_pub = now_secs()
@@ -88,23 +89,23 @@ class Filter(Service_Mixin):
     def _post_poll(self, items):
         if self.pull_socket in items:
             while True:
-                data = None
-
                 # read all messages on socket, i.e. keep reading until there is nothing
                 # left to process
                 try:
-                    data = DataMsg._DATA.recv(self.pull_socket)
-                except Again as e:
+                    msg = data.Data.recv(self.pull_socket)
+                except Again:
                     break
                 self.pull_cnt += 1
 
-                if data.is_error:
-                    self.logger.error('received error message: %s' % data)
+                if msg.is_error:
+                    self.logger.error('received error message: %s' % msg)
                     continue
 
-                self.data_file.write(data.log_str() + '\n')
+                assert isinstance(msg, data.Data)
 
-                if data.is_hugz:
+                self.data_file.write(msg.log_str() + '\n')
+
+                if msg.is_hugz:
                     # noted. moving on...
                     self.logger.debug('received hug.')
                     continue
@@ -112,27 +113,27 @@ class Filter(Service_Mixin):
                 # process message (i.e. do the filtering) and then forward to parent
                 if self.level in ['branch', 'leaf']:
                     # if unknown metric, just drop it
-                    if data.config_seqid != self.metric_seqid:
+                    if msg.config_seqid != self.metric_seqid:
                         self.logger.warn('unknown config seq-id (%d); dropping data'
-                                         % data.config_seqid)
+                                         % msg.config_seqid)
                         continue
 
                     # if non-local data, just send it off to the parent
-                    if data.source != self.endpoint:
+                    if msg.source != self.endpoint:
                         assert (self.level in ['branch'])
-                        data.send(self.pubs_socket)
+                        msg.send(self.pubs_socket)
                         self.pubs_cnt += 1
                         continue
 
                     # lookup metric spec, default is None and an empty cache list
-                    (metric, cache) = self.metric_specs.get(data.config_name, (None, []))
+                    (metric, cache) = self.metric_specs.get(msg.config_name, (None, []))
 
                     if metric is None:
                         self.logger.warn('unknown metric config-name (%s); dropping data'
-                                         % data.config_name)
+                                         % msg.config_name)
                         continue
 
-                    cache.append(data)
+                    cache.append(msg)
                     self.logger.debug('cache size: %d' % len(cache))
                     self.__filter_and_send(metric, cache)
 
@@ -149,7 +150,7 @@ class Filter(Service_Mixin):
                 value = cache[0].time  # time-based threshold compares against the earliest time
 
             elif metric.threshold.is_limit:
-                # if first collection, just add to cache and skip further processing
+                # if first sample, just add to cache and skip further processing
                 if len(cache) == 1:
                     return
 
@@ -188,23 +189,17 @@ class Filter(Service_Mixin):
             for s in specs:
                 self.metric_specs[s.config_name] = (s, [])
             self.metric_seqid = seq
-            self.logger.debug('new metric specs: %s' % self.metric_specs)
+            self.logger.debug('new metric specs: {}'.format(self.metric_specs))
             # XXX: trigger new metric setup
 
     def __get_next_wakeup(self):
-        '''
-        Method calculates the next wake-up time, using HUGZ if the next metric collection
-        is farther away then the hug interval.
-
-        @returns next wakeup time
-        @pre should only be called immediately after sending a message
-        '''
+        """ @returns next wakeup time (as msecs delta) """
         assert (self.level in ['branch', 'leaf'])
 
-        # reset hugz given that we just sent a message (maybe)
+        # reset hugz using last pub time
         self.next_hug = self.last_pub + self.hug_int
 
-        # next_hug is in secs; subtract current msecs to get next wakeup epoch
+        # next_hug is in secs; subtract current msecs to get next wakeup
         val = max(0, (self.next_hug * 1e3) - now_msecs())
         self.logger.debug('next wakeup in %dms' % val)
         return val

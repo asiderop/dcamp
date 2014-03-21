@@ -3,11 +3,11 @@ from threading import Thread
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=E0611
 
-from dcamp.util.decorators import Runnable
+from dcamp.util.decorators import runnable
 
 
-@Runnable
-class Service_Mixin(Thread):
+@runnable
+class Service(Thread):
     def __init__(self, pipe):
         Thread.__init__(self)
         self.ctx = Context.instance()

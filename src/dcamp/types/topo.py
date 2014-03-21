@@ -3,7 +3,7 @@ from sys import stdout
 from functools import total_ordering
 from datetime import datetime
 
-from dcamp.util.decorators import Prefixable
+from dcamp.util.decorators import prefixable
 from dcamp.types.specs import EndpntSpec
 import dcamp.types.messages.topology as TopoMsg
 
@@ -74,7 +74,7 @@ class TopoNode(object):
         return TopoMsg.ASSIGN(self.parent.endpoint, self.level, self.group)
 
 
-@Prefixable
+@prefixable
 class TopoTree_Mixin(object):
     pass
 

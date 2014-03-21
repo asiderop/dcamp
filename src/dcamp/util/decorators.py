@@ -1,4 +1,4 @@
-def Runnable(given_class):
+def runnable(given_class):
     """Class decorator turning given class into a "runnable" object"""
 
     # _run_state "enum" values
@@ -70,7 +70,7 @@ def Runnable(given_class):
     return given_class
 
 
-def Prefixable(given_class):
+def prefixable(given_class):
     """
     Decorator provides given class with methods to get/pop/push a prefix.
 

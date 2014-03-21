@@ -1,18 +1,18 @@
 from zmq import SUB, SUBSCRIBE, PUSH, Again  # pylint: disable-msg=E0611
 
 from dcamp.types.specs import EndpntSpec
-from dcamp.service.service import Service_Mixin
-import dcamp.types.messages.data as DataMsg
+from dcamp.service.service import Service
+import dcamp.types.messages.data as data
 
 
-class Aggregation(Service_Mixin):
+class Aggregation(Service):
     def __init__(self,
                  control_pipe,
                  level,
                  config_service,
                  local_ep,
                  parent_ep):
-        Service_Mixin.__init__(self, control_pipe)
+        Service.__init__(self, control_pipe)
         assert level in ['root', 'branch']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
         assert isinstance(local_ep, EndpntSpec)
@@ -37,8 +37,8 @@ class Aggregation(Service_Mixin):
         if self.sub in items:
             while True:
                 try:
-                    msg = DataMsg._DATA.recv(self.sub)
-                except Again as e:
+                    msg = data.Data.recv(self.sub)
+                except Again:
                     break
 
                 self.sub_cnt += 1
@@ -55,4 +55,4 @@ class Aggregation(Service_Mixin):
         self.push.close()
         del self.sub, self.push
 
-        Service_Mixin._cleanup(self)
+        Service._cleanup(self)

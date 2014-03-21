@@ -1,19 +1,19 @@
-import logging, sys, psutil
+import psutil
 
 from zmq import PUSH  # pylint: disable-msg=E0611
 
-import dcamp.types.messages.data as DataMsg
+import dcamp.types.messages.data as data
 from dcamp.types.specs import EndpntSpec, MetricCollection
-from dcamp.service.service import Service_Mixin
+from dcamp.service.service import Service
 from dcamp.util.functions import now_secs, now_msecs
 
 
-class Sensor(Service_Mixin):
+class Sensor(Service):
     def __init__(self,
                  control_pipe,
                  config_service,
                  endpoint):
-        Service_Mixin.__init__(self, control_pipe)
+        Service.__init__(self, control_pipe)
 
         self.config_service = config_service
         self.endpoint = endpoint
@@ -38,7 +38,7 @@ class Sensor(Service_Mixin):
         self.metrics_socket.close()
         del self.metrics_socket
 
-        Service_Mixin._cleanup(self)
+        Service._cleanup(self)
 
     def _pre_poll(self):
         self.__check_config_for_metric_updates()
@@ -114,33 +114,34 @@ class Sensor(Service_Mixin):
                 self.next_collection = now_secs() + 5
 
     def __process(self, collection):
-        ''' returns tuple of (data-msg, metric-collection) '''
+        """ returns tuple of (data-msg, metric-collection) """
         # TODO: move this to another class?
 
         (time, value, base_value) = (None, None, None)
 
-        props = {}
-        props['detail'] = collection.spec.detail
-        props['config-name'] = collection.spec.config_name
-        props['config-seqid'] = self.metric_seqid
+        props = {
+            'detail': collection.spec.detail,
+            'config-name': collection.spec.config_name,
+            'config-seqid': self.metric_seqid,
+        }
 
         # local vars for easier access
         detail = collection.spec.detail
-        message = None
+        message = data.Data  # should be overridden below
 
         if 'CPU' == detail:
             props['type'] = 'percent'
-            message = DataMsg.DATA_PERCENT
+            message = data.DataPercent
 
             time = now_msecs()
             # cpu_times() is accurate to two decimal points
             cpu_times = psutil.cpu_times()
-            value = int(( sum(cpu_times) - cpu_times.idle ) * 1e2)
+            value = int((sum(cpu_times) - cpu_times.idle) * 1e2)
             base_value = int(sum(cpu_times) * 1e2)
 
         elif 'DISK' == detail:
             props['type'] = 'rate'
-            message = DataMsg.DATA_RATE
+            message = data.DataRate
 
             disk = psutil.disk_io_counters()
 
@@ -149,7 +150,7 @@ class Sensor(Service_Mixin):
 
         elif 'NETWORK' == detail:
             props['type'] = 'rate'
-            message = DataMsg.DATA_RATE
+            message = data.DataRate
 
             net = psutil.net_io_counters()
 
@@ -158,7 +159,7 @@ class Sensor(Service_Mixin):
 
         elif 'MEMORY' == detail:
             props['type'] = 'percent'
-            message = DataMsg.DATA_PERCENT
+            message = data.DataPercent
 
             vmem = psutil.virtual_memory()
 
@@ -166,9 +167,10 @@ class Sensor(Service_Mixin):
             value = vmem.total - vmem.available
             base_value = vmem.total
 
+        assert message != data.Data
         m = message(self.endpoint, props, time, value, base_value)
 
         # create new collection with next collection time
         c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
 
-        return (m, c)
+        return m, c

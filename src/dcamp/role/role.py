@@ -4,10 +4,10 @@ from time import sleep
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-from dcamp.util.decorators import Runnable
+from dcamp.util.decorators import runnable
 
 
-@Runnable
+@runnable
 class Role_Mixin(object):
     def __init__(self,
                  pipe):

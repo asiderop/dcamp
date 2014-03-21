@@ -3,17 +3,17 @@ from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import isInstance_orNone, now_msecs
 
 __all__ = [
-    'DATA_HUGZ',
-    'DATA_BASIC',
-    'DATA_DELTA',
-    'DATA_RATE',
-    'DATA_AVERAGE',
-    'DATA_PERCENT',
-    '_DATA',
+    'DataHugz',
+    'DataBasic',
+    'DataDelta',
+    'DataRate',
+    'DataAverage',
+    'DataPercent',
+    'Data',
 ]
 
 
-class _DATA(DCMsg, _PROPS):
+class Data(DCMsg, _PROPS):
     """
     Frame 0: data source (leaf or collector node endpoint), as 0MQ string
     Frame 1: properties, as 0MQ string
@@ -71,7 +71,7 @@ class _DATA(DCMsg, _PROPS):
 
     @property
     def is_hugz(self):
-        return isinstance(self, DATA_HUGZ)
+        return isinstance(self, DataHugz)
 
     def __is_compatible(self, given):
         return (self.source == given.source and
@@ -137,7 +137,7 @@ class _DATA(DCMsg, _PROPS):
         time = DCMsg._decode_int(msg[2])
 
         # HUGZ have a special/minimal constructor
-        if real_class == DATA_HUGZ:
+        if real_class == DataHugz:
             return real_class(source, time)
 
         value = DCMsg._decode_int(msg[3])
@@ -146,7 +146,7 @@ class _DATA(DCMsg, _PROPS):
         return real_class(source, props, time, value, base_value)
 
 
-class DATA_HUGZ(_DATA):
+class DataHugz(Data):
     def __init__(self, the_source, the_time=None):
         super().__init__(
             source=the_source,
@@ -168,7 +168,7 @@ class DATA_HUGZ(_DATA):
         return '%d\t%s\t%s' % (self.time, self.source, self.m_type)
 
 
-class DATA_BASIC(_DATA):
+class DataBasic(Data):
     def _calculate(self, given=None):
         return float(self.value)
 
@@ -177,7 +177,7 @@ class DATA_BASIC(_DATA):
         return ''
 
 
-class DATA_DELTA(_DATA):
+class DataDelta(Data):
     def _calculate(self, given):
         return float(given.value - self.value)
 
@@ -186,12 +186,12 @@ class DATA_DELTA(_DATA):
         return ''
 
 
-class DATA_AVERAGE(_DATA):
+class DataAverage(Data):
     def __str__(self):
-        return '%s / %d' % (_DATA.__str__(self), self.base_value)
+        return '%s / %d' % (Data.__str__(self), self.base_value)
 
     def log_str(self):
-        return '%s\t%d' % (_DATA.log_str(self), self.base_value)
+        return '%s\t%d' % (Data.log_str(self), self.base_value)
 
     @property
     def suffix(self):
@@ -201,12 +201,12 @@ class DATA_AVERAGE(_DATA):
         return float((given.value - self.value) / (given.base_value - self.base_value))
 
 
-class DATA_PERCENT(_DATA):
+class DataPercent(Data):
     def __str__(self):
-        return '%s / %d' % (_DATA.__str__(self), self.base_value)
+        return '%s / %d' % (Data.__str__(self), self.base_value)
 
     def log_str(self):
-        return '%s\t%d' % (_DATA.log_str(self), self.base_value)
+        return '%s\t%d' % (Data.log_str(self), self.base_value)
 
     @property
     def suffix(self):
@@ -216,7 +216,7 @@ class DATA_PERCENT(_DATA):
         return float((given.value - self.value) / (given.base_value - self.base_value)) * 100.0
 
 
-class DATA_RATE(_DATA):
+class DataRate(Data):
     def __the_rate(self, given):
         return float((given.value - self.value) / (given.time - self.time) * 1e3)
 
@@ -229,10 +229,10 @@ class DATA_RATE(_DATA):
 
 
 _MTYPES = {
-    'HUGZ': DATA_HUGZ,
-    'basic': DATA_BASIC,
-    'delta': DATA_DELTA,
-    'rate': DATA_RATE,
-    'average': DATA_AVERAGE,
-    'percent': DATA_PERCENT,
+    'HUGZ': DataHugz,
+    'basic': DataBasic,
+    'delta': DataDelta,
+    'rate': DataRate,
+    'average': DataAverage,
+    'percent': DataPercent,
 }
