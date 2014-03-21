@@ -5,6 +5,7 @@ from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-m
 import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import Service
+from dcamp.util.functions import now_secs, now_msecs
 
 
 class Configuration(Service):
@@ -55,9 +56,15 @@ class Configuration(Service):
         self.kvdict = {}
         self.kv_seq = -1
 
+        # root/branch members for sending hearbeats to children
+        self.hug_int = 5  # units: seconds
+        self.next_hug = now_secs() + self.hug_int  # units: seconds
+        self.last_pub = now_secs()  # units: seconds
+        self.hug = None
+
         # sockets and message counts
         (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
-        (self.subcnt, self.pubcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0)
+        (self.subcnt, self.pubcnt, self.hugz_cnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
 
         ### Branch/Leaf Members
 
@@ -132,29 +139,33 @@ class Configuration(Service):
         return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
 
     def __setup_outbound(self):
-        if self.level in ['branch', 'root']:
-            # 3) publish updates to children (bind)
-            self.update_pub = self.ctx.socket(PUB)
-            self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
+        assert self.level in ['branch', 'root']
 
-            # 4) service snapshot requests to children (bind)
-            self.kvsync_rep = self.ctx.socket(ROUTER)
-            self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
-            self.poller.register(self.kvsync_rep, POLLIN)
+        # 3) publish updates to children (bind)
+        self.update_pub = self.ctx.socket(PUB)
+        self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
 
-            # process pending updates; this will trigger kvpub updates for each message
-            # processed
-            for update in self.pending_updates:
-                self.__process_update_message(update)
-            del self.pending_updates
+        self.hug = config.HUGZ()
+        self.last_pub = now_secs()
 
-            self.state = Configuration.STATE_GOGO
+        # 4) service snapshot requests to children (bind)
+        self.kvsync_rep = self.ctx.socket(ROUTER)
+        self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
+        self.poller.register(self.kvsync_rep, POLLIN)
+
+        # process pending updates; this will trigger kvpub updates for each message
+        # processed
+        for update in self.pending_updates:
+            self.__process_update_message(update)
+        del self.pending_updates
+
+        self.state = Configuration.STATE_GOGO
 
     def _cleanup(self):
         # service exiting; return some status info and cleanup
         self.logger.debug(
             "%d subs; %d pubs; %d reqs; %d reps" %
-                          (self.subcnt, self.pubcnt, self.reqcnt, self.repcnt))
+            (self.subcnt, self.pubcnt, self.reqcnt, self.repcnt))
 
         # print each key-value pair; value is really (value, seq-num)
         self.logger.debug('kv-seq: %d' % self.kv_seq)
@@ -174,6 +185,13 @@ class Configuration(Service):
 
         Service._cleanup(self)
 
+    def _pre_poll(self):
+        if self.level in ['branch', 'leaf']:
+            if self.next_hug <= now_secs():
+                self.__send_hug()
+
+            self.poller_timer = self.__get_next_wakeup()
+
     def _post_poll(self, items):
         if self.update_sub in items:
             self.__recv_update()
@@ -181,6 +199,27 @@ class Configuration(Service):
             self.__recv_snapshot()
         if self.kvsync_rep in items:
             self.__send_snapshot()
+
+    def __send_hug(self):
+        assert self.level in ['branch', 'leaf']
+
+        # wait until finished with sync state
+        if self.update_pub is not None:
+            self.hug.send(self.update_pub)
+            self.last_pub = now_secs()
+            self.hugz_cnt += 1
+
+    def __get_next_wakeup(self):
+        """ @returns next wakeup time (as msecs delta) """
+        assert self.level in ['branch', 'leaf']
+
+        # reset hugz using last pub time
+        self.next_hug = self.last_pub + self.hug_int
+
+        # next_hug is in secs; subtract current msecs to get next wakeup
+        val = max(0, (self.next_hug * 1e3) - now_msecs())
+        self.logger.debug('next wakeup in %dms' % val)
+        return val
 
     def __recv_update(self):
         update = config.CONFIG.recv(self.update_sub)
@@ -219,6 +258,7 @@ class Configuration(Service):
         # this should be None if still in SYNC state
         if self.update_pub is not None:
             update.send(self.update_pub)
+            self.last_pub = now_secs()
             self.pubcnt += 1
 
     def __recv_snapshot(self):
@@ -244,7 +284,8 @@ class Configuration(Service):
 
             self.kv_seq = max(self.kvsync_completed.values())
             del self.kvsync_completed
-            self.__setup_outbound()
+            if 'branch' == self.level:
+                self.__setup_outbound()
         else:
             self.__process_update_message(response, ignore_sequence=True)
 
