@@ -4,17 +4,6 @@ from dcamp.types.messages.common import DCMsg, _PROPS
 
 
 class CONFIG(DCMsg, _PROPS):
-    ICANHAZ = 0
-    KVSYNCPUB = 1
-    KTHXBAI = 2
-    HUGZ = 3
-
-    ctypes = [
-        ICANHAZ,
-        KVSYNCPUB,
-        KTHXBAI,
-        HUGZ,
-    ]
 
     def __init__(self, key, value=None, sequence=0, uuid=None, properties=None, peer_id=None):
         DCMsg.__init__(self, peer_id)
@@ -28,28 +17,12 @@ class CONFIG(DCMsg, _PROPS):
         self.uuid = uuid
         self.value = value
 
-        if 'ICANHAZ' == key:
-            self.ctype = CONFIG.ICANHAZ
-        elif 'KTHXBAI' == key:
-            self.ctype = CONFIG.KTHXBAI
-        elif 'HUGZ' == key:
-            self.ctype = CONFIG.HUGZ
-        else:
-            # if not one of the "known" keys, assume sync/pub message
-            self.ctype = CONFIG.KVSYNCPUB
-
     def __str__(self):
-        if self.key in ['ICANHAZ', 'KTHXBAI']:
-            return '%s %s' % (self.key, self.value)
-        elif 'HUGZ' == self.key:
-            return self.key
-        else:
-            result = '#%d: %s = %s' % (self.sequence, self.key, self.value)
-            if self.uuid is not None:
-                result += ' (%s)' % self.uuid
-            for (prop, val) in self.properties.items():
-                result += '\n%s : %s' % (prop, val)
-            return result
+        raise NotImplementedError('sub-class must implement __str__()')
+
+    @property
+    def is_hugz(self):
+        return isinstance(self, HUGZ)
 
     @property
     def frames(self):
@@ -62,7 +35,7 @@ class CONFIG(DCMsg, _PROPS):
         ]
 
     @classmethod
-    def from_msg(cls, msg):
+    def from_msg(cls, msg, peer_id):
         assert isinstance(msg, list)
 
         # make sure we have five frames
@@ -75,30 +48,64 @@ class CONFIG(DCMsg, _PROPS):
         props = _PROPS._decode_dict(msg[3])
         val = DCMsg._decode_blob(msg[4])
 
-        return cls(key, val, seq, uuid, properties=props)
+        if key.endswith('/HUGZ'):
+            # common case
+            return HUGZ(key.rsplit('/', 1)[0])  # drop the last part, i.e. '/HUGZ'
+        elif 'ICANHAZ' == key:
+            return ICANHAZ(val)
+        elif 'KTHXBAI' == key:
+            return KTHXBAI(seq, peer_id, val)
+        elif peer_id is not None:
+            return KVSYNC(key, val, seq, peer_id, props)
+        else:
+            return KVPUB(key, val, seq, uuid, props)
+
+
+class HUGZ(CONFIG):
+    """ TODO: add sequence numbers to heartbeats? """
+    def __init__(self, t):
+        assert isinstance(t, str)
+        CONFIG.__init__(self, key='%s/HUGZ' % t)
+
+    def __str__(self):
+        return self.key
 
 
 class ICANHAZ(CONFIG):
     def __init__(self, subtree=None):
         CONFIG.__init__(self, key='ICANHAZ', value=subtree)
 
-
-class KVSYNC(CONFIG):
-    def __init__(self, k, v, seq, pid):
-        CONFIG.__init__(self, key=k, value=v, sequence=seq, peer_id=pid)
+    def __str__(self):
+        return '%s %s' % (self.key, self.value)
 
 
 class KTHXBAI(CONFIG):
     def __init__(self, seq, pid, subtree=None):
         CONFIG.__init__(self, key='KTHXBAI', value=subtree, sequence=seq, peer_id=pid)
 
+    def __str__(self):
+        return '%s %s' % (self.key, self.value)
+
+
+class KVSYNC(CONFIG):
+    def __init__(self, k, v, seq, pid, props=None):
+        CONFIG.__init__(self, key=k, value=v, sequence=seq, peer_id=pid, properties=props)
+
+    def __str__(self):
+        result = '#%d: %s = %s' % (self.sequence, self.key, self.value)
+        for (prop, val) in self.properties.items():
+            result += '\n%s : %s' % (prop, val)
+        return result
+
 
 class KVPUB(CONFIG):
-    def __init__(self, k, v, seq, uuid=None):
-        CONFIG.__init__(self, key=k, value=v, sequence=seq, uuid=uuid)
+    def __init__(self, k, v, seq, uuid=None, props=None):
+        CONFIG.__init__(self, key=k, value=v, sequence=seq, uuid=uuid, properties=props)
 
-
-class HUGZ(CONFIG):
-    """ TODO: add sequence numbers to heartbeats? """
-    def __init__(self, ):
-        CONFIG.__init__(self, key='HUGZ')
+    def __str__(self):
+        result = '#%d: %s = %s' % (self.sequence, self.key, self.value)
+        if self.uuid is not None:
+            result += ' (%s)' % self.uuid
+        for (prop, val) in self.properties.items():
+            result += '\n%s : %s' % (prop, val)
+        return result

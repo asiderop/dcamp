@@ -118,7 +118,7 @@ class Data(DCMsg, _PROPS):
         ]
 
     @classmethod
-    def from_msg(cls, msg):
+    def from_msg(cls, msg, peer_id):
         assert isinstance(msg, list)
 
         # make sure we have six frames

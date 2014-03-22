@@ -27,7 +27,7 @@ class DCMsg(object):
     logger = logging.getLogger("dcamp.dcmsg")
 
     def __init__(self, peer_id=None):
-        self.peer_id = peer_id
+        self._peer_id = peer_id
 
     def __iter__(self):
         return iter(self.frames)
@@ -43,6 +43,14 @@ class DCMsg(object):
         return self.__class__.__name__
 
     @property
+    def peer_id(self):
+        return self._peer_id
+
+    def copy_peer_id_from(self, msg):
+        assert isinstance(msg, DCMsg)
+        self._peer_id = msg.peer_id
+
+    @property
     def is_error(self):
         return isinstance(self, WTF)
 
@@ -51,7 +59,7 @@ class DCMsg(object):
         raise NotImplementedError('subclass must implement method')
 
     @classmethod
-    def from_msg(cls, msg):
+    def from_msg(cls, msg, peer_id):
         raise NotImplementedError('subclass must implement method')
 
     @staticmethod
@@ -103,8 +111,8 @@ class DCMsg(object):
         if DEALER == socket.socket_type:
             parts.insert(0, b'')  # DEALER needs empty first frame (i.e. delimiter)
         elif ROUTER == socket.socket_type:
-            assert self.peer_id is not None
-            parts.insert(0, self.peer_id)  # ROUTER needs peer identity in first frame
+            assert self._peer_id is not None
+            parts.insert(0, self._peer_id)  # ROUTER needs peer identity in first frame
             parts.insert(1, b'')  # ROUTER needs dilimiter in second frame
 
         socket.send_multipart(parts)
@@ -122,16 +130,17 @@ class DCMsg(object):
 
         try:
             # try to decode message with given class
-            msg = cls.from_msg(frames)
+            msg = cls.from_msg(frames, peer_id)
         except (ValueError, struct_error) as e:
             try:
                 # otherwise, try decoding WTF message
-                msg = WTF.from_msg(frames)
+                msg = WTF.from_msg(frames, peer_id)
             except:
                 # finally, return WTF with original error string
                 msg = WTF(1, str(e))
 
-        msg.peer_id = peer_id
+        if msg.peer_id is None:  # sub-class may set peer_id
+            msg._peer_id = peer_id
 
         logger = cls.logger
         if dev_mode:
@@ -240,7 +249,7 @@ class WTF(DCMsg):
         ]
 
     @classmethod
-    def from_msg(cls, msg):
+    def from_msg(cls, msg, peer_id):
         # make sure we have either two or three frames
         assert isinstance(msg, list)
 

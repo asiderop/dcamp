@@ -127,7 +127,7 @@ class Management(Service):
                     repmsg = WTF(0, 'too chatty; already POLOed')
                     remote.touch()
 
-            repmsg.peer_id = polo_msg.peer_id
+            repmsg.copy_peer_id_from(polo_msg)
             repmsg.send(self.join_socket)
             self.repcnt += 1
 
@@ -197,7 +197,7 @@ class Management(Service):
                         continue
 
                     # send STOP command
-                    stop.peer_id = polo.peer_id
+                    stop.copy_peer_id_from(polo)
                     stop.send(control_sock)
                     num_rep += 1
 

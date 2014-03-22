@@ -64,7 +64,7 @@ class Configuration(Service):
 
         # sockets and message counts
         (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
-        (self.subcnt, self.pubcnt, self.hugz_cnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
+        (self.subcnt, self.pubcnt, self.hugcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
 
         ### Branch/Leaf Members
 
@@ -145,7 +145,13 @@ class Configuration(Service):
         self.update_pub = self.ctx.socket(PUB)
         self.update_pub.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_UPDATE))
 
-        self.hug = config.HUGZ()
+        if 'branch' == self.level:
+            assert self.group is not None
+            t = '/config/%s' % self.group
+        else:  # root
+            t = '/topo'
+
+        self.hug = config.HUGZ(t)
         self.last_pub = now_secs()
 
         # 4) service snapshot requests to children (bind)
@@ -164,8 +170,8 @@ class Configuration(Service):
     def _cleanup(self):
         # service exiting; return some status info and cleanup
         self.logger.debug(
-            "%d subs; %d pubs; %d reqs; %d reps" %
-            (self.subcnt, self.pubcnt, self.reqcnt, self.repcnt))
+            "%d subs; %d pubs; %d hugz; %d reqs; %d reps" %
+            (self.subcnt, self.pubcnt, self.hugcnt, self.reqcnt, self.repcnt))
 
         # print each key-value pair; value is really (value, seq-num)
         self.logger.debug('kv-seq: %d' % self.kv_seq)
@@ -186,7 +192,7 @@ class Configuration(Service):
         Service._cleanup(self)
 
     def _pre_poll(self):
-        if self.level in ['branch', 'leaf']:
+        if self.level in ['branch', 'root']:
             if self.next_hug <= now_secs():
                 self.__send_hug()
 
@@ -201,17 +207,17 @@ class Configuration(Service):
             self.__send_snapshot()
 
     def __send_hug(self):
-        assert self.level in ['branch', 'leaf']
+        assert self.level in ['branch', 'root']
 
         # wait until finished with sync state
         if self.update_pub is not None:
             self.hug.send(self.update_pub)
             self.last_pub = now_secs()
-            self.hugz_cnt += 1
+            self.hugcnt += 1
 
     def __get_next_wakeup(self):
         """ @returns next wakeup time (as msecs delta) """
-        assert self.level in ['branch', 'leaf']
+        assert self.level in ['branch', 'root']
 
         # reset hugz using last pub time
         self.next_hug = self.last_pub + self.hug_int
@@ -227,6 +233,11 @@ class Configuration(Service):
 
         if update.is_error:
             self.logger.error('received error message from parent: %s' % update)
+            return
+
+        if update.is_hugz:
+            # noted. moving on...
+            self.logger.debug('received hug.')
             return
 
         if Configuration.STATE_SYNC == self.state:
@@ -271,7 +282,7 @@ class Configuration(Service):
             self.logger.error(response)
             return
 
-        if config.CONFIG.KTHXBAI == response.ctype:
+        if isinstance(response, config.KTHXBAI):
             if response.value not in self.topics:
                 self.logger.error('received KTHXBAI of unexpected subtree: %s' % response.value)
                 return
