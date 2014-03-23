@@ -1,11 +1,11 @@
-from dcamp.role.role import Role_Mixin
+from dcamp.role.role import RoleMixin
 from dcamp.service.configuration import Configuration
 from dcamp.service.management import Management
 from dcamp.service.filter import Filter
 from dcamp.service.aggregation import Aggregation
 
 
-class Root(Role_Mixin):
+class Root(RoleMixin):
     """
     Root Role
     """
@@ -13,7 +13,7 @@ class Root(Role_Mixin):
     def __init__(self,
                  control_pipe,
                  config):
-        Role_Mixin.__init__(self, control_pipe)
+        RoleMixin.__init__(self, control_pipe)
 
         local_ep = config.root['endpoint']
 

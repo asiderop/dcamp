@@ -5,18 +5,18 @@ from zmq import PUB, PULL, Again  # pylint: disable-msg=E0611
 
 import dcamp.types.messages.data as data
 from dcamp.types.specs import EndpntSpec
-from dcamp.service.service import Service
+from dcamp.service.service import ServiceMixin
 from dcamp.util.functions import now_secs, now_msecs
 
 
-class Filter(Service):
+class Filter(ServiceMixin):
     def __init__(self,
                  control_pipe,
                  level,
                  config_service,
                  local_ep,
                  parent_ep):
-        Service.__init__(self, control_pipe)
+        ServiceMixin.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
         assert isinstance(local_ep, EndpntSpec)
@@ -67,7 +67,7 @@ class Filter(Service):
 
         del self.pull_socket, self.pubs_socket
 
-        Service._cleanup(self)
+        ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
         self.__check_config_for_metric_updates()
@@ -100,8 +100,6 @@ class Filter(Service):
                 if msg.is_error:
                     self.logger.error('received error message: %s' % msg)
                     continue
-
-                assert isinstance(msg, data.Data)
 
                 self.data_file.write(msg.log_str() + '\n')
 

@@ -4,11 +4,11 @@ from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-m
 
 import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
-from dcamp.service.service import Service
+from dcamp.service.service import ServiceMixin
 from dcamp.util.functions import now_secs, now_msecs
 
 
-class Configuration(Service):
+class Configuration(ServiceMixin):
 
     # states
     STATE_SYNC = 0
@@ -22,7 +22,7 @@ class Configuration(Service):
             parent_ep,  # from where we receive config updates/snapshots
             local_ep,  # this is us
     ):
-        Service.__init__(self, control_pipe)
+        ServiceMixin.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
         assert isinstance(local_ep, EndpntSpec)
@@ -189,7 +189,7 @@ class Configuration(Service):
             self.kvsync_rep.close()
         del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
 
-        Service._cleanup(self)
+        ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
         if self.level in ['branch', 'root']:

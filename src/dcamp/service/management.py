@@ -5,13 +5,13 @@ from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 from dcamp.types.messages.common import WTF
 import dcamp.types.messages.topology as topo
 
-from dcamp.service.service import Service
+from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTree_Mixin, TopoNode
 from dcamp.util.functions import now_secs
 
 
-class Management(Service):
+class Management(ServiceMixin):
     """
     Management Service -- provides functionality for interacting with and controlling
     dCAMP.
@@ -24,7 +24,7 @@ class Management(Service):
                  config_service,
                  config,
                  ):
-        Service.__init__(self, role_pipe)
+        ServiceMixin.__init__(self, role_pipe)
 
         # TODO: use config_service as full state representation; add accessor methods to
         #       make it convenient and remove the self.config and self.tree members.
@@ -76,7 +76,7 @@ class Management(Service):
         self.poller.register(self.join_socket, POLLIN)
 
     def _cleanup(self):
-        if not self.in_errored_state:
+        if not ServiceMixin.in_errored_state(self):
             self.__stop_all_nodes()
 
         # service exiting; return some status info and cleanup
@@ -90,7 +90,7 @@ class Management(Service):
         self.join_socket.close()
         self.disc_socket.close()
         del self.join_socket, self.disc_socket
-        Service._cleanup(self)
+        ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
         if self.pubnext < time():

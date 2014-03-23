@@ -8,7 +8,7 @@ from dcamp.util.decorators import runnable
 
 
 @runnable
-class Role_Mixin(object):
+class RoleMixin(object):
     def __init__(self,
                  pipe):
         self.ctx = Context.instance()
@@ -28,9 +28,9 @@ class Role_Mixin(object):
     def __recv_control(self):
         return self.__control_pipe.recv_string()
 
-    def _add_service(self, ServiceClass, *args, **kwargs):
+    def _add_service(self, cls, *args, **kwargs):
         pipe, peer = zpipe(self.ctx)  # create control socket pair
-        service = ServiceClass(peer, *args, **kwargs)  # create service, passing peer socket
+        service = cls(peer, *args, **kwargs)  # create service, passing peer socket
         self.__services[pipe] = service  # add to our dict, using pipe socket as key
         return service
 
@@ -93,7 +93,7 @@ class Role_Mixin(object):
         self.logger.debug('role cleanup finished; exiting')
 
     def __stop(self):
-        '''try to stop all of this Role's services'''
+        """ try to stop all of this Role's services """
 
         # send commands
         poller = Poller()

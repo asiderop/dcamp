@@ -7,7 +7,7 @@ from dcamp.util.decorators import runnable
 
 
 @runnable
-class Service(Thread):
+class ServiceMixin(Thread):
     def __init__(self, pipe):
         Thread.__init__(self)
         self.ctx = Context.instance()

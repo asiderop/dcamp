@@ -1,8 +1,8 @@
-from dcamp.role.role import Role_Mixin
+from dcamp.role.role import RoleMixin
 from dcamp.service.node import Node
 
 
-class Base(Role_Mixin):
+class Base(RoleMixin):
     """
     Base Role
     """
@@ -10,7 +10,7 @@ class Base(Role_Mixin):
     def __init__(self,
                  pipe,
                  address):
-        Role_Mixin.__init__(self, pipe)
+        RoleMixin.__init__(self, pipe)
 
         # add Node Service
         self._add_service(Node, address)

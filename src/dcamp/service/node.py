@@ -3,18 +3,18 @@ import threading
 from zmq import DEALER, SUB, SUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-import dcamp.types.messages.topology as TopoMsg
+import dcamp.types.messages.topology as topo
 
 from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
-from dcamp.service.service import Service
+from dcamp.service.service import ServiceMixin
 from dcamp.types.config_file import DCConfig_Mixin
 from dcamp.types.specs import EndpntSpec
 
 
-class Node(Service):
+class Node(ServiceMixin):
     """
     Node Service -- provides functionality for boot strapping into dCAMP system.
 
@@ -36,11 +36,11 @@ class Node(Service):
     def __init__(self,
                  pipe,
                  endpoint):
-        Service.__init__(self, pipe)
+        ServiceMixin.__init__(self, pipe)
 
         self.endpoint = endpoint
-        self.uuid = TopoMsg.gen_uuid()
-        self.polo_msg = TopoMsg.POLO(self.endpoint, self.uuid)
+        self.uuid = topo.gen_uuid()
+        self.polo_msg = topo.POLO(self.endpoint, self.uuid)
 
         ####
         # setup service for polling.
@@ -62,6 +62,9 @@ class Node(Service):
         self.repcnt = 0
 
         self.role = None
+        self.role_pipe = None
+        self.role_thread = None
+        self.state = None
 
         self.set_state(Node.BASE)
 
@@ -110,11 +113,11 @@ class Node(Service):
         if self.control_socket:
             self.control_socket.close()
         del self.topo_socket, self.control_socket
-        Service._cleanup(self)
+        ServiceMixin._cleanup(self)
 
     def _post_poll(self, items):
         if self.topo_socket in items:
-            marco_msg = TopoMsg.MARCO.recv(self.topo_socket)
+            marco_msg = topo.MARCO.recv(self.topo_socket)
             self.subcnt += 1
 
             if marco_msg.is_error:
@@ -140,7 +143,7 @@ class Node(Service):
             assert self.in_open_state
             self.close_state()
 
-            response = TopoMsg.CONTROL.recv(self.control_socket)
+            response = topo.CONTROL.recv(self.control_socket)
             self.poller.unregister(self.control_socket)
             self.control_socket.close()
             del self.control_socket

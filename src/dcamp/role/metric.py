@@ -1,11 +1,11 @@
-from dcamp.role.role import Role_Mixin
+from dcamp.role.role import RoleMixin
 
 from dcamp.service.configuration import Configuration
 from dcamp.service.filter import Filter
 from dcamp.service.sensor import Sensor
 
 
-class Metric(Role_Mixin):
+class Metric(RoleMixin):
     """
     Metric Role
     """
@@ -16,7 +16,7 @@ class Metric(Role_Mixin):
                  parent_ep,
                  local_ep,
     ):
-        Role_Mixin.__init__(self, control_pipe)
+        RoleMixin.__init__(self, control_pipe)
 
         ### add services
 
