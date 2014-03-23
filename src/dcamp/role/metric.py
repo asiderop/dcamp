@@ -25,6 +25,7 @@ class Metric(RoleMixin):
                                            group,
                                            parent_ep,  # collector endpoint
                                            local_ep,  # our endpoint
+                                           self.sos,
         )
 
         self._add_service(Filter, 'leaf', config_service, local_ep, parent_ep)

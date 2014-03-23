@@ -76,7 +76,7 @@ class Management(ServiceMixin):
         self.poller.register(self.join_socket, POLLIN)
 
     def _cleanup(self):
-        if not ServiceMixin.in_errored_state(self):
+        if not self.in_errored_state:
             self.__stop_all_nodes()
 
         # service exiting; return some status info and cleanup

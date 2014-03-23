@@ -25,6 +25,7 @@ class Collector(RoleMixin):
                                            group,
                                            parent_ep,  # root/collector endpoint
                                            local_ep,  # our endpoint
+                                           self.sos,
         )
 
         self._add_service(Filter, 'branch', config_service, local_ep, parent_ep)

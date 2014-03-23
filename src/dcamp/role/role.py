@@ -34,6 +34,9 @@ class RoleMixin(object):
         self.__services[pipe] = service  # add to our dict, using pipe socket as key
         return service
 
+    def sos(self):
+        self.logger.error('!!! SOS SOS SOS !!!')
+
     def play(self):
         # start each service thread
         for service in self.__services.values():

@@ -1,4 +1,5 @@
 from threading import Lock
+from types import MethodType
 
 from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-msg=E0611
 
@@ -21,6 +22,7 @@ class Configuration(ServiceMixin):
             group,
             parent_ep,  # from where we receive config updates/snapshots
             local_ep,  # this is us
+            sos_func,  # call when our parent stops sending HUGZ
     ):
         ServiceMixin.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
@@ -31,6 +33,12 @@ class Configuration(ServiceMixin):
         self.group = group
         self.parent = parent_ep
         self.endpoint = local_ep
+
+        if self.level in ['branch', 'leaf']:
+            assert isinstance(sos_func, MethodType)
+        else:
+            assert sos_func is None
+        self.sos = sos_func
 
         self.state = None
 
@@ -56,11 +64,17 @@ class Configuration(ServiceMixin):
         self.kvdict = {}
         self.kv_seq = -1
 
+        current_secs = now_secs()
+
         # root/branch members for sending hearbeats to children
         self.hug_int = 5  # units: seconds
-        self.next_hug = now_secs() + self.hug_int  # units: seconds
-        self.last_pub = now_secs()  # units: seconds
+        self.next_hug = current_secs + self.hug_int  # units: seconds
+        self.last_pub = current_secs  # units: seconds
         self.hug = None
+
+        # branch/leaf members for detecting parent heartbeats
+        self.last_hb = current_secs  # units: seconds
+        self.next_sos = current_secs + (self.hug_int * 5)  # units: seconds
 
         # sockets and message counts
         (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
@@ -139,7 +153,7 @@ class Configuration(ServiceMixin):
         return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
 
     def __setup_outbound(self):
-        assert self.level in ['branch', 'root']
+        assert self.level in ['root', 'branch']
 
         # 3) publish updates to children (bind)
         self.update_pub = self.ctx.socket(PUB)
@@ -192,11 +206,14 @@ class Configuration(ServiceMixin):
         ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
-        if self.level in ['branch', 'root']:
-            if self.next_hug <= now_secs():
-                self.__send_hug()
+        if self.level in ['root', 'branch'] and self.next_hug <= now_secs():
+            self.__send_hug()
 
-            self.poller_timer = self.__get_next_wakeup()
+        if self.level in ['branch', 'leaf'] and self.next_sos <= now_secs():
+            self.sos()
+            self.last_hb = now_secs()  # reset last hb so we don't flood the system with sos
+
+        self.poller_timer = self.__get_next_wakeup()
 
     def _post_poll(self, items):
         if self.update_sub in items:
@@ -207,7 +224,7 @@ class Configuration(ServiceMixin):
             self.__send_snapshot()
 
     def __send_hug(self):
-        assert self.level in ['branch', 'root']
+        assert self.level in ['root', 'branch']
 
         # wait until finished with sync state
         if self.update_pub is not None:
@@ -217,14 +234,37 @@ class Configuration(ServiceMixin):
 
     def __get_next_wakeup(self):
         """ @returns next wakeup time (as msecs delta) """
-        assert self.level in ['branch', 'root']
 
-        # reset hugz using last pub time
-        self.next_hug = self.last_pub + self.hug_int
+        next_wakeup = None
+        next_hug_wakeup = None
+        next_sos_wakeup = None
 
-        # next_hug is in secs; subtract current msecs to get next wakeup
-        val = max(0, (self.next_hug * 1e3) - now_msecs())
+        if self.level in ['root', 'branch']:
+            # reset hugz using last pub time
+            self.next_hug = self.last_pub + self.hug_int
+            # next_hug is in secs; subtract current msecs to get next wakeup
+            next_hug_wakeup = (self.next_hug * 1e3) - now_msecs()
+            next_wakeup = next_hug_wakeup
+
+        if self.level in ['branch', 'leaf']:
+            # reset sos using last hb time
+            self.next_sos = self.last_hb + (self.hug_int * 5)
+            # next_sos is in secs; subtract current msecs to get next wakeup
+            next_sos_wakeup = (self.next_sos * 1e3) - now_msecs()
+            next_wakeup = next_sos_wakeup
+
+        if 'branch' == self.level:
+            assert next_hug_wakeup is not None
+            assert next_sos_wakeup is not None
+            # pick the sooner of the two wakeups
+            next_wakeup = min(next_hug_wakeup, next_sos_wakeup)
+
+        assert next_wakeup is not None
+        # make sure it's not negative
+        val = max(0, next_wakeup)
+
         self.logger.debug('next wakeup in %dms' % val)
+
         return val
 
     def __recv_update(self):
@@ -237,6 +277,7 @@ class Configuration(ServiceMixin):
 
         if update.is_hugz:
             # noted. moving on...
+            self.last_hb = now_secs()
             self.logger.debug('received hug.')
             return
 
