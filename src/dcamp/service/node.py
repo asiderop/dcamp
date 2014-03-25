@@ -16,8 +16,6 @@ from dcamp.types.specs import EndpntSpec
 
 class Node(ServiceMixin):
     """
-    Node Service -- provides functionality for boot strapping into dCAMP system.
-
     @todo: need to timeout if the req fails / issue #28
     """
 
@@ -56,10 +54,9 @@ class Node(ServiceMixin):
 
         self.control_socket = None
         self.control_uuid = None
+        self.control_ep = None
 
-        self.subcnt = 0
-        self.reqcnt = 0
-        self.repcnt = 0
+        (self.subcnt,  self.reqcnt,  self.repcnt) = (0, 0, 0)
 
         self.role = None
         self.role_pipe = None
@@ -110,9 +107,12 @@ class Node(ServiceMixin):
                           (self.subcnt, self.reqcnt, self.repcnt))
 
         self.topo_socket.close()
+        self.topo_socket = None
+
         if self.control_socket:
             self.control_socket.close()
-        del self.topo_socket, self.control_socket
+        self.control_socket = None
+
         ServiceMixin._cleanup(self)
 
     def _post_poll(self, items):
@@ -130,14 +130,22 @@ class Node(ServiceMixin):
 
             # @todo: add some security here so not just anyone can shutdown the root node
             self.control_uuid = marco_msg.uuid
+            self.control_ep = marco_msg.endpoint
 
             self.control_socket = self.ctx.socket(DEALER)
-            self.control_socket.connect(marco_msg.endpoint.connect_uri(EndpntSpec.TOPO_JOIN))
+            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.TOPO_JOIN))
             self.poller.register(self.control_socket, POLLIN)
-            self.polo_msg.copy_peer_id_from(marco_msg)
+
             self.polo_msg.send(self.control_socket)
             self.reqcnt += 1
+
             self.open_state()
+
+        elif self.role_pipe in items:
+            message = self.role_pipe.recv_string()
+            assert 'SOS' == message
+
+            self.__do_sos()
 
         elif self.control_socket in items:
             assert self.in_open_state
@@ -146,7 +154,6 @@ class Node(ServiceMixin):
             response = topo.CONTROL.recv(self.control_socket)
             self.poller.unregister(self.control_socket)
             self.control_socket.close()
-            del self.control_socket
             self.control_socket = None
             self.repcnt += 1
 
@@ -168,17 +175,17 @@ class Node(ServiceMixin):
                 self.logger.debug('received STOP OKAY from %s role' % self.role)
 
                 self.role_pipe.close()
-                del self.role_pipe
+                self.poller.unregister(self.role_pipe)
                 self.role_pipe = None
 
-                # @todo: wait for thread to exit?
-
+                # wait for thread to exit
                 self.role_thread.join(timeout=60)
                 if self.role_thread.isAlive():
                     self.logger.error('!!! %s role is still alive !!!' % self.role)
                 else:
                     self.logger.debug('%s role stopped' % self.role)
-                del self.role_thread
+
+                self.role_thread = None
                 self.role = None
 
                 self.logger.debug('node stopped; back to BASE')
@@ -189,8 +196,8 @@ class Node(ServiceMixin):
                 return
 
     def __handle_assignment(self, response):
-        # @todo need to handle re-assignment
         if self.in_play_state:
+            # @todo need to handle re-assignment
             self.logger.warning('received re-assignment; ignoring')
             return
 
@@ -199,7 +206,6 @@ class Node(ServiceMixin):
             return
 
         level = response['level']
-        # if level == root, start Root role.
         if 'root' == level:
             assert 'config-file' in response.properties
             config = DCConfig_Mixin()
@@ -207,7 +213,6 @@ class Node(ServiceMixin):
             self.role_pipe, peer = zpipe(self.ctx)
             self.role = Root(peer, config)
 
-        # if level == branch, start Collector role.
         elif 'branch' == level:
             self.role_pipe, peer = zpipe(self.ctx)
             self.role = Collector(peer,
@@ -215,7 +220,6 @@ class Node(ServiceMixin):
                                   response['parent'],
                                   self.endpoint)
 
-        # if level == leaf, start Metrics role.
         elif 'leaf' == level:
             self.role_pipe, peer = zpipe(self.ctx)
             self.role = Metric(peer,
@@ -232,8 +236,52 @@ class Node(ServiceMixin):
     def __play_role(self):
         # start thread
         assert self.role is not None
+        assert self.role_pipe is not None
+
+        self.poller.register(self.role_pipe, POLLIN)
 
         self.logger.debug('starting Role: %s' % self.role)
         self.role_thread = threading.Thread(target=self.role.play)
         self.role_thread.start()
         self.set_state(Node.PLAY)
+
+    def __do_sos(self):
+        """
+        handles parent death
+
+        @todo save time of successful sos; throttle future attempts?
+        """
+        if self.role.__class__ == Metric:
+            # collector died, notify Root
+            self.logger.error('group collector node died; contacting Root...')
+
+            self.control_socket = self.ctx.socket(DEALER)
+            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.TOPO_JOIN))
+
+            polo = topo.POLO(self.endpoint, self.uuid, content='SOS')
+            polo.send(self.control_socket)
+            self.reqcnt += 1
+
+            events = self.control_socket.poll(5000)
+            if 0 != events:
+                response = topo.CONTROL.recv(self.control_socket)
+                self.repcnt += 1
+
+                if response.is_error:
+                    self.logger.error(response)
+                elif 'keepcalm' == response.command:
+                    self.logger.debug('root notified; keeping calm')
+                else:
+                    self.logger.error('unknown command from root: %s' % response.command)
+
+            else:
+                self.logger.warn('root did not respond within time limit; ohmg!')
+
+            self.control_socket.close()
+            self.control_socket = None
+
+        elif self.role.__class__ == Collector:
+            # root died, start election
+            self.logger.error('root node died; starting election...')
+        else:
+            raise NotImplementedError('unknown role class: %s' % self.role.__class__.__name__)

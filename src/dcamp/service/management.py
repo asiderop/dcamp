@@ -112,19 +112,31 @@ class Management(ServiceMixin):
 
             else:
                 remote = self.tree.find_node_by_endpoint(polo_msg.endpoint)
-                if remote is None:
-                    repmsg = self.__assign(polo_msg)
 
-                elif remote.uuid != polo_msg.uuid:
-                    # node recovered before it was recognized as down; just resend the
-                    # same assignment info as before
-                    self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
-                    remote.uuid = polo_msg.uuid
-                    remote.touch()
-                    repmsg = remote.assignment()
+                if polo_msg.content is None:
+                    if remote is None:
+                        repmsg = self.__assign(polo_msg)
+
+                    elif remote.uuid != polo_msg.uuid:
+                        # node recovered before it was recognized as down; just resend the
+                        # same assignment info as before
+                        self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
+                        remote.uuid = polo_msg.uuid
+                        repmsg = remote.assignment()
+
+                    else:
+                        repmsg = WTF(0, 'too chatty; already POLOed')
+
+                elif 'SOS' == polo_msg.content:
+                    if remote is None:
+                        repmsg = WTF(0, 'I know not you!')
+                    else:
+                        repmsg = topo.CONTROL('keepcalm')
 
                 else:
-                    repmsg = WTF(0, 'too chatty; already POLOed')
+                    repmsg = WTF(0, 'I know not what to do!')
+
+                if remote is not None:
                     remote.touch()
 
             repmsg.copy_peer_id_from(polo_msg)

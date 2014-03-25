@@ -49,12 +49,12 @@ class ServiceMixin(Thread):
         raise NotImplementedError('subclass must implement _post_poll()')
 
     def _do_control(self):
-        '''
+        """
         Process control command on the pipe.
-        '''
+        """
         msg = self.__recv_control()
 
-        if ('STOP' == msg):
+        if 'STOP' == msg:
             self.logger.debug('received STOP control command')
             self.stop_state()
         else:

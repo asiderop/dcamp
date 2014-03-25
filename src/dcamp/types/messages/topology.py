@@ -77,7 +77,7 @@ class POLO(Topo):
 
 class CONTROL(DCMsg, _PROPS):
     def __init__(self, command, properties=None):
-        assert command in ['assignment', 'stop']
+        assert command in ['assignment', 'stop', 'keepcalm']
         DCMsg.__init__(self)
         _PROPS.__init__(self, properties)
         self.command = command

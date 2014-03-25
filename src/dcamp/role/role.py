@@ -35,7 +35,7 @@ class RoleMixin(object):
         return service
 
     def sos(self):
-        self.logger.error('!!! SOS SOS SOS !!!')
+        self.__send_control('SOS')
 
     def play(self):
         # start each service thread
