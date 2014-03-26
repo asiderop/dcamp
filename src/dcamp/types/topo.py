@@ -1,17 +1,17 @@
-import uuid
+from uuid import UUID
 from sys import stdout
 from functools import total_ordering
 from datetime import datetime
 
 from dcamp.util.decorators import prefixable
 from dcamp.types.specs import EndpntSpec
-import dcamp.types.messages.topology as TopoMsg
+import dcamp.types.messages.topology as topo
 
 __all__ = [
     'TopoError',
     'DuplicateNodeError',
     'TopoNode',
-    'TopoTree_Mixin',
+    'TopoTreeMixin',
 ]
 
 
@@ -25,12 +25,12 @@ class DuplicateNodeError(TopoError):
 
 @total_ordering
 class TopoNode(object):
-    def __init__(self, endpoint, id, level, group):
+    def __init__(self, endpoint, uuid, level, group):
         assert isinstance(endpoint, EndpntSpec)
-        assert isinstance(id, uuid.UUID)
+        assert isinstance(uuid, UUID)
 
         self.endpoint = endpoint
-        self.uuid = id
+        self.uuid = uuid
         self.level = level
         self.group = group
 
@@ -39,7 +39,7 @@ class TopoNode(object):
         self.last_seen = 0
 
     def __eq__(self, given):
-        if given is None:
+        if not isinstance(given, TopoNode):
             return False
         return self.endpoint == given.endpoint
 
@@ -59,7 +59,7 @@ class TopoNode(object):
                                                 str(self.last_seen))
 
     def __repr__(self):
-        return "TopoSpec(endpoint='%s', id=%s, level='%s', group='%s')" % (
+        return "TopoSpec(endpoint='%s', uuid=%s, level='%s', group='%s')" % (
             self.endpoint, self.uuid, self.level, self.group)
 
     def add_child(self, child):
@@ -71,11 +71,11 @@ class TopoNode(object):
         self.last_seen = datetime.now()
 
     def assignment(self):
-        return TopoMsg.ASSIGN(self.parent.endpoint, self.level, self.group)
+        return topo.ASSIGN(self.parent.endpoint, self.level, self.group)
 
 
 @prefixable
-class TopoTree_Mixin(object):
+class TopoTreeMixin(object):
     pass
 
     def __init__(self, root_ep, root_id):
@@ -112,7 +112,7 @@ class TopoTree_Mixin(object):
 
         key = str(node.endpoint)
         parent = node.parent
-        while parent != None:
+        while parent is not None:
             key = str(parent.endpoint) + self._delimiter + key
             parent = parent.parent
         return self._delimiter + 'topo' + self._delimiter + key

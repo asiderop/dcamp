@@ -7,7 +7,7 @@ import dcamp.types.messages.topology as topo
 
 from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.topo import TopoTree_Mixin, TopoNode
+from dcamp.types.topo import TopoTreeMixin, TopoNode
 from dcamp.util.functions import now_secs
 
 
@@ -44,7 +44,7 @@ class Management(ServiceMixin):
         # topo-node contains (endpoint, role, group, parent, children, last-seen)
         # topo keys come from tree.get_topo_key(node)
 
-        self.tree = TopoTree_Mixin(self.endpoint, self.uuid)
+        self.tree = TopoTreeMixin(self.endpoint, self.uuid)
         self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 
         # { group: collector-topo-node }
@@ -59,6 +59,7 @@ class Management(ServiceMixin):
 
         # we send topo discovery messages on this socket
         self.disc_socket = self.ctx.socket(PUB)
+        self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
         for group in self.config.groups.values():
             for ep in group.endpoints:
