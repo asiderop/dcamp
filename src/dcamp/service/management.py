@@ -49,6 +49,8 @@ class Management(ServiceMixin):
 
         # { group: collector-topo-node }
         self.collectors = {}
+        # { group: ( set(node-uuid), last-ping-time ) }
+        self.sos_pings = {}
 
         ####
         # setup service for polling.
@@ -103,6 +105,7 @@ class Management(ServiceMixin):
 
     def _post_poll(self, items):
         if self.join_socket in items:
+            sos_group = None
             polo_msg = topo.POLO.recv(self.join_socket)
             self.reqcnt += 1
 
@@ -133,6 +136,7 @@ class Management(ServiceMixin):
                         repmsg = WTF(0, 'I know not you!')
                     else:
                         repmsg = topo.CONTROL('keepcalm')
+                        sos_group = self.__check_sos(remote)
 
                 else:
                     repmsg = WTF(0, 'I know not what to do!')
@@ -144,23 +148,25 @@ class Management(ServiceMixin):
             repmsg.send(self.join_socket)
             self.repcnt += 1
 
+            if sos_group is not None:
+                # do group reset
+                self.__stop_group(sos_group)
+
     def __stop_group(self, stop_group):
         stop_socket = self.ctx.socket(PUB)
 
-        # TODO: use the Topo Tree instead of the config; indicates how many
-        #       nodes need to be stopped
+        collector = self.collectors[stop_group]
+        size = len(collector.children)
 
-        found = False
-        size = 0
-        for group in self.config.groups.values():
-            if group != stop_group:
-                continue
-            found = True
-            for ep in group.endpoints:
-                stop_socket.connect(ep.connect_uri(EndpntSpec.BASE))
-                size += 1
-            break
-        assert found, "unknown group given to __stop_group()"
+        # connect collector and all its children to the socket
+        #stop_socket.connect(collector.endpoint.connect_uri(EndpntSpec.BASE))
+        for node in collector.children:
+            stop_socket.connect(node.endpoint.connect_uri(EndpntSpec.BASE))
+
+        # remove group's branch from the tree and local state
+        self.tree.remove_branch(collector)
+        del(self.collectors[stop_group])
+        del(self.sos_pings[stop_group])
 
         self.logger.debug('attempting to stop %d nodes in group %s' % (size, stop_group))
         num = self.__stop_nodes(stop_socket, size)
@@ -257,3 +263,28 @@ class Management(ServiceMixin):
         self.logger.debug('no base group found for %s' % str(polo_msg.endpoint))
         # @todo: cannot return None--using strict REQ/REP pattern / issue #26
         return None
+
+    def __check_sos(self, remote):
+        group = remote.group
+        nodes = set()
+
+        # add sos to cache
+        if group in self.sos_pings:
+            (nodes, last_ping) = self.sos_pings[group]
+            if (now_secs() - last_ping) > 60:
+                self.logger.warn('longer than 60 seconds since last SOS; resetting SOS state')
+                nodes = set()
+
+        nodes.add(remote)
+        last_ping = now_secs()
+
+        self.sos_pings[group] = (nodes, last_ping)
+
+        # check if over 1/3 threshold
+        if len(nodes) < (len(self.collectors[remote.group].children) / 3):
+            # not enough nodes have detected the down node; ignore for now
+            return None
+        else:
+            # otherwise, we need to reset the group
+            # clear sos cache, first
+            return group

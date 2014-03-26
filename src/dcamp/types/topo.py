@@ -67,6 +67,11 @@ class TopoNode(object):
         assert child not in self.children
         self.children.append(child)
 
+    def del_child(self, child):
+        assert isinstance(child, TopoNode)
+        assert child in self.children
+        self.children.remove(child)
+
     def touch(self):
         self.last_seen = datetime.now()
 
@@ -102,6 +107,20 @@ class TopoTreeMixin(object):
         node.parent = parent
         self.nodes[node.endpoint] = node
         return node
+
+    def remove_branch(self, node):
+        assert node.endpoint in self.nodes
+        assert node.level == 'branch'
+
+        # first remove node from its parent's children list
+        node.parent.del_child(node)
+
+        # then remove each of node's children from the tree
+        for c in node.children:
+            del(self.nodes[c.endpoint])
+
+        # and lastly remove node from the tree
+        del(self.nodes[node.endpoint])
 
     def find_node_by_endpoint(self, endpoint):
         return None if endpoint not in self.nodes else self.nodes[endpoint]
