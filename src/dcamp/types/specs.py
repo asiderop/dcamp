@@ -63,13 +63,13 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
         if op in ['+', '*']:
             try:
                 value = str_to_seconds(val_str)
-            except NotImplementedError as e:
+            except NotImplementedError:
                 errmsg = 'time-based threshold specification contains invalid time'
 
         elif op in ['>', '<']:
             try:
                 value = float(val_str)
-            except ValueError as e:
+            except ValueError:
                 errmsg = 'value-based threshold specification contains invalid value'
 
         else:
@@ -112,11 +112,12 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
     #   + Election: Collector ----commands--> Collector
     #   + User:     CLI ----------commands--> Management
     #   + Normal:   Management ---commands--> Node
+    #   + Join:     Base ---------asks------> Management
 
-    TOPO_JOIN = 2  # Node (REQ) -----------------connects-to--> Management (REP)
+    TOPO_JOIN = 2  # Node (REQ) ------------connects-to--> Management (REP)
 
     CONFIG_UPDATE = 3  # Child (SUB) ----------------connects-to--> Parent (PUB)
-    CONFIG_SNAPSHOT = 4  # Child (DEALER) -------------connects-to--> Parent (ROUTER)
+    CONFIG_SNAPSHOT = 4  # Child (DEALER) -----------connects-to--> Parent (ROUTER)
 
     DATA_EXTERNAL = 5  # Filter (PUB) ---------------connects-to--> Aggregation (SUB)
     DATA_INTERNAL = 6  # Sensor|Aggregation (PUSH) --connects-to--> Filter (PULL)
@@ -141,6 +142,8 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
         __RESERVED8__,
         __RESERVED9__,
     ]
+
+    MAX_OFFSET = len(_valid_offsets)
 
     def __str__(self):
         return "%s:%s" % (self.host, self.port)

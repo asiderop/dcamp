@@ -3,7 +3,7 @@ from configparser import ConfigParser, Error as ConfigParserError
 
 from dcamp.types.specs import EndpntSpec, FilterSpec, GroupSpec, MetricSpec, ThreshSpec
 from dcamp.util.decorators import prefixable
-import dcamp.util.functions as Util
+import dcamp.util.functions as util
 
 
 class DCParsingError(ConfigParserError):
@@ -11,12 +11,14 @@ class DCParsingError(ConfigParserError):
 
 
 @prefixable
-class DCConfig_Mixin(ConfigParser):
+class DCConfigMixin(ConfigParser):
     def __init__(self):
         self.logger = logging.getLogger('dcamp.types.config')
         ConfigParser.__init__(self, allow_no_value=True, delimiters='=')
 
         self.isvalid = False
+        self.__num_errors = 0
+        self.__num_warns = 0
 
         self.root = {}
         self.metrics = {}
@@ -24,9 +26,12 @@ class DCConfig_Mixin(ConfigParser):
 
         self.kvdict = {}
 
+        self.metric_sections = {}
+        self.group_sections = {}
+
     @staticmethod
     def validate(file):
-        config = DCConfig_Mixin()
+        config = DCConfigMixin()
         config.read_file(file)
 
     def read_file(self, f, source=None):
@@ -65,16 +70,17 @@ class DCConfig_Mixin(ConfigParser):
 
         if self.__num_errors > 0:
             raise DCParsingError('%d parsing errors in dcamp config file; '
-                                 'see above error messages for details' % (self.__num_errors))
+                                 'see above error messages for details' % self.__num_errors)
 
         self.__create_kvdict()
 
     def __create_root(self):
         assert self.isvalid
 
-        result = {}
-        result['endpoint'] = EndpntSpec.from_str(self['root']['endpoint'])
-        result['heartbeat'] = Util.str_to_seconds(self['root']['heartbeat'])
+        result = {
+            'endpoint': EndpntSpec.from_str(self['root']['endpoint']),
+            'heartbeat': util.str_to_seconds(self['root']['heartbeat'])
+        }
         self.root = result
 
     def __create_metrics(self):
@@ -85,7 +91,7 @@ class DCConfig_Mixin(ConfigParser):
         # process all metric specifications
         for name in self.metric_sections:
 
-            rate = Util.str_to_seconds(self[name]['rate'])
+            rate = util.str_to_seconds(self[name]['rate'])
 
             threshold = None
             if 'threshold' in self[name]:
@@ -139,13 +145,13 @@ class DCConfig_Mixin(ConfigParser):
 
         result = {}
 
-        prefix = self._push_prefix('config')
+        self._push_prefix('config')
 
         # add root specs
         prefix = self._push_prefix('root')
         result[prefix + 'endpoint'] = self.root['endpoint']
         result[prefix + 'heartbeat'] = self.root['heartbeat']
-        prefix = self._pop_prefix()
+        self._pop_prefix()
 
         for (group, spec) in self.groups.items():
             # add group name to prefix
@@ -156,10 +162,10 @@ class DCConfig_Mixin(ConfigParser):
             result[prefix + 'metrics'] = spec.metrics
 
             # remove name from prefix
-            prefix = self._pop_prefix()
+            self._pop_prefix()
 
         # remove "config" prefix
-        prefix = self._pop_prefix()
+        self._pop_prefix()
 
         # verify we popped as many times as we pushed
         assert len(self._get_prefix()) == 1
@@ -198,7 +204,7 @@ class DCConfig_Mixin(ConfigParser):
             except ValueError as e:
                 self.__eprint('[root] endpoint', e)
             except KeyError as e:
-                self.__eprint("missing %s option in [root] section" % (e))
+                self.__eprint("missing %s option in [root] section" % e)
 
             if 'heartbeat' not in self['root']:
                 self.__eprint("missing 'heartbeat' option in [root] section")
@@ -231,22 +237,21 @@ class DCConfig_Mixin(ConfigParser):
                         endpoints[ep.host].append(ep.port)
                     else:
                         endpoints[ep.host] = [ep.port]
-                except ValueError as e:
+                except ValueError:
                     self.__eprint('invalid endpoint or undefined metric in %s: "%s"' % (group, key))
 
             # verify group has at least one endpoint
             if nodecnt == 0:
-                self.__eprint('[%s] section contains no nodes or subnets' % (group))
+                self.__eprint('[%s] section contains no nodes or subnets' % group)
 
         # ensure no overlapping ports
-        MAX_OFFSET = len(EndpntSpec._valid_offsets)
         for (host, ports) in endpoints.items():
             ports = sorted(ports)
-            prev = ports[0];
+            prev = ports[0]
             for p in ports[1:]:
-                if (prev + MAX_OFFSET) > p:
+                if (prev + EndpntSpec.MAX_OFFSET) > p:
                     self.__eprint('endpoint port overlap on host %s: %d and %d; must be %d or more apart' %
-                                  (host, prev, p, MAX_OFFSET))
+                                  (host, prev, p, EndpntSpec.MAX_OFFSET))
                 prev = p
 
         # warn if some metric specs not used

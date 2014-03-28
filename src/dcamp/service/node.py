@@ -10,7 +10,7 @@ from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
 from dcamp.service.service import ServiceMixin
-from dcamp.types.config_file import DCConfig_Mixin
+from dcamp.types.config_file import DCConfigMixin
 from dcamp.types.specs import EndpntSpec
 
 
@@ -208,7 +208,7 @@ class Node(ServiceMixin):
         level = response['level']
         if 'root' == level:
             assert 'config-file' in response.properties
-            config = DCConfig_Mixin()
+            config = DCConfigMixin()
             config.read_file(open(response['config-file']))
             self.role_pipe, peer = zpipe(self.ctx)
             self.role = Root(peer, config)
@@ -282,6 +282,7 @@ class Node(ServiceMixin):
 
         elif self.role.__class__ == Collector:
             # root died, start election
-            self.logger.error('root node died; starting election...')
+            self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+
         else:
             raise NotImplementedError('unknown role class: %s' % self.role.__class__.__name__)

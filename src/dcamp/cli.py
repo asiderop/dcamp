@@ -3,7 +3,7 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.types.config_file import DCConfig_Mixin, DCParsingError
+from dcamp.types.config_file import DCConfigMixin, DCParsingError
 from dcamp.types.specs import EndpntSpec
 
 
@@ -94,7 +94,7 @@ def do_app(args):
 
 
 def do_config(args):
-    config = DCConfig_Mixin()
+    config = DCConfigMixin()
 
     if args.validate:
         try:
