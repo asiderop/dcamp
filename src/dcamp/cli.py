@@ -3,14 +3,14 @@ import logging
 from argparse import ArgumentParser, ArgumentTypeError, FileType
 
 from dcamp.app import App
-from dcamp.types.config_file import DCConfigMixin, DCParsingError
+from dcamp.types.config_file import ConfigFileMixin, ParsingError
 from dcamp.types.specs import EndpntSpec
 
 
 def address(string):
     try:
         return EndpntSpec.from_str(string)
-    except DCParsingError as e:
+    except ParsingError as e:
         raise ArgumentTypeError(e)
 
 
@@ -94,12 +94,12 @@ def do_app(args):
 
 
 def do_config(args):
-    config = DCConfigMixin()
+    config = ConfigFileMixin()
 
     if args.validate:
         try:
             config.validate(args.configfile)
-        except DCParsingError as e:
+        except ParsingError as e:
             print('\n' + e.message + '\n')
             return -1
         return 0

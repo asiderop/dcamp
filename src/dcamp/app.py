@@ -5,7 +5,7 @@ from zhelpers import zpipe
 
 import dcamp.types.messages.topology as TopoMsg
 
-from dcamp.types.config_file import DCConfigMixin
+from dcamp.types.config_file import ConfigFileMixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.role.base import Base
 
@@ -41,7 +41,7 @@ class App:
         exit(result)
 
     def _exec_root(self):
-        config = DCConfigMixin()
+        config = ConfigFileMixin()
         config.read_file(self.args.configfile)
 
         # 1) MARCO "root" base endpoint (multiple times?)

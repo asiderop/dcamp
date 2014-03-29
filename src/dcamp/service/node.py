@@ -10,7 +10,7 @@ from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 
 from dcamp.service.service import ServiceMixin
-from dcamp.types.config_file import DCConfigMixin
+from dcamp.types.config_file import ConfigFileMixin
 from dcamp.types.specs import EndpntSpec
 
 
@@ -208,7 +208,7 @@ class Node(ServiceMixin):
         level = response['level']
         if 'root' == level:
             assert 'config-file' in response.properties
-            config = DCConfigMixin()
+            config = ConfigFileMixin()
             config.read_file(open(response['config-file']))
             self.role_pipe, peer = zpipe(self.ctx)
             self.role = Root(peer, config)

@@ -6,12 +6,12 @@ from dcamp.util.decorators import prefixable
 import dcamp.util.functions as util
 
 
-class DCParsingError(ConfigParserError):
+class ParsingError(ConfigParserError):
     pass
 
 
 @prefixable
-class DCConfigMixin(ConfigParser):
+class ConfigFileMixin(ConfigParser):
     def __init__(self):
         self.logger = logging.getLogger('dcamp.types.config')
         ConfigParser.__init__(self, allow_no_value=True, delimiters='=')
@@ -31,7 +31,7 @@ class DCConfigMixin(ConfigParser):
 
     @staticmethod
     def validate(file):
-        config = DCConfigMixin()
+        config = ConfigFileMixin()
         config.read_file(file)
 
     def read_file(self, f, source=None):
@@ -69,8 +69,9 @@ class DCConfigMixin(ConfigParser):
             self.__create_groups()
 
         if self.__num_errors > 0:
-            raise DCParsingError('%d parsing errors in dcamp config file; '
-                                 'see above error messages for details' % self.__num_errors)
+            raise ParsingError('%d parsing errors in dcamp config file; '
+                               'see above error messages for details' %
+                               self.__num_errors)
 
         self.__create_kvdict()
 
