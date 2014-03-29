@@ -133,7 +133,7 @@ class Node(ServiceMixin):
             self.control_ep = marco_msg.endpoint
 
             self.control_socket = self.ctx.socket(DEALER)
-            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.TOPO_JOIN))
+            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
             self.poller.register(self.control_socket, POLLIN)
 
             self.polo_msg.send(self.control_socket)
@@ -256,7 +256,7 @@ class Node(ServiceMixin):
             self.logger.error('group collector node died; contacting Root...')
 
             self.control_socket = self.ctx.socket(DEALER)
-            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.TOPO_JOIN))
+            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
 
             polo = topo.POLO(self.endpoint, self.uuid, content='SOS')
             polo.send(self.control_socket)

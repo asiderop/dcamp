@@ -59,7 +59,7 @@ class App:
 
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
-        ep = EndpntSpec("localhost", bind_addr - EndpntSpec.TOPO_JOIN)
+        ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
         self.logger.debug('bound to %s + 1' % str(ep))
 
         marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid())

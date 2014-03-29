@@ -57,7 +57,7 @@ class Management(ServiceMixin):
 
         # we receive join requests on this socket
         self.join_socket = self.ctx.socket(ROUTER)
-        self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.TOPO_JOIN))
+        self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.CONTROL))
 
         # we send topo discovery messages on this socket
         self.disc_socket = self.ctx.socket(PUB)
@@ -189,7 +189,7 @@ class Management(ServiceMixin):
 
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
-        ep = EndpntSpec("localhost", bind_addr - EndpntSpec.TOPO_JOIN)
+        ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
         marco = topo.MARCO(ep, topo.gen_uuid())  # new uuid so nodes response
 
         # pub to all connected nodes

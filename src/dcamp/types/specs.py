@@ -112,16 +112,15 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
     #   + Election: Collector ----commands--> Collector
     #   + User:     CLI ----------commands--> Management
     #   + Normal:   Management ---commands--> Node
-    #   + Join:     Base ---------asks------> Management
+    #   + Join:     Base ---------commands--> Management
 
-    TOPO_JOIN = 2  # Node (REQ) ------------connects-to--> Management (REP)
+    CONFIG_UPDATE = 2  # Child (SUB) ----------------connects-to--> Parent (PUB)
+    CONFIG_SNAPSHOT = 3  # Child (DEALER) -----------connects-to--> Parent (ROUTER)
 
-    CONFIG_UPDATE = 3  # Child (SUB) ----------------connects-to--> Parent (PUB)
-    CONFIG_SNAPSHOT = 4  # Child (DEALER) -----------connects-to--> Parent (ROUTER)
+    DATA_EXTERNAL = 4  # Filter (PUB) ---------------connects-to--> Aggregation (SUB)
+    DATA_INTERNAL = 5  # Sensor|Aggregation (PUSH) --connects-to--> Filter (PULL)
 
-    DATA_EXTERNAL = 5  # Filter (PUB) ---------------connects-to--> Aggregation (SUB)
-    DATA_INTERNAL = 6  # Sensor|Aggregation (PUSH) --connects-to--> Filter (PULL)
-
+    __RESERVED6__ = 6
     __RESERVED7__ = 7
     __RESERVED8__ = 8
     __RESERVED9__ = 9
@@ -130,14 +129,13 @@ class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
         BASE,
         CONTROL,
 
-        TOPO_JOIN,
-
         CONFIG_UPDATE,
         CONFIG_SNAPSHOT,
 
         DATA_EXTERNAL,
         DATA_INTERNAL,
 
+        __RESERVED6__,
         __RESERVED7__,
         __RESERVED8__,
         __RESERVED9__,
