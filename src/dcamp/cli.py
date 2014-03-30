@@ -35,21 +35,18 @@ def main():
     parser.set_defaults(verbose=False, debug=False, debug_mods=[])
 
     # configuration file
-    parser_file = ArgumentParser(add_help=False)
-    parser_file.add_argument("-f", "--file",
-                             dest="configfile",
+    subparsers = parser.add_subparsers(title='dcamp commands', dest='command')
+
+    # root command
+    parser_root = subparsers.add_parser('root', help='run root command')
+    parser_root.add_argument("-f", "--file", dest="configfile",
                              help="use FILE as configuration",
                              type=FileType(),
                              metavar="FILE",
                              required=True)
-
-    subparsers = parser.add_subparsers(title='dcamp commands', dest='command')
-
-    # root command
-    parser_root = subparsers.add_parser('root', parents=[parser_file],
-                                        help='run root command')
     parser_root.add_argument('--start', dest='action', action='store_const', const='start')
     parser_root.add_argument('--stop', dest='action', action='store_const', const='stop')
+    parser_root.add_argument('-a', '--address', dest='address', type=address, required=True)
     parser_root.set_defaults(func=do_app, cmd='root', action='start')
 
     # base command
@@ -59,11 +56,16 @@ def main():
     parser_base.set_defaults(func=do_app, cmd='base')
 
     # config command
-    parser_config = subparsers.add_parser('config', parents=[parser_file],
-                                          help='run actions on the given %(prog)s config file')
+    parser_config = subparsers.add_parser('config',  help='run actions on the given %(prog)s config file')
+    parser_config.add_argument("-f", "--file", dest="configfile",
+                               help="use FILE as configuration",
+                               type=FileType(),
+                               metavar="FILE",
+                               required=True)
     config_actions = parser_config.add_mutually_exclusive_group(required=True)
     config_actions.add_argument('--validate', dest='validate', action='store_true')
     config_actions.add_argument('--print', dest='print', action='store_true')
+
     parser_config.set_defaults(func=do_config)
 
     args = parser.parse_args()

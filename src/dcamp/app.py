@@ -41,8 +41,6 @@ class App:
         exit(result)
 
     def _exec_root(self):
-        config = ConfigFileMixin()
-        config.read_file(self.args.configfile)
 
         # 1) MARCO "root" base endpoint (multiple times?)
         # 2) if POLO'ed, send assignment CONTROL
@@ -50,7 +48,7 @@ class App:
         # @todo: this can raise exceptions
 
         pub = self.ctx.socket(PUB)
-        root_ep = config.root['endpoint']
+        root_ep = self.args.address
         connect_str = root_ep.connect_uri(EndpntSpec.BASE)
         pub.connect(connect_str)
 

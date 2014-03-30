@@ -20,7 +20,7 @@ class ConfigFileMixin(ConfigParser):
         self.__num_errors = 0
         self.__num_warns = 0
 
-        self.root = {}
+        self.global_cfg = {}
         self.metrics = {}
         self.groups = {}
 
@@ -39,8 +39,8 @@ class ConfigFileMixin(ConfigParser):
 
         sections = list(self)
         sections.remove('DEFAULT')
-        if 'root' in self:  # not validated yet
-            sections.remove('root')
+        if 'global_cfg' in self:  # not validated yet
+            sections.remove('global_cfg')
 
         # find all metric specifications
         self.metric_sections = {}
@@ -64,7 +64,7 @@ class ConfigFileMixin(ConfigParser):
         self.__validate()
 
         if self.isvalid:
-            self.__create_root()
+            self.__create_global()
             self.__create_metrics()
             self.__create_groups()
 
@@ -75,14 +75,13 @@ class ConfigFileMixin(ConfigParser):
 
         self.__create_kvdict()
 
-    def __create_root(self):
+    def __create_global(self):
         assert self.isvalid
 
         result = {
-            'endpoint': EndpntSpec.from_str(self['root']['endpoint']),
-            'heartbeat': util.str_to_seconds(self['root']['heartbeat'])
+            'heartbeat': util.str_to_seconds(self['global_cfg']['heartbeat'])
         }
-        self.root = result
+        self.global_cfg = result
 
     def __create_metrics(self):
         assert self.isvalid
@@ -141,17 +140,16 @@ class ConfigFileMixin(ConfigParser):
 
     def __create_kvdict(self):
         assert self.isvalid
-        assert len(self.root) > 0
+        assert len(self.global_cfg) > 0
         assert len(self.metrics) > 0
 
         result = {}
 
         self._push_prefix('config')
 
-        # add root specs
-        prefix = self._push_prefix('root')
-        result[prefix + 'endpoint'] = self.root['endpoint']
-        result[prefix + 'heartbeat'] = self.root['heartbeat']
+        # add global_cfg specs
+        prefix = self._push_prefix('global_cfg')
+        result[prefix + 'heartbeat'] = self.global_cfg['heartbeat']
         self._pop_prefix()
 
         for (group, spec) in self.groups.items():
@@ -195,23 +193,15 @@ class ConfigFileMixin(ConfigParser):
         # { host : [ port ] }
         endpoints = {}
 
-        # check root specification
-        if 'root' not in self:
-            self.__eprint("missing [root] section")
+        # check global_cfg specification
+        if 'global_cfg' not in self:
+            self.__eprint("missing [global_cfg] section")
         else:
-            try:
-                ep = EndpntSpec.from_str(self['root']['endpoint'])
-                endpoints[ep.host] = [ep.port]
-            except ValueError as e:
-                self.__eprint('[root] endpoint', e)
-            except KeyError as e:
-                self.__eprint("missing %s option in [root] section" % e)
+            if 'heartbeat' not in self['global_cfg']:
+                self.__eprint("missing 'heartbeat' option in [global_cfg] section")
 
-            if 'heartbeat' not in self['root']:
-                self.__eprint("missing 'heartbeat' option in [root] section")
-
-            if len(self['root']) > 2:
-                self.__eprint("extraneous values in [root] section")
+            if len(self['global_cfg']) > 1:
+                self.__eprint("extraneous values in [global_cfg] section")
 
         # check for at least one group and one metric
         if len(self.metric_sections) < 1:

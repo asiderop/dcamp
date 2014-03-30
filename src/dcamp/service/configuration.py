@@ -7,6 +7,7 @@ import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import ServiceMixin
 from dcamp.util.functions import now_secs, now_msecs
+from dcamp.types.config_file import ConfigFileMixin
 
 
 class Configuration(ServiceMixin):
@@ -23,6 +24,7 @@ class Configuration(ServiceMixin):
             parent_ep,  # from where we receive config updates/snapshots
             local_ep,  # this is us
             sos_func,  # call when our parent stops sending HUGZ
+            config_file=None,  # should only be given for root level
     ):
         ServiceMixin.__init__(self, control_pipe)
         assert level in ['root', 'branch', 'leaf']
@@ -64,6 +66,14 @@ class Configuration(ServiceMixin):
         self.kvdict = {}
         self.kv_seq = -1
 
+        # initialize kvdict with config_file if root level
+        if 'root' == self.level:
+            assert config_file is not None
+            cfg = ConfigFileMixin()
+            cfg.read_file(open(config_file))
+            for (k, v) in cfg.kvdict.items():
+                self[k] = v
+
         current_secs = now_secs()
 
         # root/branch members for sending hearbeats to children
@@ -96,6 +106,27 @@ class Configuration(ServiceMixin):
 
         self.__initalize_sockets()
 
+    ### Dictionary Access
+    # map access to internal kvdict
+
+    def __getitem__(self, k):
+        (val, seq) = self.kvdict[k]
+        return val
+
+    def get(self, k, default=None):
+        (val, seq) = self.kvdict.get(k, (default, 0))
+        return val
+
+    def __setitem__(self, k, v):
+        assert 'root' == self.level, "only root level allowed to make modifications"
+        item = config.KVPUB(k, v, self.kv_seq + 1)
+        self.__process_update_message(item)  # add to our kvdict and publish update
+
+    def __delitem__(self, k):
+        assert 'root' == self.level, "only root level allowed to make modifications"
+        item = config.KVPUB(k, None, self.kv_seq + 1)
+        self.__process_update_message(item)  # remove from our kvdict and publish update
+
     def __initalize_sockets(self):
         if self.level in ['branch', 'leaf']:
             assert self.parent is not None
@@ -123,27 +154,6 @@ class Configuration(ServiceMixin):
         else:
             assert 'root' == self.level
             self.__setup_outbound()
-
-    ### Dictionary Access
-    # map access to internal kvdict
-
-    def __getitem__(self, k):
-        (val, seq) = self.kvdict[k]
-        return val
-
-    def get(self, k, default=None):
-        (val, seq) = self.kvdict.get(k, (default, 0))
-        return val
-
-    def __setitem__(self, k, v):
-        assert 'root' == self.level, "only root level allowed to make modifications"
-        item = config.KVPUB(k, v, self.kv_seq + 1)
-        self.__process_update_message(item)  # add to our kvdict and publish update
-
-    def __delitem__(self, k):
-        assert 'root' == self.level, "only root level allowed to make modifications"
-        item = config.KVPUB(k, None, self.kv_seq + 1)
-        self.__process_update_message(item)  # remove from our kvdict and publish update
 
     def get_metric_specs(self, group=None):
         if group is None:

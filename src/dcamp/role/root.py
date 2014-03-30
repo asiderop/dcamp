@@ -12,10 +12,9 @@ class Root(RoleMixin):
 
     def __init__(self,
                  control_pipe,
-                 config):
+                 config_file,
+                 local_ep):
         RoleMixin.__init__(self, control_pipe)
-
-        local_ep = config.root['endpoint']
 
         ### add services
 
@@ -27,6 +26,6 @@ class Root(RoleMixin):
                                            None
         )
 
-        self._add_service(Management, config_service, config)
+        self._add_service(Management, config_service, local_ep)
         self._add_service(Filter, 'root', config_service, local_ep, None)
         self._add_service(Aggregation, 'root', config_service, local_ep, None)

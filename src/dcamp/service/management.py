@@ -22,7 +22,7 @@ class Management(ServiceMixin):
     def __init__(self,
                  role_pipe,
                  config_service,
-                 config,
+                 local_ep,
                  ):
         ServiceMixin.__init__(self, role_pipe)
 
@@ -31,12 +31,8 @@ class Management(ServiceMixin):
         #       IDEA: create subclass of Configuration service class which provides these
         #       additional methods? how would that work when a branch is promoted to root?
         self.config_service = config_service
-        self.config = config
-        self.endpoint = self.config.root['endpoint']
+        self.endpoint = local_ep
         self.uuid = topo.gen_uuid()
-
-        for (k, v) in self.config.kvdict.items():
-            self.config_service[k] = v
 
         # 1) start tree with self as root
         # 2) add each node to tree as topo-node
@@ -63,6 +59,7 @@ class Management(ServiceMixin):
         self.disc_socket = self.ctx.socket(PUB)
         self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
+        # TODO: convert self.config access to configuration service
         for group in self.config.groups.values():
             for ep in group.endpoints:
                 self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
