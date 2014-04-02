@@ -28,5 +28,5 @@ class Collector(RoleMixin):
                                            self.sos,
         )
 
-        self._add_service(Filter, 'branch', config_service, local_ep, parent_ep)
+        self._add_service(Filter,      'branch', config_service, local_ep, parent_ep)
         self._add_service(Aggregation, 'branch', config_service, local_ep, parent_ep)

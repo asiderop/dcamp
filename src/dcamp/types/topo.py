@@ -126,6 +126,9 @@ class TopoTreeMixin(object):
         return None if endpoint not in self.nodes else self.nodes[endpoint]
 
     def get_topo_key(self, node):
+        # TODO: these topo keys are bogus: how do we handle parent endpoints failing?
+        #       branches are rebuilt. okay. root? maybe use "root" instead of root
+        #       endpoint?
         assert node in self.nodes.values()
         assert node.endpoint in self.nodes
 

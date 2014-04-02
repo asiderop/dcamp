@@ -26,6 +26,9 @@ class Filter(ServiceMixin):
         self.parent = parent_ep
         self.endpoint = local_ep
 
+        # wait for config service to be fully synched before doing anything
+        self.config_service.wait_for_gogo()
+
         # { config-name: (metric-spec, cached-list }
         self.metric_specs = {}
         self.metric_seqid = -1

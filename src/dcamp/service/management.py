@@ -34,6 +34,9 @@ class Management(ServiceMixin):
         self.endpoint = local_ep
         self.uuid = topo.gen_uuid()
 
+        # wait for config service to be fully synched before doing anything
+        self.config_service.wait_for_gogo()  # this should return immediately since we are root
+
         # 1) start tree with self as root
         # 2) add each node to tree as topo-node
         # tree.nodes contains { node-endpoint: topo-node }
@@ -41,6 +44,7 @@ class Management(ServiceMixin):
         # topo keys come from tree.get_topo_key(node)
 
         self.tree = TopoTreeMixin(self.endpoint, self.uuid)
+        self.config_service.root(self.endpoint)
         self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 
         # { group: collector-topo-node }
@@ -67,7 +71,7 @@ class Management(ServiceMixin):
         self.reqcnt = 0
         self.repcnt = 0
 
-        self.pubint = self.config.root['heartbeat']
+        self.pubint = self.config_service.hb_int
         self.pubcnt = 0
 
         self.marco_msg = topo.MARCO(self.endpoint, self.uuid)

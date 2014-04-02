@@ -39,8 +39,8 @@ class ConfigFileMixin(ConfigParser):
 
         sections = list(self)
         sections.remove('DEFAULT')
-        if 'global_cfg' in self:  # not validated yet
-            sections.remove('global_cfg')
+        if 'global' in self:  # not validated yet
+            sections.remove('global')
 
         # find all metric specifications
         self.metric_sections = {}
@@ -79,7 +79,7 @@ class ConfigFileMixin(ConfigParser):
         assert self.isvalid
 
         result = {
-            'heartbeat': util.str_to_seconds(self['global_cfg']['heartbeat'])
+            'heartbeat': util.str_to_seconds(self['global']['heartbeat'])
         }
         self.global_cfg = result
 
@@ -148,7 +148,7 @@ class ConfigFileMixin(ConfigParser):
         self._push_prefix('config')
 
         # add global_cfg specs
-        prefix = self._push_prefix('global_cfg')
+        prefix = self._push_prefix('global')
         result[prefix + 'heartbeat'] = self.global_cfg['heartbeat']
         self._pop_prefix()
 
@@ -194,14 +194,14 @@ class ConfigFileMixin(ConfigParser):
         endpoints = {}
 
         # check global_cfg specification
-        if 'global_cfg' not in self:
-            self.__eprint("missing [global_cfg] section")
+        if 'global' not in self:
+            self.__eprint("missing [global] section")
         else:
-            if 'heartbeat' not in self['global_cfg']:
-                self.__eprint("missing 'heartbeat' option in [global_cfg] section")
+            if 'heartbeat' not in self['global']:
+                self.__eprint("missing 'heartbeat' option in [global] section")
 
-            if len(self['global_cfg']) > 1:
-                self.__eprint("extraneous values in [global_cfg] section")
+            if len(self['global']) > 1:
+                self.__eprint("extraneous values in [global] section")
 
         # check for at least one group and one metric
         if len(self.metric_sections) < 1:

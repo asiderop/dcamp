@@ -22,6 +22,9 @@ class Aggregation(ServiceMixin):
         self.parent = parent_ep
         self.endpoint = local_ep
 
+        # wait for config service to be fully synched before doing anything
+        self.config_service.wait_for_gogo()
+
         (self.sub_cnt, self.push_cnt) = (0, 0)
 
         # sub data from child(ren) and push them to Filter service

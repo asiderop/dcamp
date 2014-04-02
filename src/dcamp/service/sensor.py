@@ -18,6 +18,9 @@ class Sensor(ServiceMixin):
         self.config_service = config_service
         self.endpoint = endpoint
 
+        # wait for config service to be fully synched before doing anything
+        self.config_service.wait_for_gogo()
+
         # goal: sort by next collection time
         self.metric_specs = []
         self.metric_seqid = -1

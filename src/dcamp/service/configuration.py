@@ -1,4 +1,4 @@
-from threading import Lock
+from threading import Lock, Condition
 from types import MethodType
 
 from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-msg=E0611
@@ -27,13 +27,16 @@ class Configuration(ServiceMixin):
             config_file=None,  # should only be given for root level
     ):
         ServiceMixin.__init__(self, control_pipe)
-        assert level in ['root', 'branch', 'leaf']
-        assert isinstance(parent_ep, (EndpntSpec, type(None)))
-        assert isinstance(local_ep, EndpntSpec)
 
+        assert level in ['root', 'branch', 'leaf']
         self.level = level
+
         self.group = group
+
+        assert isinstance(parent_ep, (EndpntSpec, type(None)))
         self.parent = parent_ep
+
+        assert isinstance(local_ep, EndpntSpec)
         self.endpoint = local_ep
 
         if self.level in ['branch', 'leaf']:
@@ -41,8 +44,6 @@ class Configuration(ServiceMixin):
         else:
             assert sos_func is None
         self.sos = sos_func
-
-        self.state = None
 
         # While no special locking is needed for the kvdict / seq_num members w.r.t.
         # multiple writers (only the Management service can write changes), reading the
@@ -66,36 +67,31 @@ class Configuration(ServiceMixin):
         self.kvdict = {}
         self.kv_seq = -1
 
-        # initialize kvdict with config_file if root level
-        if 'root' == self.level:
-            assert config_file is not None
-            cfg = ConfigFileMixin()
-            cfg.read_file(open(config_file))
-            for (k, v) in cfg.kvdict.items():
-                self[k] = v
+        ### Common Members
 
-        current_secs = now_secs()
+        # external callers wait on this condition until state==GOGO
+        self.state_cond = Condition()
+        self.state = Configuration.STATE_SYNC
 
-        # root/branch members for sending hearbeats to children
-        self.hug_int = 5  # units: seconds
-        self.next_hug = current_secs + self.hug_int  # units: seconds
-        self.last_pub = current_secs  # units: seconds
+        ### Root/Branch Members
+
+        # sending hearbeats to children
         self.hug = None
-
-        # branch/leaf members for detecting parent heartbeats
-        self.last_hb = current_secs  # units: seconds
-        self.next_sos = current_secs + (self.hug_int * 5)  # units: seconds
-
-        # sockets and message counts
-        (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
-        (self.subcnt, self.pubcnt, self.hugcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
+        self.next_hug = None
+        self.last_pub = None
 
         ### Branch/Leaf Members
 
+        # detecting parent heartbeats
+        self.last_hb = None
+        self.next_sos = None
+
+        # receiving snapshots
         # { topic : final-seq-num }
         self.kvsync_completed = {}
         self.pending_updates = []
 
+        # receiving updates
         self.topics = []
         if 'leaf' == self.level:
             assert self.group is not None
@@ -104,7 +100,17 @@ class Configuration(ServiceMixin):
             self.topics.append('/config')
             self.topics.append('/topo')
 
-        self.__initalize_sockets()
+        ### let's get it started
+
+        # sockets and message counts
+        (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
+        (self.subcnt, self.pubcnt, self.hugcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
+
+        self.__initialize_sockets()
+
+        # populate dict with config_file values if root level; values are used later
+        if 'root' == self.level:
+            self.__initialize_kvdict(config_file)
 
     ### Dictionary Access
     # map access to internal kvdict
@@ -127,7 +133,14 @@ class Configuration(ServiceMixin):
         item = config.KVPUB(k, None, self.kv_seq + 1)
         self.__process_update_message(item)  # remove from our kvdict and publish update
 
-    def __initalize_sockets(self):
+    def __initialize_kvdict(self, config_file):
+        assert config_file is not None
+        cfg = ConfigFileMixin()
+        cfg.read_file(open(config_file))
+        for (k, v) in cfg.kvdict.items():
+            self[k] = v
+
+    def __initialize_sockets(self):
         if self.level in ['branch', 'leaf']:
             assert self.parent is not None
             assert len(self.topics) > 0
@@ -149,21 +162,17 @@ class Configuration(ServiceMixin):
 
             self.poller.register(self.kvsync_req, POLLIN)
 
-            self.state = Configuration.STATE_SYNC
-
         else:
             assert 'root' == self.level
+
+            # set GOGO state; this basically means we have all the config values
+            self.state = Configuration.STATE_GOGO
+
             self.__setup_outbound()
-
-    def get_metric_specs(self, group=None):
-        if group is None:
-            group = self.group
-
-        # return (spec-list, seq-id) or (None, -1)
-        return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
 
     def __setup_outbound(self):
         assert self.level in ['root', 'branch']
+        assert self._is_gogo
 
         # 3) publish updates to children (bind)
         self.update_pub = self.ctx.socket(PUB)
@@ -172,10 +181,13 @@ class Configuration(ServiceMixin):
         if 'branch' == self.level:
             assert self.group is not None
             t = '/config/%s' % self.group
-        else:  # root
+        elif 'root' == self.level:
             t = '/topo'
+        else:
+            raise NotImplementedError('unknown level: %s' % self.level)
 
         self.hug = config.HUGZ(t)
+        self.next_hug = now_secs() + self.hb_int  # units: seconds
         self.last_pub = now_secs()
 
         # 4) service snapshot requests to children (bind)
@@ -189,7 +201,47 @@ class Configuration(ServiceMixin):
             self.__process_update_message(update)
         del self.pending_updates
 
-        self.state = Configuration.STATE_GOGO
+    @property
+    def _is_gogo(self):
+        return Configuration.STATE_GOGO == self.state
+
+    @property
+    def _is_sync(self):
+        return Configuration.STATE_SYNC == self.state
+
+    def wait_for_gogo(self):
+        self.state_cond.wait_for(self._is_gogo)
+
+    #####
+    # BEGIN config access methods
+
+    @property
+    def hb_int(self):
+        assert self._is_gogo
+        return self['/config/global/heartbeat']
+
+    def root(self, new_root=None):
+        if new_root is not None:
+            assert 'branch' == self.level
+            # TODO: this will fail an assertion
+            self['/topo/root'] = new_root
+
+        return self['/topo/root']
+
+    def get_metric_specs(self, group=None):
+        assert self._is_gogo
+
+        if group is None:
+            group = self.group
+
+        # return (spec-list, seq-id) or (None, -1)
+        return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
+
+    def endpoints(self, group=None):
+        pass # return endpoints (for mgmt svc use)
+
+    # END config access methods
+    #####
 
     def _cleanup(self):
         # service exiting; return some status info and cleanup
@@ -205,17 +257,28 @@ class Configuration(ServiceMixin):
 
         if self.update_sub is not None:
             self.update_sub.close()
+        del self.update_sub
+
         if self.update_pub is not None:
             self.update_pub.close()
+        del self.update_pub
+
         if self.kvsync_req is not None:
             self.kvsync_req.close()
+        del self.kvsync_req
+
         if self.kvsync_rep is not None:
             self.kvsync_rep.close()
-        del self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep
+        del self.kvsync_rep
 
         ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
+        # wait until finished with sync state before sending anything
+        if not self._is_gogo:
+            self.poller_timer = None
+            return
+
         if self.level in ['root', 'branch'] and self.next_hug <= now_secs():
             self.__send_hug()
 
@@ -235,30 +298,36 @@ class Configuration(ServiceMixin):
 
     def __send_hug(self):
         assert self.level in ['root', 'branch']
+        assert self._is_gogo
+        assert self.update_pub is not None
 
-        # wait until finished with sync state
-        if self.update_pub is not None:
-            self.hug.send(self.update_pub)
-            self.last_pub = now_secs()
-            self.hugcnt += 1
+        self.hug.send(self.update_pub)
+        self.last_pub = now_secs()
+        self.hugcnt += 1
 
     def __get_next_wakeup(self):
         """ @returns next wakeup time (as msecs delta) """
+        assert self._is_gogo
 
         next_wakeup = None
         next_hug_wakeup = None
         next_sos_wakeup = None
 
         if self.level in ['root', 'branch']:
+            assert self.last_pub is not None
             # reset hugz using last pub time
-            self.next_hug = self.last_pub + self.hug_int
+            self.next_hug = self.last_pub + self.hb_int
             # next_hug is in secs; subtract current msecs to get next wakeup
             next_hug_wakeup = (self.next_hug * 1e3) - now_msecs()
             next_wakeup = next_hug_wakeup
 
         if self.level in ['branch', 'leaf']:
+            # last_hb is None if we just started
+            if self.last_hb is None:
+                self.last_hb = now_secs()
+
             # reset sos using last hb time
-            self.next_sos = self.last_hb + (self.hug_int * 5)
+            self.next_sos = self.last_hb + (self.hb_int * 5)
             # next_sos is in secs; subtract current msecs to get next wakeup
             next_sos_wakeup = (self.next_sos * 1e3) - now_msecs()
             next_wakeup = next_sos_wakeup
@@ -279,6 +348,7 @@ class Configuration(ServiceMixin):
 
     def __recv_update(self):
         update = config.CONFIG.recv(self.update_sub)
+        self.last_hb = now_secs()  # any message from parent is considered a heartbeat
         self.subcnt += 1
 
         if update.is_error:
@@ -286,16 +356,17 @@ class Configuration(ServiceMixin):
             return
 
         if update.is_hugz:
-            # noted. moving on...
-            self.last_hb = now_secs()
+            # already noted above. moving on...
             self.logger.debug('received hug.')
             return
 
-        if Configuration.STATE_SYNC == self.state:
-            # TODO: another solution is to just not read the message; let them queue up on
-            #       the socket itself...
+        if self._is_sync:
+            # another solution is to just not read the message; let them queue
+            # up on the socket itself...but that relies on the HWM of the socket
+            # being set high enough to account for all messages received while
+            # in the SYNC state. this approach guarantees no updates are lost.
             self.pending_updates.append(update)
-        elif Configuration.STATE_GOGO == self.state:
+        elif self._is_gogo:
             self.__process_update_message(update)
         else:
             raise NotImplementedError('unknown state')
@@ -317,17 +388,21 @@ class Configuration(ServiceMixin):
             if update.value is None:
                 del self.kvdict[update.key]
 
-        # this should be None if still in SYNC state
-        if self.update_pub is not None:
+        # wait until finished with sync state before sending updates
+        if self._is_gogo:
+            assert self.update_pub is not None
             update.send(self.update_pub)
             self.last_pub = now_secs()
             self.pubcnt += 1
 
     def __recv_snapshot(self):
-        assert Configuration.STATE_SYNC == self.state
+        assert self.level in ['branch', 'leaf']
+        assert self._is_sync
 
         # should either be KVSYNC or KTHXBAI
         response = config.CONFIG.recv(self.kvsync_req)
+        self.last_hb = now_secs()  # any message from parent is considered a heartbeat
+        self.repcnt += 1
 
         if response.is_error:
             self.logger.error(response)
@@ -346,15 +421,21 @@ class Configuration(ServiceMixin):
 
             self.kv_seq = max(self.kvsync_completed.values())
             del self.kvsync_completed
+
+            # set GOGO state; this basically means we have all the config values
+            self.state = Configuration.STATE_GOGO
+
             if 'branch' == self.level:
                 self.__setup_outbound()
+
         else:
             self.__process_update_message(response, ignore_sequence=True)
 
     def __send_snapshot(self):
-        assert Configuration.STATE_GOGO == self.state
+        assert self._is_gogo
 
         request = config.CONFIG.recv(self.kvsync_rep)
+        self.reqcnt += 1
 
         if request.is_error:
             self.logger.error(request)

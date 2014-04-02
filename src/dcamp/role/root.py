@@ -23,9 +23,10 @@ class Root(RoleMixin):
                                            None,  # group
                                            None,  # parent--root should use cli endpoint as parent / #42
                                            local_ep,
-                                           None
-        )
+                                           None,
+                                           config_file,
+                                           )
 
-        self._add_service(Management, config_service, local_ep)
-        self._add_service(Filter, 'root', config_service, local_ep, None)
+        self._add_service(Management,          config_service, local_ep)
+        self._add_service(Filter,      'root', config_service, local_ep, None)
         self._add_service(Aggregation, 'root', config_service, local_ep, None)

@@ -29,4 +29,4 @@ class Metric(RoleMixin):
         )
 
         self._add_service(Filter, 'leaf', config_service, local_ep, parent_ep)
-        self._add_service(Sensor, config_service, local_ep)
+        self._add_service(Sensor,         config_service, local_ep)
