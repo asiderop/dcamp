@@ -107,11 +107,11 @@ class Configuration(ServiceMixin):
         (self.update_sub, self.update_pub, self.kvsync_req, self.kvsync_rep) = (None, None, None, None)
         (self.subcnt, self.pubcnt, self.hugcnt, self.reqcnt, self.repcnt) = (0, 0, 0, 0, 0)
 
-        self.__initialize_sockets()
-
         # populate dict with config_file values if root level; values are used later
         if 'root' == self.level:
             self.__initialize_kvdict(config_file)
+
+        self.__initialize_sockets()
 
     #####
     #  BEGIN dictionary access methods
@@ -137,11 +137,9 @@ class Configuration(ServiceMixin):
     # END dictionary access methods
     #####
 
-    @property
     def _is_gogo(self):
         return Configuration.STATE_GOGO == self.state
 
-    @property
     def _is_sync(self):
         return Configuration.STATE_SYNC == self.state
 
@@ -153,7 +151,7 @@ class Configuration(ServiceMixin):
 
     @property
     def hb_int(self):
-        assert self._is_gogo
+        assert self._is_gogo()
         return self['/config/global/heartbeat']
 
     def root(self, new_root=None):
@@ -165,7 +163,7 @@ class Configuration(ServiceMixin):
         return self['/topo/root']
 
     def get_metric_specs(self, group=None):
-        assert self._is_gogo
+        assert self._is_gogo()
 
         if group is None:
             group = self.group
@@ -174,7 +172,7 @@ class Configuration(ServiceMixin):
         return self.get('/config/%s/metrics' % group, (None, -1))
 
     def get_endpoints(self, group=None):
-        assert self._is_gogo
+        assert self._is_gogo()
 
         if group is None:
             group = self.group
@@ -236,7 +234,7 @@ class Configuration(ServiceMixin):
 
     def __setup_outbound(self):
         assert self.level in ['root', 'branch']
-        assert self._is_gogo
+        assert self._is_gogo()
 
         # 3) publish updates to children (bind)
         self.update_pub = self.ctx.socket(PUB)
@@ -298,7 +296,7 @@ class Configuration(ServiceMixin):
 
     def _pre_poll(self):
         # wait until finished with sync state before sending anything
-        if not self._is_gogo:
+        if not self._is_gogo():
             self.poller_timer = None
             return
 
@@ -321,7 +319,7 @@ class Configuration(ServiceMixin):
 
     def __send_hug(self):
         assert self.level in ['root', 'branch']
-        assert self._is_gogo
+        assert self._is_gogo()
         assert self.update_pub is not None
 
         self.hug.send(self.update_pub)
@@ -330,7 +328,7 @@ class Configuration(ServiceMixin):
 
     def __get_next_wakeup(self):
         """ @returns next wakeup time (as msecs delta) """
-        assert self._is_gogo
+        assert self._is_gogo()
 
         next_wakeup = None
         next_hug_wakeup = None
@@ -383,13 +381,13 @@ class Configuration(ServiceMixin):
             self.logger.debug('received hug.')
             return
 
-        if self._is_sync:
+        if self._is_sync():
             # another solution is to just not read the message; let them queue
             # up on the socket itself...but that relies on the HWM of the socket
             # being set high enough to account for all messages received while
             # in the SYNC state. this approach guarantees no updates are lost.
             self.pending_updates.append(update)
-        elif self._is_gogo:
+        elif self._is_gogo():
             self.__process_update_message(update)
         else:
             raise NotImplementedError('unknown state')
@@ -412,7 +410,7 @@ class Configuration(ServiceMixin):
                 del self.kvdict[update.key]
 
         # wait until finished with sync state before sending updates
-        if self._is_gogo:
+        if self._is_gogo():
             assert self.update_pub is not None
             update.send(self.update_pub)
             self.last_pub = now_secs()
@@ -420,7 +418,7 @@ class Configuration(ServiceMixin):
 
     def __recv_snapshot(self):
         assert self.level in ['branch', 'leaf']
-        assert self._is_sync
+        assert self._is_sync()
 
         # should either be KVSYNC or KTHXBAI
         response = config.CONFIG.recv(self.kvsync_req)
@@ -455,7 +453,7 @@ class Configuration(ServiceMixin):
             self.__process_update_message(response, ignore_sequence=True)
 
     def __send_snapshot(self):
-        assert self._is_gogo
+        assert self._is_gogo()
 
         request = config.CONFIG.recv(self.kvsync_rep)
         self.reqcnt += 1
