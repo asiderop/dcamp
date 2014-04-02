@@ -1,3 +1,4 @@
+import re
 from threading import Lock, Condition
 from types import MethodType
 
@@ -112,8 +113,8 @@ class Configuration(ServiceMixin):
         if 'root' == self.level:
             self.__initialize_kvdict(config_file)
 
-    ### Dictionary Access
-    # map access to internal kvdict
+    #####
+    #  BEGIN dictionary access methods
 
     def __getitem__(self, k):
         (val, seq) = self.kvdict[k]
@@ -132,6 +133,69 @@ class Configuration(ServiceMixin):
         assert 'root' == self.level, "only root level allowed to make modifications"
         item = config.KVPUB(k, None, self.kv_seq + 1)
         self.__process_update_message(item)  # remove from our kvdict and publish update
+
+    # END dictionary access methods
+    #####
+
+    @property
+    def _is_gogo(self):
+        return Configuration.STATE_GOGO == self.state
+
+    @property
+    def _is_sync(self):
+        return Configuration.STATE_SYNC == self.state
+
+    def wait_for_gogo(self):
+        self.state_cond.wait_for(self._is_gogo)
+
+    #####
+    # BEGIN config access methods
+
+    @property
+    def hb_int(self):
+        assert self._is_gogo
+        return self['/config/global/heartbeat']
+
+    def root(self, new_root=None):
+        if new_root is not None:
+            assert 'branch' == self.level
+            # TODO: this will fail an assertion
+            self['/topo/root'] = new_root
+
+        return self['/topo/root']
+
+    def get_metric_specs(self, group=None):
+        assert self._is_gogo
+
+        if group is None:
+            group = self.group
+
+        # return (spec-list, seq-id) or (None, -1)
+        return self.get('/config/%s/metrics' % group, (None, -1))
+
+    def get_endpoints(self, group=None):
+        assert self._is_gogo
+
+        if group is None:
+            group = self.group
+
+        # return (spec-list, seq-id) or (None, -1)
+        return self.get('/config/%s/endpoints' % group, ([], -1))[0]
+
+    def get_groups(self):
+        regex = re.compile('/config/(\w+)/.+')
+        gs = set()
+        with self.kvlock:
+            for key in self:
+                m = regex.match(key)
+                if m is not None:
+                    # every group has three keys in the kvdict; lazily find the unique
+                    # groups names by using a set
+                    gs.add(m.group(1))
+        return gs
+
+    # END config access methods
+    #####
 
     def __initialize_kvdict(self, config_file):
         assert config_file is not None
@@ -201,48 +265,6 @@ class Configuration(ServiceMixin):
             self.__process_update_message(update)
         del self.pending_updates
 
-    @property
-    def _is_gogo(self):
-        return Configuration.STATE_GOGO == self.state
-
-    @property
-    def _is_sync(self):
-        return Configuration.STATE_SYNC == self.state
-
-    def wait_for_gogo(self):
-        self.state_cond.wait_for(self._is_gogo)
-
-    #####
-    # BEGIN config access methods
-
-    @property
-    def hb_int(self):
-        assert self._is_gogo
-        return self['/config/global/heartbeat']
-
-    def root(self, new_root=None):
-        if new_root is not None:
-            assert 'branch' == self.level
-            # TODO: this will fail an assertion
-            self['/topo/root'] = new_root
-
-        return self['/topo/root']
-
-    def get_metric_specs(self, group=None):
-        assert self._is_gogo
-
-        if group is None:
-            group = self.group
-
-        # return (spec-list, seq-id) or (None, -1)
-        return self.kvdict.get('/config/%s/metrics' % group, (None, -1))
-
-    def endpoints(self, group=None):
-        pass # return endpoints (for mgmt svc use)
-
-    # END config access methods
-    #####
-
     def _cleanup(self):
         # service exiting; return some status info and cleanup
         self.logger.debug(
@@ -252,8 +274,9 @@ class Configuration(ServiceMixin):
         # print each key-value pair; value is really (value, seq-num)
         self.logger.debug('kv-seq: %d' % self.kv_seq)
         width = len(str(self.kv_seq))
-        for (k, (v, s)) in sorted(self.kvdict.items()):
-            self.logger.debug('({0:0{width}d}) {1}: {2}'.format(s, k, v, width=width))
+        with self.kvlock:
+            for (k, (v, s)) in sorted(self.kvdict.items()):
+                self.logger.debug('({0:0{width}d}) {1}: {2}'.format(s, k, v, width=width))
 
         if self.update_sub is not None:
             self.update_sub.close()

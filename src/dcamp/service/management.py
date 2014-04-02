@@ -26,16 +26,13 @@ class Management(ServiceMixin):
                  ):
         ServiceMixin.__init__(self, role_pipe)
 
-        # TODO: use config_service as full state representation; add accessor methods to
-        #       make it convenient and remove the self.config and self.tree members.
-        #       IDEA: create subclass of Configuration service class which provides these
-        #       additional methods? how would that work when a branch is promoted to root?
         self.config_service = config_service
         self.endpoint = local_ep
         self.uuid = topo.gen_uuid()
 
-        # wait for config service to be fully synched before doing anything
-        self.config_service.wait_for_gogo()  # this should return immediately since we are root
+        # wait for config service to be fully synched before doing anything;
+        # this should return immediately since we are root
+        self.config_service.wait_for_gogo()
 
         # 1) start tree with self as root
         # 2) add each node to tree as topo-node
@@ -63,9 +60,8 @@ class Management(ServiceMixin):
         self.disc_socket = self.ctx.socket(PUB)
         self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
-        # TODO: convert self.config access to configuration service
-        for group in self.config.groups.values():
-            for ep in group.endpoints:
+        for group in self.config_service.get_groups():
+            for ep in self.config_service.get_endpoints(group):
                 self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
 
         self.reqcnt = 0
@@ -236,8 +232,8 @@ class Management(ServiceMixin):
 
         # lookup node group
         # @todo need to keep track of nodes which have already POLO'ed / issue #39
-        for (group, spec) in self.config.groups.items():
-            if polo_msg.endpoint in spec.endpoints:
+        for group in self.config_service.get_groups():
+            if polo_msg.endpoint in self.config_service.get_endpoints(group):
                 self.logger.debug('found base group: %s' % group)
 
                 if group in self.collectors:
