@@ -9,17 +9,17 @@ from dcamp.util.functions import now_secs, now_msecs
 
 
 class Sensor(ServiceMixin):
-    def __init__(self,
-                 control_pipe,
-                 config_service,
-                 endpoint):
-        ServiceMixin.__init__(self, control_pipe)
+    def __init__(
+            self,
+            control_pipe,
+            config_svc,
+            local_ep
+    ):
 
-        self.config_service = config_service
-        self.endpoint = endpoint
+        ServiceMixin.__init__(self, control_pipe, config_svc)
 
-        # wait for config service to be fully synched before doing anything
-        self.config_service.wait_for_gogo()
+        self.config_service = config_svc
+        self.endpoint = local_ep
 
         # goal: sort by next collection time
         self.metric_specs = []

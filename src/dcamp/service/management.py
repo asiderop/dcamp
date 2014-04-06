@@ -19,21 +19,19 @@ class Management(ServiceMixin):
     @todo: how to handle joining nodes not part of config / issue #26
     """
 
-    def __init__(self,
-                 role_pipe,
-                 config_service,
-                 local_ep,
-                 ):
-        ServiceMixin.__init__(self, role_pipe)
+    def __init__(
+            self,
+            control_pipe,
+            config_svc,
+            local_ep
+    ):
+
+        ServiceMixin.__init__(self, control_pipe, config_svc)
         assert isinstance(local_ep, EndpntSpec)
 
-        self.config_service = config_service
+        self.config_service = config_svc
         self.endpoint = local_ep
         self.uuid = topo.gen_uuid()
-
-        # wait for config service to be fully synched before doing anything;
-        # this should return immediately since we are root
-        self.config_service.wait_for_gogo()
 
         # 1) start tree with self as root
         # 2) add each node to tree as topo-node

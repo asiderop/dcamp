@@ -10,23 +10,28 @@ class Metric(RoleMixin):
     Metric Role
     """
 
-    def __init__(self,
-                 control_pipe,
-                 group,
-                 parent_ep,
-                 local_ep,
+    def __init__(
+            self,
+            control_pipe,
+            local_ep,
+            parent_ep,
+            group,
     ):
         RoleMixin.__init__(self, control_pipe)
 
         ### add services
 
-        config_service = self._add_service(Configuration,
-                                           'leaf',
-                                           group,
-                                           parent_ep,  # collector endpoint
-                                           local_ep,  # our endpoint
-                                           self.sos,
+        config_service = self._add_service(
+            Configuration,
+            None,         # config service, None for config service (obviously)
+            local_ep,     # our endpoint
+            parent_ep,    # parent endpoint, root/collector node
+            'leaf',       # node's level
+            group,        # node's group
+            self.sos,     # sos callable, None for root node
+            None,         # configuration file, only for root node
         )
 
-        self._add_service(Filter, 'leaf', config_service, local_ep, parent_ep)
-        self._add_service(Sensor,         config_service, local_ep)
+        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
+        self._add_service(Filter,       config_service, local_ep, parent_ep, 'leaf'  )
+        self._add_service(Sensor,       config_service, local_ep                     )

@@ -6,24 +6,24 @@ import dcamp.types.messages.data as data
 
 
 class Aggregation(ServiceMixin):
-    def __init__(self,
-                 control_pipe,
-                 level,
-                 config_service,
-                 local_ep,
-                 parent_ep):
-        ServiceMixin.__init__(self, control_pipe)
+    def __init__(
+            self,
+            control_pipe,
+            config_svc,
+            local_ep,
+            parent_ep,
+            level
+    ):
+
+        ServiceMixin.__init__(self, control_pipe, config_svc)
         assert level in ['root', 'branch']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
         assert isinstance(local_ep, EndpntSpec)
 
         self.level = level
-        self.config_service = config_service
+        self.config_service = config_svc
         self.parent = parent_ep
         self.endpoint = local_ep
-
-        # wait for config service to be fully synched before doing anything
-        self.config_service.wait_for_gogo()
 
         (self.sub_cnt, self.push_cnt) = (0, 0)
 

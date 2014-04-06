@@ -20,14 +20,17 @@ class Configuration(ServiceMixin):
     def __init__(
             self,
             control_pipe,  # control pipe for shutting down service
+            config_svc,  # obviously, this must be None
+            local_ep,  # this is us
+            parent_ep,  # from where we receive config updates/snapshots
             level,
             group,
-            parent_ep,  # from where we receive config updates/snapshots
-            local_ep,  # this is us
             sos_func,  # call when our parent stops sending HUGZ
             config_file=None,  # should only be given for root level
     ):
-        ServiceMixin.__init__(self, control_pipe)
+        ServiceMixin.__init__(self, control_pipe, config_svc)
+
+        assert config_svc is None
 
         assert level in ['root', 'branch', 'leaf']
         self.level = level

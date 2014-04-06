@@ -18,6 +18,7 @@ class RoleMixin(object):
 
         # { pipe: service, ...}
         self.__services = {}
+        self.__config_svc = None
 
     def __str__(self):
         return self.__class__.__name__

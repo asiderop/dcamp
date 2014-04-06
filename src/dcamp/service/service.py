@@ -8,10 +8,11 @@ from dcamp.util.decorators import runnable
 
 @runnable
 class ServiceMixin(Thread):
-    def __init__(self, pipe):
+    def __init__(self, pipe, config_svc):
         Thread.__init__(self)
         self.ctx = Context.instance()
         self.__control_pipe = pipe
+        self.__config_svc = config_svc
 
         self.logger = getLogger('dcamp.service.%s' % self)
 
@@ -63,6 +64,11 @@ class ServiceMixin(Thread):
 
     def run(self):
         self.run_state()
+
+        # wait for configuration service to init
+        if self.__config_svc is not None:
+            self.__config_svc.wait_for_gogo()
+
         while self.in_running_state:
             try:
                 self._pre_poll()

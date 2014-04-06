@@ -10,23 +10,29 @@ class Root(RoleMixin):
     Root Role
     """
 
-    def __init__(self,
-                 control_pipe,
-                 config_file,
-                 local_ep):
+    def __init__(
+            self,
+            control_pipe,
+            local_ep,
+            config_file,
+    ):
+
         RoleMixin.__init__(self, control_pipe)
 
         ### add services
 
-        config_service = self._add_service(Configuration,
-                                           'root',
-                                           None,  # group
-                                           None,  # parent--root should use cli endpoint as parent / #42
-                                           local_ep,
-                                           None,
-                                           config_file,
-                                           )
+        config_service = self._add_service(
+            Configuration,
+            None,         # config service, None for config service (obviously)
+            local_ep,     # our endpoint
+            None,         # parent endpoint--root should use cli endpoint as parent / #42
+            'root',       # node's level
+            None,         # node's group
+            None,         # sos callable, None for root node
+            config_file,  # configuration file, only for root node
+        )
 
-        self._add_service(Management,          config_service, local_ep)
-        self._add_service(Filter,      'root', config_service, local_ep, None)
-        self._add_service(Aggregation, 'root', config_service, local_ep, None)
+        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
+        self._add_service(Management,   config_service, local_ep                     )
+        self._add_service(Filter,       config_service, local_ep, None,      'root'  )
+        self._add_service(Aggregation,  config_service, local_ep, None,      'root'  )

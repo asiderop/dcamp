@@ -7,10 +7,12 @@ class Base(RoleMixin):
     Base Role
     """
 
-    def __init__(self,
-                 pipe,
-                 address):
-        RoleMixin.__init__(self, pipe)
+    def __init__(
+            self,
+            control_pipe,
+            local_ep
+    ):
+        RoleMixin.__init__(self, control_pipe)
 
-        # add Node Service
-        self._add_service(Node, address)
+        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
+        self._add_service(Node,         None,           local_ep                     )

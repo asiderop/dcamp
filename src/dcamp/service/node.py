@@ -30,12 +30,17 @@ class Node(ServiceMixin):
         PLAY_OPEN,
     ]
 
-    def __init__(self,
-                 pipe,
-                 endpoint):
-        ServiceMixin.__init__(self, pipe)
+    def __init__(
+            self,
+            control_pipe,
+            config_svc,  # must be None
+            local_ep
+    ):
 
-        self.endpoint = endpoint
+        ServiceMixin.__init__(self, control_pipe, config_svc)
+        assert config_svc is None
+
+        self.endpoint = local_ep
         self.uuid = topo.gen_uuid()
         self.polo_msg = topo.POLO(self.endpoint, self.uuid)
 
@@ -208,23 +213,29 @@ class Node(ServiceMixin):
         if 'root' == level:
             assert 'config-file' in response.properties
             self.role_pipe, peer = zpipe(self.ctx)
-            self.role = Root(peer,
-                             response['config-file'],
-                             self.endpoint)
+            self.role = Root(
+                peer,
+                self.endpoint,
+                response['config-file'],
+            )
 
         elif 'branch' == level:
             self.role_pipe, peer = zpipe(self.ctx)
-            self.role = Collector(peer,
-                                  response['group'],
-                                  response['parent'],
-                                  self.endpoint)
+            self.role = Collector(
+                peer,
+                self.endpoint,
+                response['parent'],
+                response['group'],
+            )
 
         elif 'leaf' == level:
             self.role_pipe, peer = zpipe(self.ctx)
-            self.role = Metric(peer,
-                               response['group'],
-                               response['parent'],
-                               self.endpoint)
+            self.role = Metric(
+                peer,
+                self.endpoint,
+                response['parent'],
+                response['group'],
+            )
 
         else:
             self.logger.error('unknown assignment level: %s' % level)
