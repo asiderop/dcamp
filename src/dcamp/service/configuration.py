@@ -116,12 +116,12 @@ class Configuration(ServiceMixin):
     #####
     #  BEGIN dictionary access methods
 
-    def __getitem__(self, k):
-        (val, seq) = self.kvdict[k]
+    def get(self, k, default=None):
+        (val, seq) = self.kvdict.get(k, (default, -1))
         return val
 
-    def get(self, k, default=None):
-        (val, seq) = self.kvdict.get(k, (default, 0))
+    def __getitem__(self, k):
+        (val, seq) = self.kvdict[k]
         return val
 
     def __setitem__(self, k, v):
@@ -134,8 +134,20 @@ class Configuration(ServiceMixin):
         item = config.KVPUB(k, None, self.kv_seq + 1)
         self.__process_update_message(item)  # remove from our kvdict and publish update
 
+    def __len__(self):
+        return len(self.kvdict)
+
+    def __iter__(self):
+        return iter(self.kvdict)
+
     # END dictionary access methods
     #####
+
+    def __set_gogo(self):
+        self.state_cond.acquire()
+        self.state = Configuration.STATE_GOGO
+        self.state_cond.notify_all()
+        self.state_cond.release()
 
     def _is_gogo(self):
         return Configuration.STATE_GOGO == self.state
@@ -144,7 +156,9 @@ class Configuration(ServiceMixin):
         return Configuration.STATE_SYNC == self.state
 
     def wait_for_gogo(self):
+        self.state_cond.acquire()
         self.state_cond.wait_for(self._is_gogo)
+        self.state_cond.release()
 
     #####
     # BEGIN config access methods
@@ -156,7 +170,6 @@ class Configuration(ServiceMixin):
 
     def root(self, new_root=None):
         if new_root is not None:
-            assert 'branch' == self.level
             # TODO: this will fail an assertion
             self['/topo/root'] = new_root
 
@@ -168,8 +181,11 @@ class Configuration(ServiceMixin):
         if group is None:
             group = self.group
 
-        # return (spec-list, seq-id) or (None, -1)
-        return self.get('/config/%s/metrics' % group, (None, -1))
+        # return tuple = (spec-list, seq-id) or (None, -1)
+        try:
+            return self['/config/%s/metrics' % group]
+        except KeyError:
+            return None, -1
 
     def get_endpoints(self, group=None):
         assert self._is_gogo()
@@ -177,8 +193,8 @@ class Configuration(ServiceMixin):
         if group is None:
             group = self.group
 
-        # return (spec-list, seq-id) or (None, -1)
-        return self.get('/config/%s/endpoints' % group, ([], -1))[0]
+        # return ep-list or []
+        return self.get('/config/%s/endpoints' % group, [])
 
     def get_groups(self):
         regex = re.compile('/config/(\w+)/.+')
@@ -196,11 +212,15 @@ class Configuration(ServiceMixin):
     #####
 
     def __initialize_kvdict(self, config_file):
+        assert 'root' == self.level
         assert config_file is not None
         cfg = ConfigFileMixin()
         cfg.read_file(open(config_file))
         for (k, v) in cfg.kvdict.items():
+            assert isinstance(k, str)
+            self.logger.debug('INIT: {}: {}'.format(k, v))
             self[k] = v
+        self.logger.debug('INIT: final kv-seq = {}'.format(self.kv_seq))
 
     def __initialize_sockets(self):
         if self.level in ['branch', 'leaf']:
@@ -228,7 +248,7 @@ class Configuration(ServiceMixin):
             assert 'root' == self.level
 
             # set GOGO state; this basically means we have all the config values
-            self.state = Configuration.STATE_GOGO
+            self.__set_gogo()
 
             self.__setup_outbound()
 
@@ -444,7 +464,7 @@ class Configuration(ServiceMixin):
             del self.kvsync_completed
 
             # set GOGO state; this basically means we have all the config values
-            self.state = Configuration.STATE_GOGO
+            self.__set_gogo()
 
             if 'branch' == self.level:
                 self.__setup_outbound()

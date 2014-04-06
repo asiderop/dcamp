@@ -4,8 +4,8 @@ from dcamp.types.messages.common import DCMsg, _PROPS
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import isInstance_orNone
 
-# @todo: need to include UUIDs in each message so nodes can distinguish between multiple invocations of the same
-#        endpoint
+# @todo: need to include UUIDs in each message so nodes can distinguish between multiple
+#        invocations of the same endpoint
 
 __all__ = [
     'gen_uuid',

@@ -25,6 +25,7 @@ class Management(ServiceMixin):
                  local_ep,
                  ):
         ServiceMixin.__init__(self, role_pipe)
+        assert isinstance(local_ep, EndpntSpec)
 
         self.config_service = config_service
         self.endpoint = local_ep
@@ -62,6 +63,8 @@ class Management(ServiceMixin):
 
         for group in self.config_service.get_groups():
             for ep in self.config_service.get_endpoints(group):
+                if ep == local_ep:
+                    continue  # don't add ourself
                 self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
 
         self.reqcnt = 0
