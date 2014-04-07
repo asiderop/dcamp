@@ -80,14 +80,12 @@ class Configuration(ServiceMixin):
         ### Root/Branch Members
 
         # sending hearbeats to children
-        self.hug = None
+        self.hug_msg = None
         self.next_hug = None
-        self.last_pub = None
 
         ### Branch/Leaf Members
 
         # detecting parent heartbeats
-        self.last_hb = None
         self.next_sos = None
 
         # receiving snapshots
@@ -120,8 +118,8 @@ class Configuration(ServiceMixin):
     #  BEGIN dictionary access methods
 
     def get(self, k, default=None):
-        (val, seq) = self.kvdict.get(k, (default, -1))
-        return val
+        """ returns (value, seq-id) """
+        return self.kvdict.get(k, (default, -1))
 
     def __getitem__(self, k):
         (val, seq) = self.kvdict[k]
@@ -168,8 +166,9 @@ class Configuration(ServiceMixin):
 
     @property
     def hb_int(self):
-        assert self._is_gogo()
-        return self['/config/global/heartbeat']
+        if self._is_gogo():
+            return self['/config/global/heartbeat']
+        return 5  # default hb interval until init is complete
 
     def root(self, new_root=None):
         if new_root is not None:
@@ -185,10 +184,7 @@ class Configuration(ServiceMixin):
             group = self.group
 
         # return tuple = (spec-list, seq-id) or (None, -1)
-        try:
-            return self['/config/%s/metrics' % group]
-        except KeyError:
-            return None, -1
+        return self.get('/config/%s/metrics' % group, (None, -1))
 
     def get_endpoints(self, group=None):
         assert self._is_gogo()
@@ -197,7 +193,10 @@ class Configuration(ServiceMixin):
             group = self.group
 
         # return ep-list or []
-        return self.get('/config/%s/endpoints' % group, [])
+        try:
+            return self['/config/%s/endpoints' % group]
+        except KeyError:
+            return []
 
     def get_groups(self):
         regex = re.compile('/config/(\w+)/.+')
@@ -271,9 +270,8 @@ class Configuration(ServiceMixin):
         else:
             raise NotImplementedError('unknown level: %s' % self.level)
 
-        self.hug = config.HUGZ(t)
-        self.next_hug = now_secs() + self.hb_int  # units: seconds
-        self.last_pub = now_secs()
+        self.hug_msg = config.HUGZ(t)
+        self.__hb_sent()  # start the hb timer
 
         # 4) service snapshot requests to children (bind)
         self.kvsync_rep = self.ctx.socket(ROUTER)
@@ -323,12 +321,14 @@ class Configuration(ServiceMixin):
             self.poller_timer = None
             return
 
+        assert self.next_hug is not None
         if self.level in ['root', 'branch'] and self.next_hug <= now_secs():
             self.__send_hug()
 
+        assert self.next_sos is not None
         if self.level in ['branch', 'leaf'] and self.next_sos <= now_secs():
             self.sos()
-            self.last_hb = now_secs()  # reset last hb so we don't flood the system with sos
+            self.__hb_received()  # reset hb monitor so we don't flood the system with sos
 
         self.poller_timer = self.__get_next_wakeup()
 
@@ -344,9 +344,10 @@ class Configuration(ServiceMixin):
         assert self.level in ['root', 'branch']
         assert self._is_gogo()
         assert self.update_pub is not None
+        assert self.hug_msg is not None
 
-        self.hug.send(self.update_pub)
-        self.last_pub = now_secs()
+        self.hug_msg.send(self.update_pub)
+        self.__hb_sent()
         self.hugcnt += 1
 
     def __get_next_wakeup(self):
@@ -358,20 +359,13 @@ class Configuration(ServiceMixin):
         next_sos_wakeup = None
 
         if self.level in ['root', 'branch']:
-            assert self.last_pub is not None
-            # reset hugz using last pub time
-            self.next_hug = self.last_pub + self.hb_int
+            assert self.next_hug is not None  # initialized by __setup_outbound()
             # next_hug is in secs; subtract current msecs to get next wakeup
             next_hug_wakeup = (self.next_hug * 1e3) - now_msecs()
             next_wakeup = next_hug_wakeup
 
         if self.level in ['branch', 'leaf']:
-            # last_hb is None if we just started
-            if self.last_hb is None:
-                self.last_hb = now_secs()
-
-            # reset sos using last hb time
-            self.next_sos = self.last_hb + (self.hb_int * 5)
+            assert self.next_sos is not None  # initialized by __recv_snapshot() / _recv_update()
             # next_sos is in secs; subtract current msecs to get next wakeup
             next_sos_wakeup = (self.next_sos * 1e3) - now_msecs()
             next_wakeup = next_sos_wakeup
@@ -390,9 +384,17 @@ class Configuration(ServiceMixin):
 
         return val
 
+    def __hb_sent(self):
+        # reset hugz using last pub time
+        self.next_hug = now_secs() + self.hb_int
+
+    def __hb_received(self):
+        # reset sos using last hb time
+        self.next_sos = now_secs() + (self.hb_int * 5)
+
     def __recv_update(self):
         update = config.CONFIG.recv(self.update_sub)
-        self.last_hb = now_secs()  # any message from parent is considered a heartbeat
+        self.__hb_received()  # any message from parent is considered a heartbeat
         self.subcnt += 1
 
         if update.is_error:
@@ -436,7 +438,7 @@ class Configuration(ServiceMixin):
         if self._is_gogo():
             assert self.update_pub is not None
             update.send(self.update_pub)
-            self.last_pub = now_secs()
+            self.__hb_sent()
             self.pubcnt += 1
 
     def __recv_snapshot(self):
@@ -445,7 +447,7 @@ class Configuration(ServiceMixin):
 
         # should either be KVSYNC or KTHXBAI
         response = config.CONFIG.recv(self.kvsync_req)
-        self.last_hb = now_secs()  # any message from parent is considered a heartbeat
+        self.__hb_received()  # any message from parent is considered a heartbeat
         self.repcnt += 1
 
         if response.is_error:
