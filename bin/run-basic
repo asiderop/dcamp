@@ -6,7 +6,7 @@ BASEDIR=`dirname $0`/..
 DCAMP=$BASEDIR/bin/dcamp
 XTERM='xterm -r'
 
-USAGE="usage: `basename $0` [-x] <base-r|base-c|base-m|start>"
+USAGE="usage: `basename $0` [-x] <base-r|base-c|base-m|start|stop>"
 
 if [ $# -lt 1 ]; then
 	echo $USAGE
@@ -22,7 +22,9 @@ fi
 case "$1" in
 
 	base-r)
-		MODS="--debug-module dcamp.service.Management --debug-module dcamp.service.Node --debug-module dcamp.role.Base --debug-module dcamp.role.Root"
+		MODS="-d"
+		MODS="--debug-module dcamp.service.Configuration"
+		MODS="--debug-module dcamp.service.Management --debug-module dcamp.service.Node --debug-module dcamp.role.Root"
 		if [ $X -eq 0 ]; then
 			$XTERM -geometry 131x50+0+0 -T root -e $DCAMP $MODS base -a localhost:55500 &
 		else
@@ -31,25 +33,32 @@ case "$1" in
 		;;
 
 	base-c)
-		MODS=""
+		MODS="--debug-module dcamp.service.Configuration"
+		MODS="-d"
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 131x50+0+350 -T collector -e $DCAMP $MODS -d base -a localhost:55700 &
+			$XTERM -geometry 131x50+0+350 -T collector -e $DCAMP $MODS base -a localhost:55700 &
 		else
-			$DCAMP $MODS -d base -a localhost:55700
+			$DCAMP $MODS base -a localhost:55700
 		fi
 		;;
 
 	base-m)
-		MODS=""
+		MODS="-d"
+		MODS="--debug-module dcamp.service.Node --debug-module dcamp.service.Configuration"
+		MODS="--debug-module dcamp.service.Node"
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 147x76-0+0 -T metric -e $DCAMP $MODS -d base -a localhost:55730 &
+			$XTERM -geometry 147x76-0+0 -T metric -e $DCAMP $MODS base -a localhost:55730 &
 		else
-			$DCAMP $MODS -d base -a localhost:55730
+			$DCAMP $MODS base -a localhost:55730
 		fi
 		;;
 
 	start)
-		$DCAMP -d root -f $BASEDIR/dcamp.cfg
+		$DCAMP -d root -f $BASEDIR/dcamp.cfg --start
+		;;
+
+	stop)
+		$DCAMP -d root -f $BASEDIR/dcamp.cfg --stop
 		;;
 	
 	*)
