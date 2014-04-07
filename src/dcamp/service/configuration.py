@@ -8,10 +8,11 @@ import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import ServiceMixin
 from dcamp.util.functions import now_secs, now_msecs
+from dcamp.util.decorators import decorate_all, printer
 from dcamp.types.config_file import ConfigFileMixin
 
 
-class Configuration(ServiceMixin):
+class Configuration(ServiceMixin):  # , metaclass=decorate_all(printer)):
 
     # states
     STATE_SYNC = 0

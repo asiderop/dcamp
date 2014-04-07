@@ -1,3 +1,62 @@
+"""
+TODO: convert these decorators to metaclasses?
+"""
+
+__all__ = [
+    'decorate_all',
+    'dont_decorate',
+    'printer',
+
+    'runnable',
+    'prefixable',
+]
+
+
+def printer(f):
+    """ useful (with decorate_all) for instrumenting classes to analyze  execution """
+    import inspect
+
+    def internal(self, *args, **kwargs):
+        caller = inspect.stack()[1][0]  # we want this method's caller
+        cl = ''
+        if 'self' in caller.f_locals:
+            cl = type(caller.f_locals['self']).__name__
+        print('{}::{} -> {}()'.format(cl, caller.f_code.co_name, f.__name__))
+
+        return f(self, *args, **kwargs)
+    return internal
+
+
+def dont_decorate(f):
+    """ decorator to exclude methods """
+    f.decorate = False
+    return f
+
+
+def do_decorate(attr, value):
+    """ check if an object should be decorated """
+    from types import FunctionType
+
+    return (isinstance(value, FunctionType) and
+            getattr(value, 'decorate', True))
+
+
+def decorate_all(decorator):
+    """ metaclass applies the given decorator to all instance methods (unless excluded) """
+    class DecorateAll(type):
+        def __new__(mcs, name, bases, dct):
+            for attr, value in dct.items():
+                if do_decorate(attr, value):
+                    dct[attr] = decorator(value)
+            return super(DecorateAll, mcs).__new__(mcs, name, bases, dct)
+
+        def __setattr__(self, attr, value):
+            if do_decorate(attr, value):
+                value = decorator(value)
+            super(DecorateAll, self).__setattr__(attr, value)
+    return DecorateAll
+
+
 def runnable(given_class):
     """Class decorator turning given class into a "runnable" object"""
 
@@ -113,3 +172,5 @@ def prefixable(given_class):
     given_class._push_prefix = _push_prefix
 
     return given_class
+
+
