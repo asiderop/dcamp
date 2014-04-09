@@ -97,10 +97,11 @@ class Configuration(ServiceMixin):
         self.topics = []
         if 'leaf' == self.level:
             assert self.group is not None
-            self.topics.append('/config/%s' % self.group)
+            self.topics.append('/config/%s/' % self.group)
+            self.topics.append('/config/global/')
         elif 'branch' == self.level:
-            self.topics.append('/config')
-            self.topics.append('/topo')
+            self.topics.append('/config/')
+            self.topics.append('/topo/')
 
         ### let's get it started
 
@@ -321,14 +322,16 @@ class Configuration(ServiceMixin):
             self.poller_timer = None
             return
 
-        assert self.next_hug is not None
-        if self.level in ['root', 'branch'] and self.next_hug <= now_secs():
-            self.__send_hug()
+        if self.level in ['root', 'branch']:
+            assert self.next_hug is not None
+            if self.next_hug <= now_secs():
+                self.__send_hug()
 
-        assert self.next_sos is not None
-        if self.level in ['branch', 'leaf'] and self.next_sos <= now_secs():
-            self.sos()
-            self.__hb_received()  # reset hb monitor so we don't flood the system with sos
+        if self.level in ['branch', 'leaf']:
+            assert self.next_sos is not None
+            if self.next_sos <= now_secs():
+                self.sos()
+                self.__hb_received()  # reset hb monitor so we don't flood the system with sos
 
         self.poller_timer = self.__get_next_wakeup()
 
