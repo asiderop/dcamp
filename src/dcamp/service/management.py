@@ -196,7 +196,7 @@ class Management(ServiceMixin):
         # poll for answers
         #
         # TODO: this will block the service for half a minute; combine this
-        #       will self.poller in case we are not stopping? blocking the mgmt
+        #       with self.poller in case we are not stopping? blocking the mgmt
         #       service might actually be good: nodes are not re-connected to
         #       the system until all nodes have stopped?
         timeout = now_secs() + 30

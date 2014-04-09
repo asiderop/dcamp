@@ -265,16 +265,16 @@ class Node(ServiceMixin):
             # collector died, notify Root
             self.logger.error('group collector node died; contacting Root...')
 
-            self.control_socket = self.ctx.socket(DEALER)
-            self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
+            control_socket = self.ctx.socket(DEALER)
+            control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
 
             polo = topo.POLO(self.endpoint, self.uuid, content='SOS')
-            polo.send(self.control_socket)
+            polo.send(control_socket)
             self.reqcnt += 1
 
-            events = self.control_socket.poll(5000)
+            events = control_socket.poll(5000)
             if 0 != events:
-                response = topo.CONTROL.recv(self.control_socket)
+                response = topo.CONTROL.recv(control_socket)
                 self.repcnt += 1
 
                 if response.is_error:
@@ -287,8 +287,8 @@ class Node(ServiceMixin):
             else:
                 self.logger.warn('root did not respond within time limit; ohmg!')
 
-            self.control_socket.close()
-            self.control_socket = None
+            control_socket.close()
+            del control_socket
 
         elif self.role.__class__ == Collector:
             # root died, start election
