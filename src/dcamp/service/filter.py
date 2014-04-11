@@ -58,7 +58,7 @@ class Filter(ServiceMixin):
 
     def _cleanup(self):
         # service exiting; return some status info and cleanup
-        self.logger.debug("%d pulls; %d pubs; %d hugz; metrics= [\n%s]" %
+        self.logger.debug("%d pulls; %d pubs; %d hugz; metrics= [%s]" %
                           (self.pull_cnt, self.pubs_cnt, self.hugz_cnt, self.metric_specs))
 
         self.data_file.close()

@@ -35,7 +35,7 @@ class Sensor(ServiceMixin):
 
     def _cleanup(self):
         # service exiting; return some status info and cleanup
-        self.logger.debug("%d pushes; metrics = [\n%s]" %
+        self.logger.debug("%d pushes; metrics = [%s]" %
                           (self.push_cnt, self.metric_specs))
 
         self.metrics_socket.close()
