@@ -1,4 +1,4 @@
-from time import time
+from time import time, sleep
 
 from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 
@@ -157,9 +157,11 @@ class Management(ServiceMixin):
         size = len(collector.children)
 
         # connect collector and all its children to the socket
-        #stop_socket.connect(collector.endpoint.connect_uri(EndpntSpec.BASE))
         for node in collector.children:
             stop_socket.connect(node.endpoint.connect_uri(EndpntSpec.BASE))
+
+        # delay before sending any messages on stop_socket / Issue #64
+        sleep(5)
 
         # remove group's branch from the tree and local state
         self.tree.remove_branch(collector)

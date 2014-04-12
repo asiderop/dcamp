@@ -123,6 +123,7 @@ class Simulator(object):
 
 		if nodes is None:
 			nodes = self.nodes.keys()
+			self.state = 'dead'
 
 		for a in nodes:
 			if a in self.nodes and self.nodes[a] is not None:
@@ -134,9 +135,6 @@ class Simulator(object):
 				p.wait()
 				fout.close()
 				self.nodes[a] = None
-
-		if nodes is None:
-			self.state = 'dead'
 
 	def run(self):
 		try:
