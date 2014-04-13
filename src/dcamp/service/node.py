@@ -51,7 +51,6 @@ class Node(ServiceMixin):
         # @todo these sockets need a better naming convention.
         self.topo_socket = self.ctx.socket(SUB)
         self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
-
         self.topo_socket.bind(self.topo_endpoint)
 
         self.control_socket = None
@@ -111,7 +110,7 @@ class Node(ServiceMixin):
         self.topo_socket.close()
         self.topo_socket = None
 
-        if self.control_socket:
+        if self.control_socket is not None:
             self.control_socket.close()
         self.control_socket = None
 
@@ -248,6 +247,7 @@ class Node(ServiceMixin):
                     response['group'],
                 )
 
+        peer = None  # closed by peer/role
         self.__play_role()
 
     def __play_role(self):

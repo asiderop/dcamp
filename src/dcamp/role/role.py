@@ -32,6 +32,7 @@ class RoleMixin(object):
     def _add_service(self, cls, *args, **kwargs):
         pipe, peer = zpipe(self.ctx)  # create control socket pair
         service = cls(peer, *args, **kwargs)  # create service, passing peer socket
+        peer = None  # closed by peer/service
         self.__services[pipe] = service  # add to our dict, using pipe socket as key
         return service
 

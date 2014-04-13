@@ -102,6 +102,7 @@ class App:
 
         try:
             role = Base(peer, self.args.address)
+            peer = None  # closed by peer
         except ZMQError as e:
             self.logger.debug('exception while starting base role:', exc_info=True)
             self.logger.error('Unable to start base node: %s' % e)

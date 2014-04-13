@@ -63,11 +63,11 @@ class Filter(ServiceMixin):
 
         self.data_file.close()
         self.pull_socket.close()
+        del self.pull_socket
 
-        if self.level in ['branch', 'leaf']:
+        if self.pubs_socket is not None:
             self.pubs_socket.close()
-
-        del self.pull_socket, self.pubs_socket
+        del self.pubs_socket
 
         ServiceMixin._cleanup(self)
 
