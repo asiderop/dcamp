@@ -3,14 +3,12 @@ import threading
 from zmq import DEALER, SUB, SUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-import dcamp.types.messages.topology as topo
-
 from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
-
 from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
+from dcamp.types.messages.topology import gen_uuid, TOPO, POLO, MARCO, CONTROL, SOS
 
 
 class Node(ServiceMixin):
@@ -41,8 +39,8 @@ class Node(ServiceMixin):
         assert config_svc is None
 
         self.endpoint = local_ep
-        self.uuid = topo.gen_uuid()
-        self.polo_msg = topo.POLO(self.endpoint, self.uuid)
+        self.uuid = gen_uuid()
+        self.polo_msg = POLO(self.endpoint, self.uuid)
 
         ####
         # setup service for polling.
@@ -52,7 +50,7 @@ class Node(ServiceMixin):
 
         # @todo these sockets need a better naming convention.
         self.topo_socket = self.ctx.socket(SUB)
-        self.topo_socket.setsockopt_string(SUBSCRIBE, '')
+        self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
 
         self.topo_socket.bind(self.topo_endpoint)
 
@@ -121,7 +119,7 @@ class Node(ServiceMixin):
 
     def _post_poll(self, items):
         if self.topo_socket in items:
-            marco_msg = topo.MARCO.recv(self.topo_socket)
+            marco_msg = MARCO.recv(self.topo_socket)
             self.subcnt += 1
 
             if marco_msg.is_error:
@@ -155,7 +153,7 @@ class Node(ServiceMixin):
             assert self.in_open_state
             self.close_state()
 
-            response = topo.CONTROL.recv(self.control_socket)
+            response = CONTROL.recv(self.control_socket)
             self.poller.unregister(self.control_socket)
             self.control_socket.close()
             self.control_socket = None
@@ -173,8 +171,8 @@ class Node(ServiceMixin):
                     return
 
                 self.role_pipe.send_string('STOP')
-                response = self.role_pipe.recv_string()
-                assert 'OKAY' == response
+                reply = self.role_pipe.recv_string()
+                assert 'OKAY' == reply
 
                 self.logger.debug('received STOP OKAY from %s role' % self.role)
 
@@ -210,36 +208,45 @@ class Node(ServiceMixin):
             return
 
         level = response['level']
+
+        if level not in ['root', 'branch', 'leaf']:
+            self.logger.error('unknown assignment level: %s' % level)
+            return
+
+        self.role_pipe, peer = zpipe(self.ctx)
+
         if 'root' == level:
             assert 'config-file' in response.properties
-            self.role_pipe, peer = zpipe(self.ctx)
+
             self.role = Root(
                 peer,
                 self.endpoint,
                 response['config-file'],
             )
 
-        elif 'branch' == level:
-            self.role_pipe, peer = zpipe(self.ctx)
-            self.role = Collector(
-                peer,
-                self.endpoint,
-                response['parent'],
-                response['group'],
-            )
-
-        elif 'leaf' == level:
-            self.role_pipe, peer = zpipe(self.ctx)
-            self.role = Metric(
-                peer,
-                self.endpoint,
-                response['parent'],
-                response['group'],
-            )
-
         else:
-            self.logger.error('unknown assignment level: %s' % level)
-            return
+            assert 'parent' in response.properties
+            assert 'group' in response.properties
+
+            self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.group_key(response['group']))
+
+            if 'branch' == level:
+                self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.recovery_key())
+
+                self.role = Collector(
+                    peer,
+                    self.endpoint,
+                    response['parent'],
+                    response['group'],
+                )
+
+            else:
+                self.role = Metric(
+                    peer,
+                    self.endpoint,
+                    response['parent'],
+                    response['group'],
+                )
 
         self.__play_role()
 
@@ -268,13 +275,13 @@ class Node(ServiceMixin):
             control_socket = self.ctx.socket(DEALER)
             control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
 
-            polo = topo.POLO(self.endpoint, self.uuid, content='SOS')
-            polo.send(control_socket)
+            msg = SOS(self.endpoint, self.uuid)
+            msg.send(control_socket)
             self.reqcnt += 1
 
             events = control_socket.poll(5000)
             if 0 != events:
-                response = topo.CONTROL.recv(control_socket)
+                response = CONTROL.recv(control_socket)
                 self.repcnt += 1
 
                 if response.is_error:

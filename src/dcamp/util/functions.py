@@ -2,22 +2,22 @@ from time import time
 
 
 def now_secs():
-    '''round down to most recent second -- designed for collection scheduling'''
+    """round down to most recent second -- designed for collection scheduling"""
     return int(time())
 
 
 def now_msecs():
-    '''round up/down to nearest millisecond -- designed for collection records'''
+    """round up/down to nearest millisecond -- designed for collection records"""
     return int(round(time() * 1000))
 
 
 def isInstance_orNone(gvalue, gtype):
-    '''returns whether given value is an instance of the given type or None'''
+    """returns whether given value is an instance of the given type or None"""
     return isinstance(gvalue, (gtype, type(None)))
 
 
 def seconds_to_str(seconds):
-    '''
+    """
     Method takes given number of seconds and determines how to best (concisely) represent
     it in a string.
 
@@ -25,12 +25,12 @@ def seconds_to_str(seconds):
         '90s'
 
     @see str_to_seconds() does the exact opposite of this
-    '''
+    """
     return '%ds' % seconds
 
 
 def str_to_seconds(string):
-    '''
+    """
     Method determines how time in given string is specified and returns an int value in
     seconds.
 
@@ -43,7 +43,7 @@ def str_to_seconds(string):
         s -- seconds
 
     @todo add this to validation routine / issue #23
-    '''
+    """
     valid_units = ['s']
     if string.endswith('s'):
         return int(string[:len(string) - 1])
@@ -52,19 +52,19 @@ def str_to_seconds(string):
 
 
 def plural(count, ending='s', word=None):
-    '''return plural form of given word based on given count'''
+    """return plural form of given word based on given count"""
     return (word or '') + (count != 1.0 and ending or '')
 
 
 def format_bytes(given, use_short=True, num_or_suffix='both'):
-    '''
+    """
     Converts given number of bytes (int) into a human-friendly format.
 
     Use num_or_suffix to dictate the output format:
       + "num"    --> returns given bytes as float (in possibly larger units)
       + "suffix" --> returns units of "num"
       + "both"   --> returns "%.2f%s" % (num, suffix)
-    '''
+    """
     long_units = ['', 'Kilo', 'Mega', 'Giga', 'Tera', 'Peta']  # with 'byte' suffix
     short_units = ['B', 'Kb', 'Mb', 'Gb', 'Tb', 'Pb']
 
@@ -77,7 +77,6 @@ def format_bytes(given, use_short=True, num_or_suffix='both'):
         num_orders += 1
         num /= 1024.0
 
-    suffix = None
     if use_short:
         suffix = short_units[num_orders]
     else:
@@ -94,8 +93,16 @@ def format_bytes(given, use_short=True, num_or_suffix='both'):
 def get_logger_from_caller(default):
     import inspect
 
-    caller = inspect.stack()[2][0]  # we want this method's caller's caller
-    if 'self' in caller.f_locals:
-        return caller.f_locals['self'].logger
+    # we want the caller's logger which does not match the given logger
+
+    stack = inspect.stack()
+    frame = 1
+    while frame < len(stack):
+        caller = stack[frame][0]
+        if 'self' in caller.f_locals:
+            up_logger = caller.f_locals['self'].logger
+            if up_logger != default:
+                return up_logger
+        frame += 1
 
     return default

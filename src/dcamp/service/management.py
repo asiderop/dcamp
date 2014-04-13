@@ -2,10 +2,9 @@ from time import time, sleep
 
 from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 
-from dcamp.types.messages.common import WTF
-import dcamp.types.messages.topology as topo
-
 from dcamp.service.service import ServiceMixin
+from dcamp.types.messages.common import WTF
+from dcamp.types.messages.topology import gen_uuid, MARCO, CONTROL, POLO, STOP
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTreeMixin, TopoNode
 from dcamp.util.functions import now_secs
@@ -31,7 +30,7 @@ class Management(ServiceMixin):
 
         self.config_service = config_svc
         self.endpoint = local_ep
-        self.uuid = topo.gen_uuid()
+        self.uuid = gen_uuid()
 
         # 1) start tree with self as root
         # 2) add each node to tree as topo-node
@@ -71,7 +70,7 @@ class Management(ServiceMixin):
         self.pubint = self.config_service.hb_int
         self.pubcnt = 0
 
-        self.marco_msg = topo.MARCO(self.endpoint, self.uuid)
+        self.marco_msg = MARCO(self.endpoint, self.uuid)
         self.pubnext = time()
 
         self.poller.register(self.join_socket, POLLIN)
@@ -89,8 +88,11 @@ class Management(ServiceMixin):
             self.logger.debug('%s last seen %s' % (str(node.endpoint), node.last_seen))
 
         self.join_socket.close()
+        del self.join_socket
+
         self.disc_socket.close()
-        del self.join_socket, self.disc_socket
+        del self.disc_socket
+
         ServiceMixin._cleanup(self)
 
     def _pre_poll(self):
@@ -103,52 +105,63 @@ class Management(ServiceMixin):
 
     def _post_poll(self, items):
         if self.join_socket in items:
-            sos_group = None
-            polo_msg = topo.POLO.recv(self.join_socket)
+            msg = CONTROL.recv(self.join_socket)
             self.reqcnt += 1
 
-            if polo_msg.is_error:
-                errstr = 'invalid base endpoint received: {}'.format(polo_msg.errstr)
-                self.logger.error(errstr)
-                repmsg = WTF(0, errstr)
+            (repmsg, remote, sos_group) = self.__get_rep(msg)
 
-            else:
-                remote = self.tree.find_node_by_endpoint(polo_msg.endpoint)
-
-                if polo_msg.content is None:
-                    if remote is None:
-                        repmsg = self.__assign(polo_msg)
-
-                    elif remote.uuid != polo_msg.uuid:
-                        # node recovered before it was recognized as down; just resend the
-                        # same assignment info as before
-                        self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
-                        remote.uuid = polo_msg.uuid
-                        repmsg = remote.assignment()
-
-                    else:
-                        repmsg = WTF(0, 'too chatty; already POLOed')
-
-                elif 'SOS' == polo_msg.content:
-                    if remote is None:
-                        repmsg = WTF(0, 'I know not you!')
-                    else:
-                        repmsg = topo.CONTROL('keepcalm')
-                        sos_group = self.__check_sos(remote)
-
-                else:
-                    repmsg = WTF(0, 'I know not what to do!')
-
-                if remote is not None:
-                    remote.touch()
-
-            repmsg.copy_peer_id_from(polo_msg)
+            repmsg.copy_peer_id_from(msg)
             repmsg.send(self.join_socket)
             self.repcnt += 1
+
+            if remote is not None:
+                remote.touch()
 
             if sos_group is not None:
                 # do group reset
                 self.__stop_group(sos_group)
+
+    def __get_rep(self, msg):
+        (repmsg, remote, sos_group) = (None, None, None)
+
+        if msg.is_error:
+            errstr = 'invalid base endpoint received: {}'.format(msg.errstr)
+            self.logger.error(errstr)
+            repmsg = WTF(0, errstr)
+
+        elif msg.command in ['polo', 'sos']:
+            remote = self.tree.find_node_by_endpoint(msg.endpoint)
+
+            if 'polo' == msg.command:
+                if remote is None:
+                    repmsg = self.__assign(msg)
+
+                elif remote.uuid != msg.uuid:
+                    # node recovered before it was recognized as down; just resend the
+                    # same assignment info as before
+                    self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
+                    remote.uuid = msg.uuid
+                    repmsg = remote.assignment()
+
+                else:
+                    repmsg = WTF(0, 'too chatty; already POLOed')
+
+            elif 'sos' == msg.command:
+                if remote is None:
+                    repmsg = WTF(0, 'I know not you!')
+
+                else:
+                    repmsg = CONTROL('keepcalm', self.endpoint, self.uuid)
+                    sos_group = self.__check_sos(remote)
+
+            else:
+                repmsg = WTF(0, 'I know not what to do!')
+
+        # unknown command
+        else:
+            repmsg = WTF(0, 'I know not what to do!')
+
+        return repmsg, remote, sos_group
 
     def __stop_group(self, stop_group):
         stop_socket = self.ctx.socket(PUB)
@@ -182,7 +195,7 @@ class Management(ServiceMixin):
     def __stop_nodes(self, pub_sock, expected):
         assert PUB == pub_sock.socket_type
 
-        stop = topo.STOP()
+        stop = STOP(self.endpoint, self.uuid)
         control_sock = self.ctx.socket(ROUTER)
         bind_addr = control_sock.bind_to_random_port("tcp://*")
         num_rep = 0
@@ -190,7 +203,7 @@ class Management(ServiceMixin):
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
-        marco = topo.MARCO(ep, topo.gen_uuid())  # new uuid so nodes response
+        marco = MARCO(ep, gen_uuid())  # new uuid so nodes response
 
         # pub to all connected nodes
         marco.send(pub_sock)
@@ -206,7 +219,7 @@ class Management(ServiceMixin):
             if control_sock.poll(timeout=1000) != 0:
                 while True:
                     try:
-                        polo = topo.POLO.recv(control_sock)
+                        polo = POLO.recv(control_sock)
                     except Again:
                         break  # nothing to read; go back to polling
 

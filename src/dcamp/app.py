@@ -3,7 +3,7 @@ import logging
 from zmq import Context, PUB, REP, ZMQError  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-import dcamp.types.messages.topology as TopoMsg
+from dcamp.types.messages.topology import gen_uuid, ASSIGN, MARCO, POLO, STOP
 
 from dcamp.types.specs import EndpntSpec
 from dcamp.role.base import Base
@@ -57,9 +57,10 @@ class App:
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
+        uuid = gen_uuid()
         self.logger.debug('bound to %s + 1' % str(ep))
 
-        marco = TopoMsg.MARCO(ep, TopoMsg.gen_uuid())
+        marco = MARCO(ep, uuid)
         polo = None
         tries = 0
         while tries < 5:
@@ -67,7 +68,7 @@ class App:
             marco.send(pub)
             result = rep.poll(timeout=1000)
             if 0 != result:
-                polo = TopoMsg.POLO.recv(rep)
+                polo = POLO.recv(rep)
                 break
 
         if None == polo:
@@ -80,11 +81,11 @@ class App:
             return -1
 
         if 'start' == self.args.action:
-            repmsg = TopoMsg.ASSIGN(root_ep, 'root', None)
+            repmsg = ASSIGN(ep, uuid, root_ep, 'root', None)
             repmsg['config-file'] = self.args.configfile.name
 
         elif 'stop' == self.args.action:
-            repmsg = TopoMsg.STOP()
+            repmsg = STOP(ep, uuid)
 
         else:
             raise NotImplementedError('unknown root action')
