@@ -23,6 +23,8 @@ __all__ = [
 def gen_uuid():
     return uuid4()
 
+# TODO: the TOPO and CONTROL classes are very similar and can be comnbined perhaps.
+
 
 class TOPO(DCMsg):
     def __init__(self, key, ep, uuid, content=None):

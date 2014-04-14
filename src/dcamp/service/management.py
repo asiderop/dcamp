@@ -4,7 +4,7 @@ from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 
 from dcamp.service.service import ServiceMixin
 from dcamp.types.messages.common import WTF
-from dcamp.types.messages.topology import gen_uuid, MARCO, CONTROL, POLO, STOP
+from dcamp.types.messages.topology import gen_uuid, MARCO, CONTROL, POLO, STOP, GROUP
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.topo import TopoTreeMixin, TopoNode
 from dcamp.util.functions import now_secs
@@ -54,6 +54,9 @@ class Management(ServiceMixin):
         self.join_socket = self.ctx.socket(ROUTER)
         self.join_socket.bind(self.endpoint.bind_uri(EndpntSpec.CONTROL))
 
+        # we receive special control messages on this socket during recovery
+        self.control_sock = None
+
         # we send topo discovery messages on this socket
         self.disc_socket = self.ctx.socket(PUB)
         self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
@@ -92,6 +95,10 @@ class Management(ServiceMixin):
 
         self.disc_socket.close()
         del self.disc_socket
+
+        if self.control_sock is not None:
+            self.control_sock.close()
+        del self.control_sock
 
         ServiceMixin._cleanup(self)
 
@@ -164,17 +171,8 @@ class Management(ServiceMixin):
         return repmsg, remote, sos_group
 
     def __stop_group(self, stop_group):
-        stop_socket = self.ctx.socket(PUB)
-
         collector = self.collectors[stop_group]
         size = len(collector.children)
-
-        # connect collector and all its children to the socket
-        for node in collector.children:
-            stop_socket.connect(node.endpoint.connect_uri(EndpntSpec.BASE))
-
-        # delay before sending any messages on stop_socket / Issue #64
-        sleep(5)
 
         # remove group's branch from the tree and local state
         self.tree.remove_branch(collector)
@@ -182,31 +180,34 @@ class Management(ServiceMixin):
         del(self.sos_pings[stop_group])
 
         self.logger.debug('attempting to stop %d nodes in group %s' % (size, stop_group))
-        num = self.__stop_nodes(stop_socket, size)
-        stop_socket.close()
+        num = self.__stop_nodes(size, stop_group)
         self.logger.debug('%d nodes in group %s stopped' % (num, stop_group))
 
     def __stop_all_nodes(self):
         size = len(self.tree) - 1  # don't count this (root) node
         self.logger.debug('attempting to stop {} nodes'.format(size))
-        num = self.__stop_nodes(self.disc_socket, size)
+        num = self.__stop_nodes(size)
         self.logger.debug('{} nodes stopped'.format(num))
 
-    def __stop_nodes(self, pub_sock, expected):
-        assert PUB == pub_sock.socket_type
+    def __stop_nodes(self, expected, stop_group=None):
 
-        stop = STOP(self.endpoint, self.uuid)
-        control_sock = self.ctx.socket(ROUTER)
-        bind_addr = control_sock.bind_to_random_port("tcp://*")
+        stop_msg = STOP(self.endpoint, self.uuid)
         num_rep = 0
+
+        self.control_sock = self.ctx.socket(ROUTER)
+        bind_addr = self.control_sock.bind_to_random_port("tcp://*")
 
         # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
         # random port to which we just bound
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
-        marco = MARCO(ep, gen_uuid())  # new uuid so nodes response
+
+        if stop_group is None:
+            pub_msg = MARCO(ep, gen_uuid())  # new uuid so nodes response
+        else:
+            pub_msg = GROUP(stop_group, ep, gen_uuid())
 
         # pub to all connected nodes
-        marco.send(pub_sock)
+        pub_msg.send(self.disc_socket)
 
         # poll for answers
         #
@@ -216,10 +217,10 @@ class Management(ServiceMixin):
         #       the system until all nodes have stopped?
         timeout = now_secs() + 30
         while timeout >= now_secs() and num_rep < expected:
-            if control_sock.poll(timeout=1000) != 0:
+            if self.control_sock.poll(timeout=1000) != 0:
                 while True:
                     try:
-                        polo = POLO.recv(control_sock)
+                        polo = POLO.recv(self.control_sock)
                     except Again:
                         break  # nothing to read; go back to polling
 
@@ -229,11 +230,12 @@ class Management(ServiceMixin):
                         continue
 
                     # send STOP command
-                    stop.copy_peer_id_from(polo)
-                    stop.send(control_sock)
+                    stop_msg.copy_peer_id_from(polo)
+                    stop_msg.send(self.control_sock)
                     num_rep += 1
 
-        control_sock.close()
+        self.control_sock.close()
+        self.control_sock = None
         return num_rep
 
     def __assign(self, polo_msg):

@@ -1,6 +1,6 @@
 import threading
 
-from zmq import DEALER, SUB, SUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
+from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 from dcamp.role.root import Root
@@ -53,6 +53,8 @@ class Node(ServiceMixin):
         self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
         self.topo_socket.bind(self.topo_endpoint)
 
+        self.recovery_socket = None
+
         self.control_socket = None
         self.control_uuid = None
         self.control_ep = None
@@ -63,6 +65,9 @@ class Node(ServiceMixin):
         self.role_pipe = None
         self.role_thread = None
         self.state = None
+
+        self.level = None
+        self.group = None
 
         self.set_state(Node.BASE)
 
@@ -113,6 +118,14 @@ class Node(ServiceMixin):
         if self.control_socket is not None:
             self.control_socket.close()
         self.control_socket = None
+
+        if self.recovery_socket is not None:
+            self.recovery_socket.close()
+        self.recovery_socket = None
+
+        if self.role_pipe is not None:
+            self.role_pipe.close()
+        self.role_pipe = None
 
         ServiceMixin._cleanup(self)
 
@@ -175,6 +188,11 @@ class Node(ServiceMixin):
 
                 self.logger.debug('received STOP OKAY from %s role' % self.role)
 
+                if 'branch' == self.level:
+                    self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.recovery_key())
+                if self.group is not None:
+                    self.topo_socket.setsockopt_string(UNSUBSCRIBE, TOPO.group_key(self.group))
+
                 self.role_pipe.close()
                 self.poller.unregister(self.role_pipe)
                 self.role_pipe = None
@@ -227,6 +245,8 @@ class Node(ServiceMixin):
             assert 'parent' in response.properties
             assert 'group' in response.properties
 
+            self.group = response['group']
+
             self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.group_key(response['group']))
 
             if 'branch' == level:
@@ -248,6 +268,7 @@ class Node(ServiceMixin):
                 )
 
         peer = None  # closed by peer/role
+        self.level = level
         self.__play_role()
 
     def __play_role(self):
@@ -272,16 +293,16 @@ class Node(ServiceMixin):
             # collector died, notify Root
             self.logger.error('group collector node died; contacting Root...')
 
-            control_socket = self.ctx.socket(DEALER)
-            control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
+            self.recovery_socket = self.ctx.socket(DEALER)
+            self.recovery_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
 
             msg = SOS(self.endpoint, self.uuid)
-            msg.send(control_socket)
+            msg.send(self.recovery_socket)
             self.reqcnt += 1
 
-            events = control_socket.poll(5000)
+            events = self.recovery_socket.poll(5000)
             if 0 != events:
-                response = CONTROL.recv(control_socket)
+                response = CONTROL.recv(self.recovery_socket)
                 self.repcnt += 1
 
                 if response.is_error:
@@ -294,8 +315,8 @@ class Node(ServiceMixin):
             else:
                 self.logger.warn('root did not respond within time limit; ohmg!')
 
-            control_socket.close()
-            del control_socket
+            self.recovery_socket.close()
+            self.recovery_socket = None
 
         elif self.role.__class__ == Collector:
             # root died, start election
