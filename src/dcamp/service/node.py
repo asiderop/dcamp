@@ -159,7 +159,14 @@ class Node(ServiceMixin):
             message = self.role_pipe.recv_string()
             assert 'SOS' == message
 
-            self.__do_sos()
+            # TODO: save time of successful sos; throttle future attempts?
+
+            if self.role.__class__ == Metric:
+                self.__do_metric_sos()
+            elif self.role.__class__ == Collector:
+                self.__do_collector_sos()
+            else:
+                raise NotImplementedError('unknown role class: %s' % self.role)
 
         elif self.control_socket in items:
             assert self.in_open_state
@@ -283,44 +290,38 @@ class Node(ServiceMixin):
         self.role_thread.start()
         self.set_state(Node.PLAY)
 
-    def __do_sos(self):
+    def __do_metric_sos(self):
         """
         handles parent death
-
-        @todo save time of successful sos; throttle future attempts?
         """
-        if self.role.__class__ == Metric:
-            # collector died, notify Root
-            self.logger.error('group collector node died; contacting Root...')
+        # collector died, notify Root
+        self.logger.error('group collector node died; contacting Root...')
 
-            self.recovery_socket = self.ctx.socket(DEALER)
-            self.recovery_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
+        self.recovery_socket = self.ctx.socket(DEALER)
+        self.recovery_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
 
-            msg = SOS(self.endpoint, self.uuid)
-            msg.send(self.recovery_socket)
-            self.reqcnt += 1
+        msg = SOS(self.endpoint, self.uuid)
+        msg.send(self.recovery_socket)
+        self.reqcnt += 1
 
-            events = self.recovery_socket.poll(5000)
-            if 0 != events:
-                response = CONTROL.recv(self.recovery_socket)
-                self.repcnt += 1
+        events = self.recovery_socket.poll(5000)
+        if 0 != events:
+            response = CONTROL.recv(self.recovery_socket)
+            self.repcnt += 1
 
-                if response.is_error:
-                    self.logger.error(response)
-                elif 'keepcalm' == response.command:
-                    self.logger.debug('root notified; keeping calm')
-                else:
-                    self.logger.error('unknown command from root: %s' % response.command)
-
+            if response.is_error:
+                self.logger.error(response)
+            elif 'keepcalm' == response.command:
+                self.logger.debug('root notified; keeping calm')
             else:
-                self.logger.warn('root did not respond within time limit; ohmg!')
-
-            self.recovery_socket.close()
-            self.recovery_socket = None
-
-        elif self.role.__class__ == Collector:
-            # root died, start election
-            self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+                self.logger.error('unknown command from root: %s' % response.command)
 
         else:
-            raise NotImplementedError('unknown role class: %s' % self.role.__class__.__name__)
+            self.logger.warn('root did not respond within time limit; ohmg!')
+
+        self.recovery_socket.close()
+        self.recovery_socket = None
+
+    def __do_collector_sos(self):
+            # root died, start election
+            self.logger.error('EEEEEEKK!!! root node died... starting an election...')

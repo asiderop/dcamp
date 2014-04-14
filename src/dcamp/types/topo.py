@@ -128,7 +128,7 @@ class TopoTreeMixin(object):
     def get_topo_key(self, node):
         # TODO: these topo keys are bogus: how do we handle parent endpoints failing?
         #       branches are rebuilt. okay. root? maybe use "root" instead of root
-        #       endpoint?
+        #       endpoint? Issue #66
         assert node in self.nodes.values()
         assert node.endpoint in self.nodes
 
