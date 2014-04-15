@@ -1,4 +1,4 @@
-from time import time, sleep
+from time import time
 
 from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
 
