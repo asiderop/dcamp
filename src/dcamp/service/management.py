@@ -32,13 +32,6 @@ class Management(ServiceMixin):
         self.endpoint = local_ep
         self.uuid = gen_uuid()
 
-        # 1) start tree with self as root
-        # 2) add each node to tree as topo-node
-        # tree.nodes contains { node-endpoint: topo-node }
-        # topo-node contains (endpoint, role, group, parent, children, last-seen)
-        # topo keys come from tree.get_topo_key(node)
-
-        self.tree = TopoTreeMixin(self.endpoint, self.uuid)
         self.config_service.root(self.endpoint)
         self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
 

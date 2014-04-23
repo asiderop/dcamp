@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 from sys import stdout
 from functools import total_ordering
@@ -51,12 +52,14 @@ class TopoNode(object):
     def __hash__(self):
         return hash(self.endpoint)
 
-    def __str__(self):
+    def print(self):
         # "root node for tree: localhost:9090"
         # "collector node for groupA: localhost:5454"
-        return "%s node for %s last seen %s" % (self.level,
-                                                'tree' if self.level == 'root' else self.group,
-                                                str(self.last_seen))
+        return "%s node for %s last seen %s" % (
+            self.level, 'tree' if self.level == 'root' else self.group, str(self.last_seen))
+
+    def __str__(self):
+        return str(self.endpoint)
 
     def __repr__(self):
         return "TopoSpec(endpoint='%s', uuid=%s, level='%s', group='%s')" % (
@@ -83,12 +86,32 @@ class TopoNode(object):
 class TopoTreeMixin(object):
     pass
 
-    def __init__(self, root_ep, root_id):
-        self.root = TopoNode(root_ep, root_id, level='root', group=None)
-        self.nodes = {root_ep: self.root}
+    def __init__(self):
+        self.logger = logging.getLogger('dcamp.types.topo')
+        self.root = None
+        # { endpoint : TopoNode }
+        self.nodes = {}
 
     def __len__(self):
         return len(self.nodes)
+
+    def set_root(self, root_ep, root_id):
+
+        old_root = self.root
+
+        # TODO: create new node or find current node of same endpoint?
+        assert root_ep not in self.nodes
+        new_root = TopoNode(root_ep, root_id, level='root', group=None)
+
+        self.nodes[new_root.endpoint] = new_root
+        self.root = new_root
+
+        # if replacing the current root node, update child-parent relationships
+        if old_root is not None:
+            self.logger.warn('root node {} replaced by {}'.format(old_root, new_root))
+            del self.nodes[old_root.endpoint]
+            for c in old_root.children:
+                c.parent = new_root
 
     def insert_endpoint(self, node_ep, node_id, level, group, parent):
         if node_ep in self.nodes:

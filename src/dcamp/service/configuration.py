@@ -7,6 +7,7 @@ from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-m
 import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import ServiceMixin
+from dcamp.types.topo import TopoTreeMixin
 from dcamp.util.functions import now_secs, now_msecs
 from dcamp.types.config_file import ConfigFileMixin
 
@@ -48,6 +49,19 @@ class Configuration(ServiceMixin):
         else:
             assert sos_func is None
         self.sos = sos_func
+
+        # 1) tree starts empty
+        # 2) as config receives /topo keys, add nodes to tree as topo-node
+        # tree.nodes contains { EndpntSpec: TopoNode }
+        # TopoNode contains (endpoint, role, group, parent, children, last-seen)
+        # topo keys come from tree.get_topo_key(node)
+
+        # TODO: when updates are made to tree, pub them to consumers; use func pointer
+        # TODO: when update are received, apply them to tree without pub'ing
+
+        self.tree = TopoTreeMixin(self.__setitem__)
+
+        # TODO: need to lock write access to kvdict; writes come from both mgmt and config svcs
 
         # While no special locking is needed for the kvdict / seq_num members w.r.t.
         # multiple writers (only the Management service can write changes), reading the
