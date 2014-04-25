@@ -156,8 +156,38 @@ class Configuration(ServiceMixin):
     def __iter__(self):
         return iter(self.kvdict)
 
+    def __write_kv(self, key, value, sequence=None, ignore_sequence=False):
+        if ignore_sequence:
+            assert self._is_sync()
+
+        with self.kvlock:
+            if sequence is None:
+                assert not ignore_sequence
+                sequence = self.kv_seq + 1
+
+            # if not greater than current kv-sequence, skip this one
+            if not ignore_sequence and sequence <= self.kv_seq:
+                self.logger.warn('kv write out of sequence (cur=%d, recvd=%d); dropping' % (
+                    self.kv_seq, sequence))
+                return False
+
+            # during kvsync, we allow out of sequence updates; we only set our seq-num when
+            # not doing a kvsync
+            if not ignore_sequence:
+                self.kv_seq = sequence
+
+            self.kvdict[key] = (value, sequence)
+            if value is None:
+                del self.kvdict[key]
+
+        return True
+
     # END dictionary access methods
     #####
+
+    def __topo_tree_updated(self, key, value):
+        if 'root' == self.level:
+            self[key] = value
 
     def __set_gogo(self):
         self.state_cond.acquire()
@@ -435,21 +465,9 @@ class Configuration(ServiceMixin):
             raise NotImplementedError('unknown state')
 
     def __process_update_message(self, update, ignore_sequence=False):
-        # if not greater than current kv-sequence, skip this one
-        if not ignore_sequence and update.sequence <= self.kv_seq:
-            self.logger.warn('KVPUB out of sequence (cur=%d, recvd=%d); dropping' % (
-                self.kv_seq, update.sequence))
-            return
+        result = self.__write_kv(update.key, update.value, update.sequence, ignore_sequence)
 
-        # during kvsync, we allow out of sequence updates; we only set our seq-num when
-        # not doing a kvsync
-        if not ignore_sequence:
-            self.kv_seq = update.sequence
-
-        with self.kvlock:
-            self.kvdict[update.key] = (update.value, update.sequence)
-            if update.value is None:
-                del self.kvdict[update.key]
+        # TODO: check result and pub; maybe pub from write_kv() ?
 
         # wait until finished with sync state before sending updates
         if self._is_gogo():

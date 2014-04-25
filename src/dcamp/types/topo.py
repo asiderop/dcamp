@@ -96,22 +96,22 @@ class TopoTreeMixin(object):
         return len(self.nodes)
 
     def set_root(self, root_ep, root_id):
+        """ plants the topo tree root """
 
-        old_root = self.root
-
-        # TODO: create new node or find current node of same endpoint?
+        # create new node for the new root; the old node should no longer exist in the tree
         assert root_ep not in self.nodes
         new_root = TopoNode(root_ep, root_id, level='root', group=None)
-
+        old_root = self.root
         self.nodes[new_root.endpoint] = new_root
         self.root = new_root
 
         # if replacing the current root node, update child-parent relationships
         if old_root is not None:
             self.logger.warn('root node {} replaced by {}'.format(old_root, new_root))
-            del self.nodes[old_root.endpoint]
             for c in old_root.children:
                 c.parent = new_root
+                new_root.add_child(c)
+            del self.nodes[old_root.endpoint]
 
     def insert_endpoint(self, node_ep, node_id, level, group, parent):
         if node_ep in self.nodes:
