@@ -50,40 +50,29 @@ class Configuration(ServiceMixin):
             assert sos_func is None
         self.sos = sos_func
 
+        # Access to kvdict, kv_seq, and tree are protected by kvlock. There are multiple writers
+        # (both the Management and Configuration services can write at the same time) and multiple
+        # readers (all services, snapshots requests, etc).
+        #
+        # When reading, the Lock only needs to be held while reading multiple values (i.e.
+        # iterating across the entire dictionary or walking the tree). Getting individual elements
+        # should not require the Lock.
+
+        # { key : ( value, seq-num ) }
+        self.kvlock = Lock()
+        self.kvdict = {}
+        self.kv_seq = -1
+
         # 1) tree starts empty
         # 2) as config receives /topo keys, add nodes to tree as topo-node
         # tree.nodes contains { EndpntSpec: TopoNode }
         # TopoNode contains (endpoint, role, group, parent, children, last-seen)
         # topo keys come from tree.get_topo_key(node)
 
-        # TODO: when updates are made to tree, pub them to consumers; use func pointer
-        # TODO: when update are received, apply them to tree without pub'ing
-
-        self.tree = TopoTreeMixin(self.__setitem__)
-
-        # TODO: need to lock write access to kvdict; writes come from both mgmt and config svcs
-
-        # While no special locking is needed for the kvdict / seq_num members w.r.t.
-        # multiple writers (only the Management service can write changes), reading the
-        # dict while a change is being made will cause a RuntimeError to be raised. We
-        # could solve this by making a copy of the dict everytime a snapshot request is
-        # being made, but we will just use a Lock object instead.
-        #
-        # The Lock only needs to be held while sending a snapshot (i.e. iterating across
-        # the entire dictionary) and writing changes to the dictionary. Getting individual
-        # elements does not require the Lock.
-        #
-        # WRITE: If level is root, there will be no sub messages to process, so only one
-        #        thread (the Management service thread) will ever write to the kvdict and
-        #        seq_num members.
-        # READ:  If a kvsync and __setitem__() call occur simultaneously, the new item will
-        #        trigger a kvpub update. So if the new value is not included in the sync
-        #        snapshot, the clients will still get the new value.
-
-        # { key : ( value, seq-num ) }
-        self.kvlock = Lock()
-        self.kvdict = {}
-        self.kv_seq = -1
+        # all topo changes are handled directly by tree: both local updates (made by Management
+        # service) and SUBs are processed the same way. all topo changes are also in  kvdict and
+        # PUB'ed to consumers via given function pointer.
+        self.tree = TopoTreeMixin(self.__update)
 
         ### Common Members
 
@@ -142,13 +131,11 @@ class Configuration(ServiceMixin):
 
     def __setitem__(self, k, v):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        item = config.KVPUB(k, v, self.kv_seq + 1)
-        self.__process_update_message(item)  # add to our kvdict and publish update
+        self.__update(k, v)  # add to our kvdict and publish update
 
     def __delitem__(self, k):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        item = config.KVPUB(k, None, self.kv_seq + 1)
-        self.__process_update_message(item)  # remove from our kvdict and publish update
+        self.__update(k, None)  # remove from our kvdict and publish update
 
     def __len__(self):
         return len(self.kvdict)
@@ -156,31 +143,45 @@ class Configuration(ServiceMixin):
     def __iter__(self):
         return iter(self.kvdict)
 
-    def __write_kv(self, key, value, sequence=None, ignore_sequence=False):
-        if ignore_sequence:
-            assert self._is_sync()
+    def __kv_write(self, key, value, sequence, ignore_sequence):
+        """ N.B.: self.kvlock MUST be held when calling __kv_write() """
 
+        if ignore_sequence:
+            # during kvsync, we allow out of sequence updates
+            assert self._is_sync()
+        else:
+            # if not greater than current kv-sequence, skip this one
+            if sequence <= self.kv_seq:
+                self.logger.warn('kv write out of sequence (cur=%d, recvd=%d); dropping' % (
+                    self.kv_seq, sequence))
+                return False
+
+            # set seq-num when not doing a kvsync
+            self.kv_seq = sequence
+
+        # set/delete given key-value pair
+        self.kvdict[key] = (value, sequence)
+        if value is None:
+            del self.kvdict[key]
+
+        return True
+
+    def __update(self, k, v, sequence=None, ignore_sequence=False, silent=False):
+        # TODO: when update are received, check key and sent to tree if /topo
         with self.kvlock:
             if sequence is None:
                 assert not ignore_sequence
                 sequence = self.kv_seq + 1
 
-            # if not greater than current kv-sequence, skip this one
-            if not ignore_sequence and sequence <= self.kv_seq:
-                self.logger.warn('kv write out of sequence (cur=%d, recvd=%d); dropping' % (
-                    self.kv_seq, sequence))
-                return False
+            ok = self.__kv_write(k, v, sequence, ignore_sequence)
 
-            # during kvsync, we allow out of sequence updates; we only set our seq-num when
-            # not doing a kvsync
-            if not ignore_sequence:
-                self.kv_seq = sequence
-
-            self.kvdict[key] = (value, sequence)
-            if value is None:
-                del self.kvdict[key]
-
-        return True
+        # wait until finished with sync state before sending updates
+        if ok and self._is_gogo() and not silent:
+            assert self.update_pub is not None
+            update = config.KVPUB(k, v, self.kv_seq + 1)
+            update.send(self.update_pub)
+            self.__hb_sent()
+            self.pubcnt += 1
 
     # END dictionary access methods
     #####
@@ -247,10 +248,10 @@ class Configuration(ServiceMixin):
         regex = re.compile('/config/(\w+)/.+')
         gs = set()
         with self.kvlock:
-            for key in self:
+            for key in self.kvdict:
                 m = regex.match(key)
                 if m is not None:
-                    # every group has three keys in the kvdict; lazily find the unique
+                    # every group has three keys in the dict; lazily find the unique
                     # groups names by using a set
                     gs.add(m.group(1))
         return gs
@@ -326,7 +327,7 @@ class Configuration(ServiceMixin):
         # process pending updates; this will trigger kvpub updates for each message
         # processed
         for update in self.pending_updates:
-            self.__process_update_message(update)
+            self.__update(update.key, update.value, update.sequence)
         del self.pending_updates
 
     def _cleanup(self):
@@ -460,21 +461,9 @@ class Configuration(ServiceMixin):
             # in the SYNC state. this approach guarantees no updates are lost.
             self.pending_updates.append(update)
         elif self._is_gogo():
-            self.__process_update_message(update)
+            self.__update(update.key, update.value, update.sequence)
         else:
             raise NotImplementedError('unknown state')
-
-    def __process_update_message(self, update, ignore_sequence=False):
-        result = self.__write_kv(update.key, update.value, update.sequence, ignore_sequence)
-
-        # TODO: check result and pub; maybe pub from write_kv() ?
-
-        # wait until finished with sync state before sending updates
-        if self._is_gogo():
-            assert self.update_pub is not None
-            update.send(self.update_pub)
-            self.__hb_sent()
-            self.pubcnt += 1
 
     def __recv_snapshot(self):
         assert self.level in ['branch', 'leaf']
@@ -510,7 +499,7 @@ class Configuration(ServiceMixin):
                 self.__setup_outbound()
 
         else:
-            self.__process_update_message(response, ignore_sequence=True)
+            self.__update(response.key, response.value, response.sequence, ignore_sequence=True)
 
     def __send_snapshot(self):
         assert self._is_gogo()

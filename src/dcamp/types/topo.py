@@ -86,16 +86,19 @@ class TopoNode(object):
 class TopoTreeMixin(object):
     pass
 
-    def __init__(self):
+    def __init__(self, on_update):
         self.logger = logging.getLogger('dcamp.types.topo')
         self.root = None
         # { endpoint : TopoNode }
         self.nodes = {}
 
+        # TODO: when updates are made to tree, save/pub them using func pointer
+        self.on_update = on_update
+
     def __len__(self):
         return len(self.nodes)
 
-    def set_root(self, root_ep, root_id):
+    def insert_root(self, root_ep, root_id):
         """ plants the topo tree root """
 
         # create new node for the new root; the old node should no longer exist in the tree
@@ -112,13 +115,6 @@ class TopoTreeMixin(object):
                 c.parent = new_root
                 new_root.add_child(c)
             del self.nodes[old_root.endpoint]
-
-    def insert_endpoint(self, node_ep, node_id, level, group, parent):
-        if node_ep in self.nodes:
-            raise DuplicateNodeError('endpoint already exists: %s' % self.nodes[node_ep])
-
-        node = TopoNode(node_ep, node_id, level, group)
-        return self.insert_node(node, parent)
 
     def insert_node(self, node, parent):
         assert isinstance(parent, TopoNode)
