@@ -92,9 +92,6 @@ class TopoTreeMixin(object):
         # { endpoint : TopoNode }
         self.nodes = {}
 
-        # TODO: when updates are made to tree, save/pub them using func pointer
-        self.on_update = on_update
-
     def __len__(self):
         return len(self.nodes)
 
