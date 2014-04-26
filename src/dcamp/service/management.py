@@ -32,11 +32,8 @@ class Management(ServiceMixin):
         self.endpoint = local_ep
         self.uuid = gen_uuid()
 
-        self.config_service.root(self.endpoint)
-        self.config_service[self.tree.get_topo_key(self.tree.root)] = 0
+        self.config_service.set_root(self.endpoint, self.uuid)
 
-        # { group: collector-topo-node }
-        self.collectors = {}
         # { group: ( set(node-uuid), last-ping-time ) }
         self.sos_pings = {}
 
@@ -79,9 +76,7 @@ class Management(ServiceMixin):
         self.logger.debug("%d pubs; %d reqs; %d reps" %
                           (self.pubcnt, self.reqcnt, self.repcnt))
 
-        self.tree.print()
-        for (key, node) in self.tree.walk():
-            self.logger.debug('%s last seen %s' % (str(node.endpoint), node.last_seen))
+        self.config_service.print_tree()
 
         self.join_socket.close()
         del self.join_socket
@@ -130,7 +125,7 @@ class Management(ServiceMixin):
             repmsg = WTF(0, errstr)
 
         elif msg.command in ['polo', 'sos']:
-            remote = self.tree.find_node_by_endpoint(msg.endpoint)
+            remote = self.config_service.find_node(msg.endpoint)
 
             if 'polo' == msg.command:
                 if remote is None:
@@ -141,6 +136,7 @@ class Management(ServiceMixin):
                     # same assignment info as before
                     self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
                     remote.uuid = msg.uuid
+                    self.config_service.update_node(remote)
                     repmsg = remote.assignment()
 
                 else:
@@ -164,12 +160,12 @@ class Management(ServiceMixin):
         return repmsg, remote, sos_group
 
     def __stop_group(self, stop_group):
-        collector = self.collectors[stop_group]
+        collector = self.config_service.find_collector(stop_group)
+        assert collector is not None
         size = len(collector.children)
 
         # remove group's branch from the tree and local state
-        self.tree.remove_branch(collector)
-        del(self.collectors[stop_group])
+        self.config_service.remove_branch(collector)
         del(self.sos_pings[stop_group])
 
         self.logger.debug('attempting to stop %d nodes in group %s' % (size, stop_group))
@@ -247,9 +243,10 @@ class Management(ServiceMixin):
             if polo_msg.endpoint in self.config_service.get_endpoints(group):
                 self.logger.debug('found base group: %s' % group)
 
-                if group in self.collectors:
+                collector = self.config_service.find_collector(group)
+                if collector is not None:
                     # group already exists, make sensor (leaf) node
-                    parent = self.collectors[group]
+                    parent = collector
                     level = 'leaf'
                 else:
                     # first node in group, make collector
@@ -257,12 +254,8 @@ class Management(ServiceMixin):
                     level = 'branch'
 
                 node = TopoNode(polo_msg.endpoint, polo_msg.uuid, level, group)
-                if parent == self.tree.root:
-                    self.collectors[group] = node
-
                 node.touch()
                 node = self.tree.insert_node(node, parent)
-                self.config_service[self.tree.get_topo_key(node)] = node.last_seen
 
                 # create reply message
                 return node.assignment()

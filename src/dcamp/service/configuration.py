@@ -215,6 +215,26 @@ class Configuration(ServiceMixin):
     def root(self):
         return self.__tree.__root
 
+    def print_tree(self):
+        self.__tree.print()
+
+    def find_collector(self, group):
+        return self.__tree.find_collector(group)
+
+    def group_size(self, group):
+        return self.__tree.group_size()
+
+    def find_node(self, endpoint):
+        return self.__tree.find_node_by_endpoint(endpoint)
+
+    def update_node(self, node):
+        kvlist = self.__tree.update_node(node)
+        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+
+    def remove_branch(self, collector):
+        kvlist = self.__tree.remove_branch(collector)
+        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+
     # END topo tree access methods
     #####
 
