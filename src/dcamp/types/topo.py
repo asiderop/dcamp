@@ -29,6 +29,7 @@ class TopoNode(object):
     def __init__(self, endpoint, uuid, level, group):
         assert isinstance(endpoint, EndpntSpec)
         assert isinstance(uuid, UUID)
+        assert level in ['root', 'branch', 'leaf']
 
         self.endpoint = endpoint
         self.uuid = uuid
@@ -77,39 +78,62 @@ class TopoNode(object):
 
     def touch(self):
         self.last_seen = datetime.now()
+        return self.get_key_value()
 
     def assignment(self):
         return ASSIGN(self.endpoint, self.uuid, self.parent.endpoint, self.level, self.group)
+
+    def get_key_value(self):
+        return self.get_key(), self
+
+    def get_key(self):
+        """
+        /topo/root = RootNode
+        /topo/<group>/collector = BranchNode
+        /topo/<group>/nodes/<ep> = LeafNode
+        """
+        root_key = '/topo/root'
+        bran_key = '/topo/{}/collector'.format(self.group)
+        leaf_key = '/topo/{}/nodes/{}'.format(self.group, self.endpoint)
+
+        if 'root' == self.level:
+            return root_key
+        elif 'branch' == self.level:
+            return bran_key
+        elif 'leaf' == self.level:
+            return leaf_key
+
+        raise NotImplementedError('unknown level')
 
 
 @prefixable
 class TopoTreeMixin(object):
     pass
 
-    def __init__(self, on_update):
+    def __init__(self):
         self.logger = logging.getLogger('dcamp.types.topo')
-        self.root = None
+        self.__root = None
         # { endpoint : TopoNode }
-        self.nodes = {}
+        self.__nodes = {}
 
     def __len__(self):
-        return len(self.nodes)
-
-    # TODO: each "write" method must return list of (k,v) to be PUB'ed
+        return len(self.__nodes)
 
     def insert_root(self, root_ep, root_id):
-        """ plants the topo tree root """
+        """
+        plants the topo tree root
 
-        kvlist = {}
+        N.B.: assumes new root is NOT in tree
+        """
+        assert root_ep not in self.__nodes
+
+        kvlist = []
 
         # create new node for the new root; the old node should no longer exist in the tree
-        assert root_ep not in self.nodes
         new_root = TopoNode(root_ep, root_id, level='root', group=None)
-        old_root = self.root
-        self.nodes[new_root.endpoint] = new_root
-        self.root = new_root
-
-        kvlist['/topo/root'] = self.root
+        old_root = self.__root
+        self.__nodes[new_root.endpoint] = new_root
+        self.__root = new_root
 
         # if replacing the current root node, update child-parent relationships
         if old_root is not None:
@@ -117,95 +141,62 @@ class TopoTreeMixin(object):
             for c in old_root.children:
                 c.parent = new_root
                 new_root.add_child(c)
-            del self.nodes[old_root.endpoint]
 
-        return kvlist.items()
+            # remote old root from dict and add kv update for deletion
+            del self.__nodes[old_root.endpoint]
+            kvlist.append((old_root.get_key(), None))
+
+        # add kv update for new root
+        kvlist.append(self.__root.get_key_value())
+
+        # return kv updates
+        return kvlist
 
     def insert_node(self, node, parent):
         assert isinstance(parent, TopoNode)
-        assert parent in self.nodes.values()
-        if node.endpoint in self.nodes or node in self.nodes.values():
-            raise DuplicateNodeError('node already exists: %s' % self.nodes[node.endpoint])
+        assert parent in self.__nodes.values()
+        if node.endpoint in self.__nodes or node in self.__nodes.values():
+            raise DuplicateNodeError('node already exists: %s' % self.__nodes[node.endpoint])
 
         parent.add_child(node)
         node.parent = parent
-        self.nodes[node.endpoint] = node
-        return node
+        self.__nodes[node.endpoint] = node
+
+        return [node.get_key_value()]
 
     def remove_branch(self, node):
-        assert node.endpoint in self.nodes
+        assert node.endpoint in self.__nodes
         assert node.level == 'branch'
+
+        kvlist = []
 
         # first remove node from its parent's children list
         node.parent.del_child(node)
 
         # then remove each of node's children from the tree
         for c in node.children:
-            del(self.nodes[c.endpoint])
+            del self.__nodes[c.endpoint]
+            kvlist.append((c.get_key(), None))
 
         # and lastly remove node from the tree
-        del(self.nodes[node.endpoint])
+        del self.__nodes[node.endpoint]
+        kvlist.append((node.get_key(), None))
+
+        # return kv updates
+        return kvlist
 
     def find_node_by_endpoint(self, endpoint):
-        return None if endpoint not in self.nodes else self.nodes[endpoint]
+        return None if endpoint not in self.__nodes else self.__nodes[endpoint]
 
-    def get_topo_key(self, node):
-        # TODO: these topo keys are bogus: how do we handle parent endpoints failing?
-        #       branches are rebuilt. okay. root? maybe use "root" instead of root
-        #       endpoint? Issue #66
-        assert node in self.nodes.values()
-        assert node.endpoint in self.nodes
-
-        key = str(node.endpoint)
-        parent = node.parent
-        while parent is not None:
-            key = str(parent.endpoint) + self._delimiter + key
-            parent = parent.parent
-        return self._delimiter + 'topo' + self._delimiter + key
-
-    def walk(self):
-        self._push_prefix('topo')
-
-        self._push_prefix(str(self.root.endpoint))
-        yield from self.__walk()
-        self._pop_prefix()
-
-        # remove "topo" prefix
-        self._pop_prefix()
-
-        # verify we popped as many times as we pushed
-        assert len(self._get_prefix()) == 1
-
-    def __walk(self, node=None):
+    def walk(self, node=None):
         if node is None:
-            node = self.root
+            node = self.__root
 
-        yield (self._get_prefix(), node)
+        yield node.get_key_value()
 
         for child in node.children:
-            self._push_prefix(str(child.endpoint))
-            yield from self.__walk(child)
-            self._pop_prefix()
+            yield from self.walk(child)
 
-    def print(self, out=stdout):
-        self._push_prefix('topo')
-
-        self._push_prefix(str(self.root.endpoint))
-        self.__print(out=out)
-        self._pop_prefix()
-
-        # remove "topo" prefix
-        self._pop_prefix()
-
-        # verify we popped as many times as we pushed
-        assert len(self._get_prefix()) == 1
-
-    def __print(self, out, node=None):
-        if node is None:
-            node = self.root
-
-        out.write('%s = %s\n' % (self._get_prefix(), node))
-        for child in node.children:
-            self._push_prefix(str(child.endpoint))
-            self.__print(out, child)
-            self._pop_prefix()
+    def print(self, out=stdout, node=None):
+        for n in self.walk(node):
+            out.write('%s = %s\n' % n.get_key_value())

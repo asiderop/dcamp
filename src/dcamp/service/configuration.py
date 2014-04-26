@@ -208,13 +208,12 @@ class Configuration(ServiceMixin):
     #####
     # BEGIN topo tree access methods
 
-    def root(self, ep=None, uuid=None):
-        if ep is not None:
-            assert uuid is not None
-            kvlist = self.__tree.insert_root(ep, uuid)
-            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+    def set_root(self, ep, uuid):
+        kvlist = self.__tree.insert_root(ep, uuid)
+        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
 
-        return self.__tree.root
+    def root(self):
+        return self.__tree.__root
 
     # END topo tree access methods
     #####
