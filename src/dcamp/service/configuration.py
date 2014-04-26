@@ -69,7 +69,6 @@ class Configuration(ServiceMixin):
         # TopoNode contains (endpoint, role, group, parent, children, last-seen)
         # topo keys come from tree.get_topo_key(node)
 
-        # TODO
         # topo changes SUB'ed from parent are mimicked in __tree and PUB'ed to children; topo
         # changes by local services are applied to tree and then all generated key-value
         # updates are PUB'ed to children all at once.
@@ -132,17 +131,50 @@ class Configuration(ServiceMixin):
 
     def __setitem__(self, k, v):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        self.__kv_store_and_pub(k, v)  # add to our dict and publish update
+        self.__kvlist_store_and_pub([(k, v, None)])  # add to our dict and publish update
 
     def __delitem__(self, k):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        self.__kv_store_and_pub(k, None)  # remove from our dict and publish update
+        self.__kvlist_store_and_pub([(k, None, None)])  # remove from our dict and publish update
 
     def __len__(self):
         return len(self.__kvdict)
 
     def __iter__(self):
         return iter(self.__kvdict)
+
+    def __kvlist_store_and_pub(self, kvlist, skip_topo=False):
+        pub_kvlist = []
+        with self.__kvlock:
+            for item in kvlist:
+                # for convenience, list contains CONFIG messages or 3-tuples
+                if isinstance(item, config.CONFIG):
+                    (k, v, seq) = (item.key, item.value, item.sequence)
+                else:
+                    assert isinstance(item, tuple) and len(item) == 3
+                    (k, v, seq) = item
+
+                if seq is None:
+                    assert self._is_sync()
+                    seq = self.__kv_seq + 1
+
+                # write to dict
+                if self.__kv_write(k, v, seq):
+                    # if successful, pub later
+                    pub_kvlist.append((k, v, seq))
+
+        for (k, v, seq) in pub_kvlist:
+            # pass all topo updates to tree
+            if not skip_topo and k.startswith('/topo'):
+                self.__tree.update(k, v)
+
+            # wait until finished with sync state before sending updates
+            if self._is_gogo():
+                assert self.update_pub is not None
+                update = config.KVPUB(k, v, seq)
+                update.send(self.update_pub)
+                self.__hb_sent()
+                self.pubcnt += 1
 
     def __kv_write(self, key, value, sequence):
         """ N.B.: self.__kvlock MUST be held when calling __kv_write() """
@@ -165,33 +197,27 @@ class Configuration(ServiceMixin):
 
         return True
 
-    def __kv_store_and_pub(self, k, v, sequence=None):
-        with self.__kvlock:
-            if sequence is None:
-                assert self._is_sync()
-                sequence = self.__kv_seq + 1
-
-            ok = self.__kv_write(k, v, sequence)
-
-        if ok:
-            # pass all topo updates to tree
-            if k.startswith('/topo'):
-                self.__tree.update(k, v)
-
-            # wait until finished with sync state before sending updates
-            if self._is_gogo():
-                assert self.update_pub is not None
-                update = config.KVPUB(k, v, self.__kv_seq + 1)
-                update.send(self.update_pub)
-                self.__hb_sent()
-                self.pubcnt += 1
-
     # END dictionary access methods
     #####
+
+    #####
+    # BEGIN topo tree access methods
 
     def __topo_tree_updated(self, key, value):
         if 'root' == self.level:
             self[key] = value
+
+    def root(self, ep=None, uuid=None):
+        if ep is not None:
+            assert uuid is not None
+            # TODO: this will fail an assertion
+            kvlist = self.__tree.insert_root(ep, uuid)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+
+        return self.__tree.root
+
+    # END topo tree access methods
+    #####
 
     def __set_gogo(self):
         self.state_cond.acquire()
@@ -218,13 +244,6 @@ class Configuration(ServiceMixin):
         if self._is_gogo():
             return self['/config/global/heartbeat']
         return 5  # default hb interval until init is complete
-
-    def root(self, new_root=None):
-        if new_root is not None:
-            # TODO: this will fail an assertion
-            self['/topo/root'] = new_root
-
-        return self['/topo/root']
 
     def get_metric_specs(self, group=None):
         assert self._is_gogo()
@@ -327,10 +346,8 @@ class Configuration(ServiceMixin):
         self.kvsync_rep.bind(self.endpoint.bind_uri(EndpntSpec.CONFIG_SNAPSHOT))
         self.poller.register(self.kvsync_rep, POLLIN)
 
-        # process pending updates; this will trigger kvpub updates for each message
-        # processed
-        for update in self.pending_updates:
-            self.__kv_store_and_pub(update.key, update.value, update.sequence)
+        # process pending updates; this will trigger kvpub updates for each message processed
+        self.__kvlist_store_and_pub(self.pending_updates)
         del self.pending_updates
 
     def _cleanup(self):
@@ -464,7 +481,7 @@ class Configuration(ServiceMixin):
             # in the SYNC state. this approach guarantees no updates are lost.
             self.pending_updates.append(update)
         elif self._is_gogo():
-            self.__kv_store_and_pub(update.key, update.value, update.sequence)
+            self.__kvlist_store_and_pub([update])
         else:
             raise NotImplementedError('unknown state')
 
@@ -502,7 +519,7 @@ class Configuration(ServiceMixin):
                 self.__setup_outbound()
 
         else:
-            self.__kv_store_and_pub(response.key, response.value, response.sequence)
+            self.__kvlist_store_and_pub([response])
 
     def __send_snapshot(self):
         assert self._is_gogo()
