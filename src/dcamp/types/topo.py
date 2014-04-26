@@ -95,8 +95,12 @@ class TopoTreeMixin(object):
     def __len__(self):
         return len(self.nodes)
 
+    # TODO: each "write" method must return list of (k,v) to be PUB'ed
+
     def insert_root(self, root_ep, root_id):
         """ plants the topo tree root """
+
+        kvlist = {}
 
         # create new node for the new root; the old node should no longer exist in the tree
         assert root_ep not in self.nodes
@@ -105,6 +109,8 @@ class TopoTreeMixin(object):
         self.nodes[new_root.endpoint] = new_root
         self.root = new_root
 
+        kvlist['/topo/root'] = self.root
+
         # if replacing the current root node, update child-parent relationships
         if old_root is not None:
             self.logger.warn('root node {} replaced by {}'.format(old_root, new_root))
@@ -112,6 +118,8 @@ class TopoTreeMixin(object):
                 c.parent = new_root
                 new_root.add_child(c)
             del self.nodes[old_root.endpoint]
+
+        return kvlist.items()
 
     def insert_node(self, node, parent):
         assert isinstance(parent, TopoNode)

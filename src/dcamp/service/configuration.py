@@ -131,11 +131,11 @@ class Configuration(ServiceMixin):
 
     def __setitem__(self, k, v):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        self.__kvlist_store_and_pub([(k, v, None)])  # add to our dict and publish update
+        self.__kvlist_store_and_pub([(k, v)])  # add to our dict and publish update
 
     def __delitem__(self, k):
         assert 'root' == self.level, "only root level allowed to make modifications"
-        self.__kvlist_store_and_pub([(k, None, None)])  # remove from our dict and publish update
+        self.__kvlist_store_and_pub([(k, None)])  # remove from our dict and publish update
 
     def __len__(self):
         return len(self.__kvdict)
@@ -151,11 +151,16 @@ class Configuration(ServiceMixin):
                 if isinstance(item, config.CONFIG):
                     (k, v, seq) = (item.key, item.value, item.sequence)
                 else:
-                    assert isinstance(item, tuple) and len(item) == 3
-                    (k, v, seq) = item
+                    assert isinstance(item, tuple)
+                    if 3 == len(item):
+                        (k, v, seq) = item
+                    elif 2 == len(item):
+                        (k, v) = item
+                        seq = None
+                    else:
+                        raise NotImplementedError('unknown tuple length')
 
                 if seq is None:
-                    assert self._is_sync()
                     seq = self.__kv_seq + 1
 
                 # write to dict
@@ -203,14 +208,9 @@ class Configuration(ServiceMixin):
     #####
     # BEGIN topo tree access methods
 
-    def __topo_tree_updated(self, key, value):
-        if 'root' == self.level:
-            self[key] = value
-
     def root(self, ep=None, uuid=None):
         if ep is not None:
             assert uuid is not None
-            # TODO: this will fail an assertion
             kvlist = self.__tree.insert_root(ep, uuid)
             self.__kvlist_store_and_pub(kvlist, skip_topo=True)
 
