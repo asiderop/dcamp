@@ -6,7 +6,6 @@ from dcamp.service.service import ServiceMixin
 from dcamp.types.messages.common import WTF
 from dcamp.types.messages.topology import gen_uuid, MARCO, CONTROL, POLO, STOP, GROUP
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.topo import TopoTreeMixin, TopoNode
 from dcamp.util.functions import now_secs
 
 
@@ -28,11 +27,13 @@ class Management(ServiceMixin):
         ServiceMixin.__init__(self, control_pipe, config_svc)
         assert isinstance(local_ep, EndpntSpec)
 
-        self.config_service = config_svc
+        # TODO: config service is basically a replication service with two use-cases: config and topo;
+        #       this design can probably be cleaned up quite a bit.
+        self.cfgsvc = config_svc
         self.endpoint = local_ep
         self.uuid = gen_uuid()
 
-        self.config_service.set_root(self.endpoint, self.uuid)
+        self.cfgsvc.topo_set_root(self.endpoint, self.uuid)
 
         # { group: ( set(node-uuid), last-ping-time ) }
         self.sos_pings = {}
@@ -51,8 +52,8 @@ class Management(ServiceMixin):
         self.disc_socket = self.ctx.socket(PUB)
         self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
-        for group in self.config_service.get_groups():
-            for ep in self.config_service.get_endpoints(group):
+        for group in self.cfgsvc.config_get_groups():
+            for ep in self.cfgsvc.config_get_endpoints(group):
                 if ep == local_ep:
                     continue  # don't add ourself
                 self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
@@ -60,7 +61,7 @@ class Management(ServiceMixin):
         self.reqcnt = 0
         self.repcnt = 0
 
-        self.pubint = self.config_service.hb_int
+        self.pubint = self.cfgsvc.config_get_hb_int()
         self.pubcnt = 0
 
         self.marco_msg = MARCO(self.endpoint, self.uuid)
@@ -76,7 +77,7 @@ class Management(ServiceMixin):
         self.logger.debug("%d pubs; %d reqs; %d reps" %
                           (self.pubcnt, self.reqcnt, self.repcnt))
 
-        self.config_service.print_tree()
+        self.cfgsvc.topo_print()
 
         self.join_socket.close()
         del self.join_socket
@@ -110,7 +111,7 @@ class Management(ServiceMixin):
             self.repcnt += 1
 
             if remote is not None:
-                remote.touch()
+                self.cfgsvc.topo_touch_node(remote)
 
             if sos_group is not None:
                 # do group reset
@@ -125,7 +126,7 @@ class Management(ServiceMixin):
             repmsg = WTF(0, errstr)
 
         elif msg.command in ['polo', 'sos']:
-            remote = self.config_service.find_node(msg.endpoint)
+            remote = self.cfgsvc.topo_get_node(msg.endpoint)
 
             if 'polo' == msg.command:
                 if remote is None:
@@ -136,7 +137,7 @@ class Management(ServiceMixin):
                     # same assignment info as before
                     self.logger.debug('%s rePOLOed with new UUID' % str(remote.endpoint))
                     remote.uuid = msg.uuid
-                    self.config_service.update_node(remote)
+                    self.cfgsvc.topo_set_node(remote)
                     repmsg = remote.assignment()
 
                 else:
@@ -160,12 +161,12 @@ class Management(ServiceMixin):
         return repmsg, remote, sos_group
 
     def __stop_group(self, stop_group):
-        collector = self.config_service.find_collector(stop_group)
+        collector = self.cfgsvc.topo_get_collector(stop_group)
         assert collector is not None
         size = len(collector.children)
 
-        # remove group's branch from the tree and local state
-        self.config_service.remove_branch(collector)
+        # remove group's branch from the tree (by removing collector)
+        self.cfgsvc.topo_del_branch(collector)
         del(self.sos_pings[stop_group])
 
         self.logger.debug('attempting to stop %d nodes in group %s' % (size, stop_group))
@@ -173,7 +174,7 @@ class Management(ServiceMixin):
         self.logger.debug('%d nodes in group %s stopped' % (num, stop_group))
 
     def __stop_all_nodes(self):
-        size = len(self.tree) - 1  # don't count this (root) node
+        size = self.cfgsvc.topo_size() - 1  # don't count this (root) node
         self.logger.debug('attempting to stop {} nodes'.format(size))
         num = self.__stop_nodes(size)
         self.logger.debug('{} nodes stopped'.format(num))
@@ -239,23 +240,26 @@ class Management(ServiceMixin):
 
         # lookup node group
         # @todo need to keep track of nodes which have already POLO'ed / issue #39
-        for group in self.config_service.get_groups():
-            if polo_msg.endpoint in self.config_service.get_endpoints(group):
+        for group in self.cfgsvc.config_get_groups():
+            if polo_msg.endpoint in self.cfgsvc.config_get_endpoints(group):
                 self.logger.debug('found base group: %s' % group)
 
-                collector = self.config_service.find_collector(group)
+                collector = self.cfgsvc.topo_get_collector(group)
                 if collector is not None:
                     # group already exists, make sensor (leaf) node
                     parent = collector
                     level = 'leaf'
                 else:
                     # first node in group, make collector
-                    parent = self.tree.root
+                    parent = self.cfgsvc.topo_get_root()
                     level = 'branch'
 
-                node = TopoNode(polo_msg.endpoint, polo_msg.uuid, level, group)
-                node.touch()
-                node = self.tree.insert_node(node, parent)
+                node = self.cfgsvc.topo_insert_endpoint(
+                    polo_msg.endpoint,
+                    polo_msg.uuid,
+                    level,
+                    group,
+                    parent)
 
                 # create reply message
                 return node.assignment()
@@ -282,10 +286,16 @@ class Management(ServiceMixin):
         self.sos_pings[group] = (nodes, last_ping)
 
         # check if over 1/3 threshold
-        if len(nodes) < (len(self.collectors[remote.group].children) / 3):
-            # not enough nodes have detected the down node; ignore for now
-            return None
+        c = self.cfgsvc.topo_get_collector(group)
+        if c is None:
+            self.logger.warn('received SOS from {} for unknown group: {}'.format(remote, group))
         else:
-            # otherwise, we need to reset the group
-            # clear sos cache, first
-            return group
+            have = len(nodes)
+            need = len(c.children) / 3
+            if have < need:
+                # not enough nodes have detected the down node; ignore for now
+                self.logger.debug('have SOS from {} nodes; need {} more to continue'.format(have, need - have))
+                return None
+            else:
+                # otherwise, we need to reset the group
+                return group

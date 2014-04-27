@@ -1,5 +1,5 @@
 import re
-from threading import Lock, Condition
+from threading import RLock, Condition
 from types import MethodType
 
 from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-msg=E0611
@@ -7,7 +7,7 @@ from zmq import PUB, SUB, SUBSCRIBE, POLLIN, DEALER, ROUTER  # pylint: disable-m
 import dcamp.types.messages.configuration as config
 from dcamp.types.specs import EndpntSpec
 from dcamp.service.service import ServiceMixin
-from dcamp.types.topo import TopoTreeMixin
+from dcamp.types.topo import TopoTreeMixin, TopoNode
 from dcamp.util.functions import now_secs, now_msecs
 from dcamp.types.config_file import ConfigFileMixin
 
@@ -59,12 +59,12 @@ class Configuration(ServiceMixin):
         # should not require the Lock.
 
         # { key : ( value, seq-num ) }
-        self.__kvlock = Lock()
+        self.__kvlock = RLock()  # reentrant lock because I'm lazy
         self.__kvdict = {}
         self.__kv_seq = -1
 
         # 1) tree starts empty
-        # 2) as config receives /topo keys, add nodes to tree as topo-node
+        # 2) as config receives /TOPO keys, add nodes to tree as topo-node
         # tree.nodes contains { EndpntSpec: TopoNode }
         # TopoNode contains (endpoint, role, group, parent, children, last-seen)
         # topo keys come from tree.get_topo_key(node)
@@ -100,11 +100,11 @@ class Configuration(ServiceMixin):
         self.topics = []
         if 'leaf' == self.level:
             assert self.group is not None
-            self.topics.append('/config/%s/' % self.group)
-            self.topics.append('/config/global/')
+            self.topics.append('/CONFIG/%s/' % self.group)
+            self.topics.append('/CONFIG/global/')
         elif 'branch' == self.level:
-            self.topics.append('/config/')
-            self.topics.append('/topo/')
+            self.topics.append('/CONFIG/')
+            self.topics.append('/TOPO/')
 
         ### let's get it started
 
@@ -169,9 +169,9 @@ class Configuration(ServiceMixin):
                     pub_kvlist.append((k, v, seq))
 
         for (k, v, seq) in pub_kvlist:
-            # pass all topo updates to tree
-            if not skip_topo and k.startswith('/topo'):
-                self.__tree.update(k, v)
+            # pass all topo updates to tree; if update is actually coming from tree, skip_topo should be True
+            if not skip_topo and k.startswith('/TOPO'):
+                self.__tree.kv_update(k, v)
 
             # wait until finished with sync state before sending updates
             if self._is_gogo():
@@ -188,6 +188,7 @@ class Configuration(ServiceMixin):
             # during kvsync, we allow out of sequence updates; otherwise,
             # if not greater than current kv-sequence, skip this one
             if sequence <= self.__kv_seq:
+                # TODO: trigger a kvsync if sequence != kv_seq + 1
                 self.logger.warn('kv write out of sequence (cur=%d, recvd=%d); dropping' % (
                     self.__kv_seq, sequence))
                 return False
@@ -208,32 +209,59 @@ class Configuration(ServiceMixin):
     #####
     # BEGIN topo tree access methods
 
-    def set_root(self, ep, uuid):
-        kvlist = self.__tree.insert_root(ep, uuid)
-        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+    def topo_print(self):
+        with self.__kvlock:
+            self.__tree.print()
 
-    def root(self):
-        return self.__tree.__root
+    def topo_get_size(self):
+        return len(self.__tree)
 
-    def print_tree(self):
-        self.__tree.print()
+    # root access
 
-    def find_collector(self, group):
-        return self.__tree.find_collector(group)
+    def topo_get_root(self):
+        return self.__tree.root()
 
-    def group_size(self, group):
-        return self.__tree.group_size()
+    def topo_set_root(self, ep, uuid):
+        with self.__kvlock:
+            kvlist = self.__tree.insert_root(ep, uuid)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
 
-    def find_node(self, endpoint):
-        return self.__tree.find_node_by_endpoint(endpoint)
+    # branch/collector access
 
-    def update_node(self, node):
-        kvlist = self.__tree.update_node(node)
-        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+    def topo_group_size(self, group):
+        c = self.topo_get_collector(group)
+        return c is not None and len(c.children) or 0
 
-    def remove_branch(self, collector):
-        kvlist = self.__tree.remove_branch(collector)
-        self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+    def topo_get_collector(self, group):
+        return self.__tree.get_collector(group)
+
+    def topo_del_branch(self, collector):
+        with self.__kvlock:
+            kvlist = self.__tree.remove_collector(collector)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+
+    # leaf/node access
+
+    def topo_get_node(self, endpoint):
+        return self.__tree.get_node(endpoint)
+
+    def topo_set_node(self, node):
+        with self.__kvlock:
+            kvlist = self.__tree.update_node(node)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+
+    def topo_insert_endpoint(self, ep, uuid, level, group, parent):
+        node = TopoNode(ep, uuid, level, group)
+        node.touch()
+        with self.__kvlock:
+            kvlist = self.__tree.insert_node(node, parent)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
+        return node
+
+    def topo_touch_node(self, node):
+        with self.__kvlock:
+            kvlist = self.__tree.touch_node(node)
+            self.__kvlist_store_and_pub(kvlist, skip_topo=True)
 
     # END topo tree access methods
     #####
@@ -258,22 +286,21 @@ class Configuration(ServiceMixin):
     #####
     # BEGIN config access methods
 
-    @property
-    def hb_int(self):
+    def config_get_hb_int(self):
         if self._is_gogo():
-            return self['/config/global/heartbeat']
+            return self['/CONFIG/global/heartbeat']
         return 5  # default hb interval until init is complete
 
-    def get_metric_specs(self, group=None):
+    def config_get_metric_specs(self, group=None):
         assert self._is_gogo()
 
         if group is None:
             group = self.group
 
         # return tuple = (spec-list, seq-id) or (None, -1)
-        return self.get('/config/%s/metrics' % group, (None, -1))
+        return self.get('/CONFIG/%s/metrics' % group, (None, -1))
 
-    def get_endpoints(self, group=None):
+    def config_get_endpoints(self, group=None):
         assert self._is_gogo()
 
         if group is None:
@@ -281,12 +308,12 @@ class Configuration(ServiceMixin):
 
         # return ep-list or []
         try:
-            return self['/config/%s/endpoints' % group]
+            return self['/CONFIG/%s/endpoints' % group]
         except KeyError:
             return []
 
-    def get_groups(self):
-        regex = re.compile('/config/(\w+)/.+')
+    def config_get_groups(self):
+        regex = re.compile('/CONFIG/(\w+)/.+')
         gs = set()
         with self.__kvlock:
             for key in self.__kvdict:
@@ -351,9 +378,9 @@ class Configuration(ServiceMixin):
 
         if 'branch' == self.level:
             assert self.group is not None
-            t = '/config/%s' % self.group
+            t = '/CONFIG/%s' % self.group
         elif 'root' == self.level:
-            t = '/topo'
+            t = '/TOPO'
         else:
             raise NotImplementedError('unknown level: %s' % self.level)
 
@@ -473,11 +500,11 @@ class Configuration(ServiceMixin):
 
     def __hb_sent(self):
         # reset hugz using last pub time
-        self.next_hug = now_secs() + self.hb_int
+        self.next_hug = now_secs() + self.config_get_hb_int()
 
     def __hb_received(self):
         # reset sos using last hb time
-        self.next_sos = now_secs() + (self.hb_int * 5)
+        self.next_sos = now_secs() + (self.config_get_hb_int() * 5)
 
     def __recv_update(self):
         update = config.CONFIG.recv(self.update_sub)

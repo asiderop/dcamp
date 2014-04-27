@@ -7,7 +7,7 @@ from dcamp.util.functions import isInstance_orNone
 __all__ = [
     'gen_uuid',
 
-    'TOPO'
+    'TOPO',
     'MARCO',
     'GROUP',
     'RECOVERY',
