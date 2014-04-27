@@ -216,7 +216,7 @@ class _PROPS(object):
         type_name = type(value).__name__
         # special case spec types (namedtuple) to use dict as values instead of list
         if type_name in SerializableSpecTypes:
-            value = value._asdict()
+            value = vars(value)
         return type_name, value
 
     @staticmethod

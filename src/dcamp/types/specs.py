@@ -17,6 +17,7 @@ GroupSpec = namedtuple('GroupSpec', ['endpoints', 'filters', 'metrics'])
 
 class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
     """Class representing a Threshold specification"""
+    __slots__ = ()
 
     def check(self, value):
         if self.op in ['<', '>']:
@@ -83,6 +84,7 @@ class ThreshSpec(namedtuple('ThreshSpec', ['op', 'value'])):
 
 class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', 'detail', 'param'])):
     """ Class Representing a Metric Specification """
+    __slots__ = ()
 
     def __str__(self):
         return "%s(detail='%s', rate='%s', threshold='%s', param='%s')" % (
@@ -92,11 +94,13 @@ class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', '
 
 class MetricCollection(namedtuple('MetricCollection', 'epoch, spec')):
     """ Class Representing a Metric Collection Specification """
+    __slots__ = ()
     pass
 
 
 class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):
     """ Class Representing a Filter Specification """
+    __slots__ = ()
 
     def __str__(self):
         return "%s'%s'" % (self.action, self.match)
@@ -104,6 +108,7 @@ class FilterSpec(namedtuple('FilterSpec', ['action', 'match'])):
 
 class EndpntSpec(namedtuple('EndpntSpec', ['host', 'port'])):
     """ Class Representing an Endpoint Specification """
+    __slots__ = ()
 
     ### port offsets (for binding)
 
