@@ -121,7 +121,7 @@ class TopoTreeMixin(object):
     """
     root_pattern = compile(r'/TOPO/root')
     bran_pattern = compile(r'/TOPO/(?P<group>[\w\-.]+)/collector')
-    leaf_pattern = compile(r'/TOPO/(?P<group>[\w\-.]+)/leaves/(?P<ep>[\w\-.]+:\d+)')
+    leaf_pattern = compile(r'/TOPO/(?P<group>[\w\-.]+)/leaves/(?P<endpoint>[\w\-.]+:\d+)')
 
     def __init__(self):
         self.logger = logging.getLogger('dcamp.types.topo')
@@ -243,7 +243,7 @@ class TopoTreeMixin(object):
     # root access
 
     def root(self):
-        return self.__root.endpoint
+        return self.__root
 
     def insert_root(self, root_ep, root_id):
         assert root_ep not in self.__nodes

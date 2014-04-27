@@ -267,6 +267,7 @@ class RestrictedUnpickler(pickle.Unpickler):
     SAFE_IMPORTS = {
         'builtins': ['range', 'complex', 'set', 'frozenset', 'slice'],
         'datetime': ['datetime'],
+        'uuid':     ['UUID'],
     }
 
     def find_class(self, module, name):
