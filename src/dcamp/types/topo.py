@@ -144,8 +144,8 @@ class TopoTreeMixin(object):
             yield from self.walk(child)
 
     def print(self, out=stdout, node=None):
-        for n in self.walk(node):
-            out.write('%s = %s\n' % n.get_key_value())
+        for (k, n) in self.walk(node):
+            out.write('%s = %s\n' % (k, n))
 
     def kv_update(self, k, v):
         assert k.startswith('/TOPO')

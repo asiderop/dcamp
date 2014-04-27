@@ -1,6 +1,6 @@
 from time import time
 
-from zmq import ROUTER, PUB, POLLIN, Again  # pylint: disable-msg=E0611
+from zmq import ROUTER, PUB, POLLIN, Again, ZMQError  # pylint: disable-msg=E0611
 
 from dcamp.service.service import ServiceMixin
 from dcamp.types.messages.common import WTF
@@ -50,13 +50,16 @@ class Management(ServiceMixin):
 
         # we send topo discovery messages on this socket
         self.disc_socket = self.ctx.socket(PUB)
-        self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
+        #self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
         for group in self.cfgsvc.config_get_groups():
             for ep in self.cfgsvc.config_get_endpoints(group):
                 if ep == local_ep:
                     continue  # don't add ourself
-                self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
+                try:
+                    self.disc_socket.connect(ep.connect_uri(EndpntSpec.BASE))
+                except ZMQError as e:
+                    self.logger.error('unable to connect to endpoint {}: {}'.format(ep, e))
 
         self.reqcnt = 0
         self.repcnt = 0

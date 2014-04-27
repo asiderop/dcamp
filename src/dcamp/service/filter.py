@@ -24,7 +24,7 @@ class Filter(ServiceMixin):
         assert isinstance(local_ep, EndpntSpec)
 
         self.level = level
-        self.config_service = config_svc
+        self.cfgsvc = config_svc
         self.parent = parent_ep
         self.endpoint = local_ep
 
@@ -181,7 +181,7 @@ class Filter(ServiceMixin):
             cache.append(saved)
 
     def __check_config_for_metric_updates(self):
-        (specs, seq) = self.config_service.get_metric_specs()
+        (specs, seq) = self.cfgsvc.config_get_metric_specs()
         if seq > self.metric_seqid:
             # TODO: instead of clearing the list, try to keep old specs that have not
             #       changed?

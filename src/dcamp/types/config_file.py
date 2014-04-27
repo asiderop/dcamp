@@ -145,7 +145,7 @@ class ConfigFileMixin(ConfigParser):
 
         result = {}
 
-        self._push_prefix('config')
+        self._push_prefix('CONFIG')
 
         # add global_cfg specs
         prefix = self._push_prefix('global')

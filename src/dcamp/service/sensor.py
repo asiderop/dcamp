@@ -18,7 +18,7 @@ class Sensor(ServiceMixin):
 
         ServiceMixin.__init__(self, control_pipe, config_svc)
 
-        self.config_service = config_svc
+        self.cfgsvc = config_svc
         self.endpoint = local_ep
 
         # goal: sort by next collection time
@@ -90,7 +90,7 @@ class Sensor(ServiceMixin):
 
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
-        (specs, seq) = self.config_service.get_metric_specs()
+        (specs, seq) = self.cfgsvc.config_get_metric_specs()
         if seq > self.metric_seqid:
 
             new_specs = []
