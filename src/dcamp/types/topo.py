@@ -337,7 +337,7 @@ class TopoTreeMixin(object):
             assert node.parent == self.__root
             if node.group in self.__collectors:
                 self.logger.warn('branch node {} replaced by {}'.format(self.__collectors[node.group], node))
-            # no kv update needed for replacement
+            # no "delete" kv update needed for replacement
             self.__collectors[node.group] = node
 
         # add kv update for new node

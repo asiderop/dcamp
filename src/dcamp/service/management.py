@@ -113,12 +113,12 @@ class Management(ServiceMixin):
             repmsg.send(self.join_socket)
             self.repcnt += 1
 
-            if remote is not None:
-                self.cfgsvc.topo_touch_node(remote)
-
+            # do group reset
             if sos_group is not None:
-                # do group reset
                 self.__stop_group(sos_group)
+            # otherwise, update node with latest contact
+            elif remote is not None:
+                self.cfgsvc.topo_touch_node(remote)
 
     def __get_rep(self, msg):
         (repmsg, remote, sos_group) = (None, None, None)
