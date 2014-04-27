@@ -10,7 +10,7 @@ ROOT=localhost:55500
 COLLECTOR=localhost:55700
 METRIC=localhost:55730
 
-USAGE="usage: `basename $0` [-x] <base-r|base-c|base-m|start|stop>"
+USAGE="usage: `basename $0` [-x|-l] <base-r|base-c|base-m|start|stop>"
 
 if [ $# -lt 1 ]; then
 	echo $USAGE
@@ -23,14 +23,23 @@ if [ "$1" == "-x" ]; then
 	shift
 fi
 
+L=1
+if [ "$1" == "-l" ]; then
+	L=0
+	shift
+fi
+
 case "$1" in
 
 	base-r)
-		MODS="-d"
 		MODS="--debug-module dcamp.service.Configuration"
 		MODS="--debug-module dcamp.service.Management --debug-module dcamp.service.Node --debug-module dcamp.role.Root"
+		MODS="-d"
 		if [ $X -eq 0 ]; then
 			$XTERM -geometry 131x50+0+0 -T root -e $DCAMP $MODS base -a $ROOT &
+		elif [ $L -eq 0 ]; then
+			$DCAMP $MODS base -a $ROOT > $BASEDIR/debug/base-r.log 2>&1 &
+			echo $!
 		else
 			$DCAMP $MODS base -a $ROOT
 		fi
@@ -41,17 +50,23 @@ case "$1" in
 		MODS="-d"
 		if [ $X -eq 0 ]; then
 			$XTERM -geometry 131x50+0+350 -T collector -e $DCAMP $MODS base -a $COLLECTOR &
+		elif [ $L -eq 0 ]; then
+			$DCAMP $MODS base -a $COLLECTOR > $BASEDIR/debug/base-c.log 2>&1 &
+			echo $!
 		else
 			$DCAMP $MODS base -a $COLLECTOR
 		fi
 		;;
 
 	base-m)
-		MODS="-d"
 		MODS="--debug-module dcamp.service.Node --debug-module dcamp.service.Configuration"
 		MODS="--debug-module dcamp.service.Node"
+		MODS="-d"
 		if [ $X -eq 0 ]; then
 			$XTERM -geometry 147x76-0+0 -T metric -e $DCAMP $MODS base -a $METRIC &
+		elif [ $L -eq 0 ]; then
+			$DCAMP $MODS base -a $METRIC > $BASEDIR/debug/base-m.log 2>&1 &
+			echo $!
 		else
 			$DCAMP $MODS base -a $METRIC
 		fi

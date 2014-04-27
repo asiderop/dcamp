@@ -177,7 +177,7 @@ class TopoTreeMixin(object):
 
     def __kv_update_leaf(self, m, v):
         (m_g, m_e) = (m.group('group'), m.group('endpoint'))
-        if (m_g, m_e, 'leaf') != (v.group, v.endpoint, v.level):
+        if (m_g, m_e, 'leaf') != (v.group, str(v.endpoint), v.level):
             self.logger.error('key / value do not match; {} != {}'.format(
                 (m_g, m_e), (v.group, v.endpoint, v.level)))
             return False

@@ -100,11 +100,11 @@ class Configuration(ServiceMixin):
         self.topics = []
         if 'leaf' == self.level:
             assert self.group is not None
-            self.topics.append('/CONFIG/%s/' % self.group)
+            self.topics.append('/TOPO/root')
             self.topics.append('/CONFIG/global/')
+            self.topics.append('/CONFIG/%s/' % self.group)
         elif 'branch' == self.level:
-            self.topics.append('/CONFIG/')
-            self.topics.append('/TOPO/')
+            self.topics.append('/')  # collectors get everything
 
         ### let's get it started
 
@@ -114,9 +114,12 @@ class Configuration(ServiceMixin):
 
         # populate dict with config_file values if root level; values are used later
         if 'root' == self.level:
-            self.__initialize_kvdict(config_file)
-
-        self.__initialize_sockets()
+            self.__init_kvdict_from_file(config_file)
+            # set GOGO state; this basically means we have all the config values
+            self.__set_gogo()
+            self.__init_producer_sockets()
+        else:
+            self.__init_consumer_sockets()
 
     #####
     #  BEGIN dictionary access methods
@@ -143,7 +146,7 @@ class Configuration(ServiceMixin):
     def __iter__(self):
         return iter(self.__kvdict)
 
-    def __kvlist_store_and_pub(self, kvlist, skip_topo=False):
+    def __kvlist_store_and_pub(self, kvlist, ignore_seq=False, skip_topo=False):
         pub_kvlist = []
         with self.__kvlock:
             for item in kvlist:
@@ -161,15 +164,17 @@ class Configuration(ServiceMixin):
                         raise NotImplementedError('unknown tuple length')
 
                 if seq is None:
+                    assert not ignore_seq
                     seq = self.__kv_seq + 1
 
                 # write to dict
-                if self.__kv_write(k, v, seq):
+                if self.__kv_write(k, v, seq, ignore_seq):
                     # if successful, pub later
                     pub_kvlist.append((k, v, seq))
 
         for (k, v, seq) in pub_kvlist:
-            # pass all topo updates to tree; if update is actually coming from tree, skip_topo should be True
+            # pass all topo updates to tree; if update is actually coming from
+            # tree, skip_topo should be True
             if not skip_topo and k.startswith('/TOPO'):
                 self.__tree.kv_update(k, v)
 
@@ -181,19 +186,22 @@ class Configuration(ServiceMixin):
                 self.__hb_sent()
                 self.pubcnt += 1
 
-    def __kv_write(self, key, value, sequence):
+    def __kv_write(self, key, value, sequence, ignore_seq):
         """ N.B.: self.__kvlock MUST be held when calling __kv_write() """
 
-        if not self._is_sync():
+        if ignore_seq:
             # during kvsync, we allow out of sequence updates; otherwise,
+            assert self._is_sync()
+        else:
             # if not greater than current kv-sequence, skip this one
             if sequence <= self.__kv_seq:
-                # TODO: trigger a kvsync if sequence != kv_seq + 1
+                # TODO: trigger a kvsync if sequence != kv_seq + 1; leaf nodes do not get every
+                #       update, so that won't work...
                 self.logger.warn('kv write out of sequence (cur=%d, recvd=%d); dropping' % (
                     self.__kv_seq, sequence))
                 return False
 
-            # set seq-num when not doing a kvsync
+            # always set seq-num if not ignore_seq
             self.__kv_seq = sequence
 
         # set/delete given key-value pair
@@ -327,7 +335,7 @@ class Configuration(ServiceMixin):
     # END config access methods
     #####
 
-    def __initialize_kvdict(self, config_file):
+    def __init_kvdict_from_file(self, config_file):
         assert 'root' == self.level
         assert config_file is not None
         cfg = ConfigFileMixin()
@@ -335,40 +343,32 @@ class Configuration(ServiceMixin):
         for (k, v) in cfg.kvdict.items():
             assert isinstance(k, str)
             self.logger.debug('INIT: {}: {}'.format(k, v))
-            self[k] = v
+        self.__kvlist_store_and_pub(cfg.kvdict.items())
         self.logger.debug('INIT: final kv-seq = {}'.format(self.__kv_seq))
 
-    def __initialize_sockets(self):
-        if self.level in ['branch', 'leaf']:
-            assert self.parent is not None
-            assert len(self.topics) > 0
+    def __init_consumer_sockets(self):
+        assert self.level in ['branch', 'leaf']
+        assert self.parent is not None
+        assert len(self.topics) > 0
 
-            # 1) subscribe to udpates from parent
-            self.update_sub = self.ctx.socket(SUB)
-            for t in self.topics:
-                self.update_sub.setsockopt_string(SUBSCRIBE, t)
-            self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
+        # 1) subscribe to udpates from parent
+        self.update_sub = self.ctx.socket(SUB)
+        for t in self.topics:
+            self.update_sub.setsockopt_string(SUBSCRIBE, t)
+        self.update_sub.connect(self.parent.connect_uri(EndpntSpec.CONFIG_UPDATE))
 
-            self.poller.register(self.update_sub, POLLIN)
+        self.poller.register(self.update_sub, POLLIN)
 
-            # 2) request snapshot(s) from parent
-            self.kvsync_req = self.ctx.socket(DEALER)
-            self.kvsync_req.connect(self.parent.connect_uri(EndpntSpec.CONFIG_SNAPSHOT))
-            for t in self.topics:
-                icanhaz = config.ICANHAZ(t)
-                icanhaz.send(self.kvsync_req)
+        # 2) request snapshot(s) from parent
+        self.kvsync_req = self.ctx.socket(DEALER)
+        self.kvsync_req.connect(self.parent.connect_uri(EndpntSpec.CONFIG_SNAPSHOT))
+        for t in self.topics:
+            icanhaz = config.ICANHAZ(t)
+            icanhaz.send(self.kvsync_req)
 
-            self.poller.register(self.kvsync_req, POLLIN)
+        self.poller.register(self.kvsync_req, POLLIN)
 
-        else:
-            assert 'root' == self.level
-
-            # set GOGO state; this basically means we have all the config values
-            self.__set_gogo()
-
-            self.__setup_outbound()
-
-    def __setup_outbound(self):
+    def __init_producer_sockets(self):
         assert self.level in ['root', 'branch']
         assert self._is_gogo()
 
@@ -473,7 +473,7 @@ class Configuration(ServiceMixin):
         next_sos_wakeup = None
 
         if self.level in ['root', 'branch']:
-            assert self.next_hug is not None  # initialized by __setup_outbound()
+            assert self.next_hug is not None  # initialized by __init_producer_sockets()
             # next_hug is in secs; subtract current msecs to get next wakeup
             next_hug_wakeup = (self.next_hug * 1e3) - now_msecs()
             next_wakeup = next_hug_wakeup
@@ -562,10 +562,10 @@ class Configuration(ServiceMixin):
             self.__set_gogo()
 
             if 'branch' == self.level:
-                self.__setup_outbound()
+                self.__init_producer_sockets()
 
         else:
-            self.__kvlist_store_and_pub([response])
+            self.__kvlist_store_and_pub([response], ignore_seq=True)
 
     def __send_snapshot(self):
         assert self._is_gogo()
