@@ -135,6 +135,7 @@ class TopoTreeMixin(object):
         return len(self.__nodes)
 
     def walk(self, node=None):
+        assert self.__root is not None
         if node is None:
             node = self.__root
 
@@ -176,6 +177,7 @@ class TopoTreeMixin(object):
         return False
 
     def __kv_update_leaf(self, m, v):
+        assert self.__root is not None
         (m_g, m_e) = (m.group('group'), m.group('endpoint'))
         if (m_g, m_e, 'leaf') != (v.group, str(v.endpoint), v.level):
             self.logger.error('key / value do not match; {} != {}'.format(
@@ -206,6 +208,7 @@ class TopoTreeMixin(object):
         return True
 
     def __kv_update_branch(self, m, v):
+        assert self.__root is not None
         m_g = m.group('group')
         if (m_g, 'branch') != (v.group, v.level):
             self.logger.error('key / value do not match; {} != {}'.format(m_g, (v.group, v.level)))
@@ -243,6 +246,7 @@ class TopoTreeMixin(object):
     # root access
 
     def root(self):
+        assert self.__root is not None
         return self.__root
 
     def insert_root(self, root_ep, root_id):
@@ -321,6 +325,7 @@ class TopoTreeMixin(object):
         return None if endpoint not in self.__nodes else self.__nodes[endpoint]
 
     def insert_node(self, node, parent):
+        assert self.__root is not None
         assert isinstance(parent, TopoNode)
         assert parent in self.__nodes.values()
 
