@@ -1,6 +1,7 @@
 *.pyc
 *.egg-info
 thesis/out/
+thesis/now-later.html
 /build
 /logs
 /debug
