@@ -594,5 +594,5 @@ class Configuration(ServiceMixin):
                 snap.send(self.kvsync_rep)
 
         # send final message, closing the kvsync session
-        snap = config.KTHXBAI(self.__kv_seq, peer_id, subtree)
+        snap = config.KTHXBAI(max_seq, peer_id, subtree)
         snap.send(self.kvsync_rep)
