@@ -92,7 +92,7 @@ class MetricSpec(namedtuple('MetricSpec', ['config_name', 'rate', 'threshold', '
             self.threshold, self.param or '')
 
 
-class MetricCollection(namedtuple('MetricCollection', 'epoch, spec')):
+class MetricCollection(namedtuple('MetricCollection', 'epoch, spec, p')):
     """ Class Representing a Metric Collection Specification """
     __slots__ = ()
     pass

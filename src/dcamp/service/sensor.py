@@ -102,7 +102,7 @@ class Sensor(ServiceMixin):
                     specs.remove(collection.spec)
 
             # add all new metric specs, starting collection now
-            new_specs = [MetricCollection(0, elem) for elem in specs]
+            new_specs = [MetricCollection(0, elem, None) for elem in specs]
 
             self.metric_specs = sorted(new_specs)
             self.metric_seqid = seq
@@ -120,7 +120,8 @@ class Sensor(ServiceMixin):
         """ returns tuple of (data-msg, metric-collection) """
         # TODO: move this to another class?
 
-        (time, value, base_value) = (None, None, None)
+        (value, base_value) = (None, None)
+        time = now_msecs()
 
         props = {
             'detail': collection.spec.detail,
@@ -130,17 +131,25 @@ class Sensor(ServiceMixin):
 
         # local vars for easier access
         detail = collection.spec.detail
-        message = data.Data  # should be overridden below
+        param = collection.spec.param
+        p = collection.p
 
         if 'CPU' == detail:
             props['type'] = 'percent'
             message = data.DataPercent
 
-            time = now_msecs()
             # cpu_times() is accurate to two decimal points
             cpu_times = psutil.cpu_times()
             value = int((sum(cpu_times) - cpu_times.idle) * 1e2)
             base_value = int(sum(cpu_times) * 1e2)
+
+        elif 'MEMORY' == detail:
+            props['type'] = 'percent'
+            message = data.DataPercent
+
+            vmem = psutil.virtual_memory()
+            value = vmem.total - vmem.available
+            base_value = vmem.total
 
         elif 'DISK' == detail:
             props['type'] = 'rate'
@@ -148,7 +157,6 @@ class Sensor(ServiceMixin):
 
             disk = psutil.disk_io_counters()
 
-            time = now_msecs()
             value = disk.read_bytes + disk.write_bytes
 
         elif 'NETWORK' == detail:
@@ -157,23 +165,61 @@ class Sensor(ServiceMixin):
 
             net = psutil.net_io_counters()
 
-            time = now_msecs()
             value = net.bytes_sent + net.bytes_recv
 
-        elif 'MEMORY' == detail:
-            props['type'] = 'percent'
-            message = data.DataPercent
+            props['type'] = 'rate'
+            message = data.DataRate
 
-            vmem = psutil.virtual_memory()
+        elif detail.startswith('PROC_'):
 
-            time = now_msecs()
-            value = vmem.total - vmem.available
-            base_value = vmem.total
+            if p is None or not p.is_running():
+                p = None
+                for proc in psutil.process_iter():
+                    try:
+                        pinfo = proc.as_dict(attrs=['pid', 'name'])
+                    except psutil.NoSuchProcess:
+                        continue
+                    if pinfo['name'] == param:
+                        p = proc
+                        break
 
-        assert message != data.Data
+                if p is None:
+                    return (None, None)
+
+            assert p is not None
+
+            if 'PROC_CPU' == detail:
+                props['type'] = 'percent'
+                message = data.DataPercent
+
+                # cpu_times() is accurate to two decimal points
+                proc_cpu_time = p.cpu_times()
+                glob_cpu_times = psutil.cpu_times()
+                value = int(sum(proc_cpu_times) * 1e2)
+                base_value = int(sum(glob_cpu_times) * 1e2)
+
+            elif 'PROC_MEM' == detail:
+                props['type'] = 'percent'
+                message = data.DataPercent
+
+                glob_vmem = psutil.virtual_memory()
+                proc_vmem = proc.memory_info()
+                value = proc_vmem.rss
+                base_value = vmem.total
+
+            '''
+            elif 'PROC_DSK' == detail:
+                props['type'] = 'rate'
+                message = data.DataRate
+
+            elif 'PROC_NET' == detail:
+                props['type'] = 'rate'
+                message = data.DataRate
+            '''
+
         m = message(self.endpoint, props, time, value, base_value)
 
         # create new collection with next collection time
-        c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
+        c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, p)
 
         return m, c
