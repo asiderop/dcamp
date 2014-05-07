@@ -107,7 +107,11 @@ class ConfigFileMixin(ConfigParser):
 
             detail = self[name]['metric']
 
-            result[name] = MetricSpec(name, rate, threshold, detail, None)
+            param = None
+            if 'param' in self[name]:
+                param = self[name]['param']
+
+            result[name] = MetricSpec(name, rate, threshold, detail, param)
 
         self.metrics = result
 

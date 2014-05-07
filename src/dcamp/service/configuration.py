@@ -96,11 +96,13 @@ class Configuration(ServiceMixin):
         self.kvsync_completed = {}
         self.pending_updates = []
 
+        # TODO: fix timing issue w.r.t. root node sync--root needs to be sync'ed before any other node.
+
         # receiving updates
         self.topics = []
+        self.topics.append('/TOPO/root')  # must be first item sync'ed for all nodes
         if 'leaf' == self.level:
             assert self.group is not None
-            self.topics.append('/TOPO/root')
             self.topics.append('/CONFIG/global/')
             self.topics.append('/CONFIG/%s/' % self.group)
         elif 'branch' == self.level:
@@ -592,5 +594,5 @@ class Configuration(ServiceMixin):
                 snap.send(self.kvsync_rep)
 
         # send final message, closing the kvsync session
-        snap = config.KTHXBAI(self.__kv_seq, peer_id, subtree)
+        snap = config.KTHXBAI(max_seq, peer_id, subtree)
         snap.send(self.kvsync_rep)
