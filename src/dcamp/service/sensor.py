@@ -193,7 +193,7 @@ class Sensor(ServiceMixin):
                 message = data.DataPercent
 
                 # cpu_times() is accurate to two decimal points
-                proc_cpu_time = p.cpu_times()
+                proc_cpu_times = p.cpu_times()
                 glob_cpu_times = psutil.cpu_times()
                 value = int(sum(proc_cpu_times) * 1e2)
                 base_value = int(sum(glob_cpu_times) * 1e2)
@@ -203,9 +203,9 @@ class Sensor(ServiceMixin):
                 message = data.DataPercent
 
                 glob_vmem = psutil.virtual_memory()
-                proc_vmem = proc.memory_info()
+                proc_vmem = p.memory_info()
                 value = proc_vmem.rss
-                base_value = vmem.total
+                base_value = glob_vmem.total
 
             '''
             elif 'PROC_DSK' == detail:

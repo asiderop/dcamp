@@ -256,13 +256,13 @@ class TopoTreeMixin(object):
         return self.__insert_root_node(new_root)
 
     def __insert_root_node(self, new_root):
-        assert new_root not in self.__nodes.values()
-
         kvlist = []
 
         if new_root == self.__root:
-            self.logger.warn('new root is same as old; no-op')
-            return kvlist
+            if new_root.uuid != self.root().uuid:
+                self.logger.warn('new root has different uuid')
+            else:
+                return kvlist
 
         # the new root node should not exist in the tree; that is, the old collector node
         # should already have been removed from the topology
