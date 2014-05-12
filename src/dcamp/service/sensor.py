@@ -156,7 +156,6 @@ class Sensor(ServiceMixin):
             message = data.DataRate
 
             disk = psutil.disk_io_counters()
-
             value = disk.read_bytes + disk.write_bytes
 
         elif 'NETWORK' == detail:
@@ -164,11 +163,7 @@ class Sensor(ServiceMixin):
             message = data.DataRate
 
             net = psutil.net_io_counters()
-
             value = net.bytes_sent + net.bytes_recv
-
-            props['type'] = 'rate'
-            message = data.DataRate
 
         elif detail.startswith('PROC_'):
 
@@ -184,7 +179,8 @@ class Sensor(ServiceMixin):
                         break
 
                 if p is None:
-                    return (None, None)
+                    c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, None)
+                    return None, c
 
             assert p is not None
 
@@ -207,15 +203,19 @@ class Sensor(ServiceMixin):
                 value = proc_vmem.rss
                 base_value = glob_vmem.total
 
-            '''
-            elif 'PROC_DSK' == detail:
+            elif 'PROC_IO' == detail:
                 props['type'] = 'rate'
                 message = data.DataRate
 
-            elif 'PROC_NET' == detail:
-                props['type'] = 'rate'
-                message = data.DataRate
-            '''
+                try:
+                    io = p.io_counters()
+                    value = io.read_bytes + io.write_bytes
+                    if value < 0:
+                        # no support for *_bytes in bsd
+                        value = 0
+                except AttributeError:
+                    # no support for io_counters() in osx
+                    value = 0
 
         m = message(self.endpoint, props, time, value, base_value)
 

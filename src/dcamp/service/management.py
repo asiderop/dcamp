@@ -50,7 +50,7 @@ class Management(ServiceMixin):
 
         # we send topo discovery messages on this socket
         self.disc_socket = self.ctx.socket(PUB)
-        #self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
+        self.disc_socket.set_hwm(1)  # don't hold onto more than 1 pub
 
         for group in self.cfgsvc.config_get_groups():
             for ep in self.cfgsvc.config_get_endpoints(group):
