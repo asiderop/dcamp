@@ -27,7 +27,7 @@ class Configuration(ServiceMixin):
             level,
             group,
             sos_func,  # call when our parent stops sending HUGZ
-            config_file=None,  # should only be given for root level
+            config_state=None,  # should only be given for root level
     ):
         ServiceMixin.__init__(self, control_pipe, config_svc)
 
@@ -116,7 +116,12 @@ class Configuration(ServiceMixin):
 
         # populate dict with config_file values if root level; values are used later
         if 'root' == self.level:
-            self.__init_kvdict_from_file(config_file)
+            if isinstance(config_state, str):
+                self.__init_kvdict_from_file(config_state)
+            else:
+                assert isinstance(config_state, dict)
+                self.__init_kvdict_from_dict(config_state)
+
             # set GOGO state; this basically means we have all the config values
             self.__set_gogo()
             self.__init_producer_sockets()
@@ -125,6 +130,12 @@ class Configuration(ServiceMixin):
 
     #####
     #  BEGIN dictionary access methods
+
+    def copy_kvdict(self):
+        assert 'root' == self.level
+        with self.__kvlock:
+            return self.__kvdict.copy()  # shallow copy; kvdict values should not be modified
+                                         # after this call
 
     def get(self, k, default=None):
         """ returns (value, seq-id) """
@@ -346,6 +357,14 @@ class Configuration(ServiceMixin):
             assert isinstance(k, str)
             self.logger.debug('INIT: {}: {}'.format(k, v))
         self.__kvlist_store_and_pub(cfg.kvdict.items())
+        self.logger.debug('INIT: final kv-seq = {}'.format(self.__kv_seq))
+
+    def __init_kvdict_from_dict(self, cfg):
+        assert 'root' == self.level
+        for (k, (v, seq)) in cfg.items():
+            assert isinstance(k, str)
+            self.logger.debug('INIT: [{}] {}: {}'.format(seq, k, v))
+        self.__kvlist_store_and_pub([(k, v, seq) for k, (v, seq) in cfg.items()])
         self.logger.debug('INIT: final kv-seq = {}'.format(self.__kv_seq))
 
     def __init_consumer_sockets(self):

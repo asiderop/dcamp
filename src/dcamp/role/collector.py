@@ -21,7 +21,7 @@ class Collector(RoleMixin):
 
         ### add services
 
-        config_service = self._add_service(
+        self.__config_service = self._add_service(
             Configuration,
             None,         # config service, None for config service (obviously)
             local_ep,     # our endpoint
@@ -33,5 +33,8 @@ class Collector(RoleMixin):
         )
 
         #                (ServiceClass, config-service, local-ep, parent-ep, level   )
-        self._add_service(Filter,       config_service, local_ep, parent_ep, 'branch')
-        self._add_service(Aggregation,  config_service, local_ep, parent_ep, 'branch')
+        self._add_service(Filter,       self.__config_service, local_ep, parent_ep, 'branch')
+        self._add_service(Aggregation,  self.__config_service, local_ep, parent_ep, 'branch')
+
+    def get_config_service_kvdict(self):
+        return self.__config_service.copy_kvdict()
