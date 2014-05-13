@@ -1,3 +1,4 @@
+from logging import getLogger
 import threading
 
 from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
@@ -325,3 +326,53 @@ class Node(ServiceMixin):
     def __do_collector_sos(self):
             # root died, start election
             self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+
+
+class Recovery(threading.Thread):
+    """
+    TODO:
+      * use recovery class to do sos and election
+      * pass sos/election method to Recovery class (like Threading does)?
+      * ensure shutdown is clean
+    """
+    def __init__(self, ctx, ep, uuid):
+        threading.Thread.__init__(self)
+        self.ctx = ctx
+        self.ep = ep
+        self.uuid = uuid
+
+        self.reqcnt = 0
+        self.repcnt = 0
+
+        self.logger = getLogger('dcamp.service.node.Recovery')
+
+        self.recovery_socket = self.ctx.socket(DEALER)
+        self.recovery_socket.connect(self.ep.connect_uri(EndpntSpec.CONTROL))
+
+    def run(self):
+        msg = SOS(self.ep, self.uuid)
+        msg.send(self.recovery_socket)
+        self.reqcnt += 1
+
+        self.logger.error('group collector node died; contacting Root...')
+
+        events = self.recovery_socket.poll(5000)
+        if 0 != events:
+            response = CONTROL.recv(self.recovery_socket)
+            self.repcnt += 1
+
+            if response.is_error:
+                self.logger.error(response)
+            elif 'keepcalm' == response.command:
+                self.logger.debug('root notified; keeping calm')
+            else:
+                self.logger.error('unknown command from root: %s' % response.command)
+
+        else:
+            self.logger.warn('root did not respond within time limit; ohmg!')
+
+        self.__stop()
+
+    def __stop(self):
+        self.recovery_socket.close()
+        del self.recovery_socket
