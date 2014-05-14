@@ -174,12 +174,14 @@ class Node(ServiceMixin):
                         self.logger.debug('last successful attempt too recent: {}ms'.format(elapsed))
                         return
 
+            # TODO: use real root ep instead of control_ep; how to get root from config service...
+
             if self.role.__class__ == Metric:
                 # collector died, notify root
-                self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid)
+                self.recovery = MetricSOS(self.ctx, self.control_ep, self.endpoint, self.uuid)
             elif self.role.__class__ == Collector:
                 # root died, start election
-                self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
+                self.recovery = CollectorSOS(self.ctx, self.control_ep, self.control_ep, self.uuid)
             else:
                 raise NotImplementedError('unknown role class: %s' % self.role)
 
@@ -309,9 +311,10 @@ class Node(ServiceMixin):
 
 
 class RecoveryThread(threading.Thread):
-    def __init__(self, ctx, ep, uuid):
+    def __init__(self, ctx, root_ep, ep, uuid):
         threading.Thread.__init__(self)
         self.ctx = ctx
+        self.root_ep = root_ep
         self.ep = ep
         self.uuid = uuid
 
@@ -322,7 +325,7 @@ class RecoveryThread(threading.Thread):
         self.logger = getLogger('dcamp.service.node.Recovery')
 
         self.recovery_socket = self.ctx.socket(DEALER)
-        self.recovery_socket.connect(self.ep.connect_uri(EndpntSpec.CONTROL))
+        self.recovery_socket.connect(self.root_ep.connect_uri(EndpntSpec.CONTROL))
 
     def run(self):
         self.start_time = now_msecs()
