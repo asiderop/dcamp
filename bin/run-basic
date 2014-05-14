@@ -35,10 +35,11 @@ case "$1" in
 		MODS="--debug-module dcamp.service.Configuration"
 		MODS="--debug-module dcamp.service.Management --debug-module dcamp.service.Node --debug-module dcamp.role.Root"
 		MODS="-d"
+		LOG=$BASEDIR/debug/base-r.log
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 131x50+0+0 -T root -e $DCAMP $MODS base -a $ROOT &
+			$XTERM -geometry 131x50+0+0 -T root -e "$DCAMP $MODS base -a $ROOT 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
-			$DCAMP $MODS base -a $ROOT > $BASEDIR/debug/base-r.log 2>&1 &
+			$DCAMP $MODS base -a $ROOT > $LOG 2>&1 &
 			echo $!
 		else
 			$DCAMP $MODS base -a $ROOT
@@ -48,10 +49,11 @@ case "$1" in
 	base-c)
 		MODS="--debug-module dcamp.service.Configuration"
 		MODS="-d"
+		LOG=$BASEDIR/debug/base-c.log
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 131x50+0+350 -T collector -e $DCAMP $MODS base -a $COLLECTOR &
+			$XTERM -geometry 131x50+0+350 -T collector -e "$DCAMP $MODS base -a $COLLECTOR 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
-			$DCAMP $MODS base -a $COLLECTOR > $BASEDIR/debug/base-c.log 2>&1 &
+			$DCAMP $MODS base -a $COLLECTOR > $LOG 2>&1 &
 			echo $!
 		else
 			$DCAMP $MODS base -a $COLLECTOR
@@ -62,10 +64,11 @@ case "$1" in
 		MODS="--debug-module dcamp.service.Node --debug-module dcamp.service.Configuration"
 		MODS="--debug-module dcamp.service.Node"
 		MODS="-d"
+		LOG=$BASEDIR/debug/base-m.log
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 147x76-0+0 -T metric -e $DCAMP $MODS base -a $METRIC &
+			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
-			$DCAMP $MODS base -a $METRIC > $BASEDIR/debug/base-m.log 2>&1 &
+			$DCAMP $MODS base -a $METRIC > $LOG 2>&1 &
 			echo $!
 		else
 			$DCAMP $MODS base -a $METRIC

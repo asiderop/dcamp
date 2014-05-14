@@ -1,7 +1,7 @@
 from logging import getLogger
 import threading
 
-from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
+from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN, ZMQError  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 from dcamp.role.root import Root
@@ -10,6 +10,9 @@ from dcamp.role.metric import Metric
 from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.messages.topology import gen_uuid, TOPO, POLO, MARCO, CONTROL, SOS
+from dcamp.util.functions import now_msecs
+
+RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
 
 
 class Node(ServiceMixin):
@@ -54,7 +57,7 @@ class Node(ServiceMixin):
         self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
         self.topo_socket.bind(self.topo_endpoint)
 
-        self.recovery_socket = None
+        self.recovery = None
 
         self.control_socket = None
         self.control_uuid = None
@@ -120,10 +123,6 @@ class Node(ServiceMixin):
             self.control_socket.close()
         self.control_socket = None
 
-        if self.recovery_socket is not None:
-            self.recovery_socket.close()
-        self.recovery_socket = None
-
         if self.role_pipe is not None:
             self.role_pipe.close()
         self.role_pipe = None
@@ -160,14 +159,31 @@ class Node(ServiceMixin):
             message = self.role_pipe.recv_string()
             assert 'SOS' == message
 
-            # TODO: save time of successful sos; throttle future attempts?
+            if self.recovery is not None:
+                self.logger.info('already processed SOS: {}'.format(self.recovery.result))
+                if self.recovery.is_alive():
+                    # still working
+                    self.logger.debug('recovery thread still working; skipping this SOS')
+                    return
+                else:
+                    assert self.recovery.stop_time is not None
+                    elapsed = now_msecs() - self.recovery.stop_time
+
+                    if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
+                        # need to wait longer before trying again
+                        self.logger.debug('last successful attempt too recent: {}ms'.format(elapsed))
+                        return
 
             if self.role.__class__ == Metric:
-                self.__do_metric_sos()
+                # collector died, notify root
+                self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid)
             elif self.role.__class__ == Collector:
-                self.__do_collector_sos()
+                # root died, start election
+                self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
             else:
                 raise NotImplementedError('unknown role class: %s' % self.role)
+
+            self.recovery.start()
 
         elif self.control_socket in items:
             assert self.in_open_state
@@ -291,58 +307,17 @@ class Node(ServiceMixin):
         self.role_thread.start()
         self.set_state(Node.PLAY)
 
-    def __do_metric_sos(self):
-        """
-        handles parent death
-        """
-        # collector died, notify Root
-        self.logger.error('group collector node died; contacting Root...')
 
-        self.recovery_socket = self.ctx.socket(DEALER)
-        self.recovery_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
-
-        msg = SOS(self.endpoint, self.uuid)
-        msg.send(self.recovery_socket)
-        self.reqcnt += 1
-
-        events = self.recovery_socket.poll(5000)
-        if 0 != events:
-            response = CONTROL.recv(self.recovery_socket)
-            self.repcnt += 1
-
-            if response.is_error:
-                self.logger.error(response)
-            elif 'keepcalm' == response.command:
-                self.logger.debug('root notified; keeping calm')
-            else:
-                self.logger.error('unknown command from root: %s' % response.command)
-
-        else:
-            self.logger.warn('root did not respond within time limit; ohmg!')
-
-        self.recovery_socket.close()
-        self.recovery_socket = None
-
-    def __do_collector_sos(self):
-            # root died, start election
-            self.logger.error('EEEEEEKK!!! root node died... starting an election...')
-
-
-class Recovery(threading.Thread):
-    """
-    TODO:
-      * use recovery class to do sos and election
-      * pass sos/election method to Recovery class (like Threading does)?
-      * ensure shutdown is clean
-    """
+class RecoveryThread(threading.Thread):
     def __init__(self, ctx, ep, uuid):
         threading.Thread.__init__(self)
         self.ctx = ctx
         self.ep = ep
         self.uuid = uuid
 
-        self.reqcnt = 0
-        self.repcnt = 0
+        self.result = 'pending'
+        self.start_time = None
+        self.stop_time = None
 
         self.logger = getLogger('dcamp.service.node.Recovery')
 
@@ -350,29 +325,52 @@ class Recovery(threading.Thread):
         self.recovery_socket.connect(self.ep.connect_uri(EndpntSpec.CONTROL))
 
     def run(self):
+        self.start_time = now_msecs()
+        try:
+            self.result = self._run()
+        except ZMQError:
+            # nothing to do with exceptions; just catch and continue to the __stop() cleanup call
+            pass
+        self.__stop()
+        self.stop_time = now_msecs()
+
+    def __stop(self):
+        self.recovery_socket.close()
+        del self.recovery_socket
+
+    def _run(self):
+        raise NotImplementedError('subclass must implement _run()')
+
+
+class CollectorSOS(RecoveryThread):
+    def _run(self):
+        self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+        return 'fake'
+
+
+class MetricSOS(RecoveryThread):
+    def _run(self):
         msg = SOS(self.ep, self.uuid)
         msg.send(self.recovery_socket)
-        self.reqcnt += 1
 
         self.logger.error('group collector node died; contacting Root...')
 
         events = self.recovery_socket.poll(5000)
         if 0 != events:
             response = CONTROL.recv(self.recovery_socket)
-            self.repcnt += 1
 
             if response.is_error:
                 self.logger.error(response)
+                return 'failure: {}'.format(response.errstr)
+
             elif 'keepcalm' == response.command:
                 self.logger.debug('root notified; keeping calm')
+                return 'success'
+
             else:
                 self.logger.error('unknown command from root: %s' % response.command)
+                return 'unknown: {}'.format(response.command)
 
         else:
             self.logger.warn('root did not respond within time limit; ohmg!')
-
-        self.__stop()
-
-    def __stop(self):
-        self.recovery_socket.close()
-        del self.recovery_socket
+            return 'failure: no response'
