@@ -196,9 +196,9 @@ class Management(ServiceMixin):
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
 
         if stop_group is None:
-            pub_msg = MARCO(ep, gen_uuid())  # new uuid so nodes response
+            pub_msg = MARCO(ep, gen_uuid())  # new uuid so nodes respond
         else:
-            pub_msg = GROUP(stop_group, ep, gen_uuid())
+            pub_msg = GROUP(stop_group, ep, gen_uuid())  # TODO: could use real ep/uuid...
 
         # pub to all connected nodes
         pub_msg.send(self.disc_socket)

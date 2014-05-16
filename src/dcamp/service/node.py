@@ -10,7 +10,7 @@ from dcamp.role.metric import Metric
 from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.messages.control import POLO, CONTROL, SOS
-from dcamp.types.messages.topology import gen_uuid, TOPO, MARCO
+from dcamp.types.messages.topology import gen_uuid, TOPO
 from dcamp.util.functions import now_msecs
 
 RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
@@ -132,20 +132,20 @@ class Node(ServiceMixin):
 
     def _post_poll(self, items):
         if self.topo_socket in items:
-            marco_msg = MARCO.recv(self.topo_socket)
+            topo_msg = TOPO.recv(self.topo_socket)
             self.subcnt += 1
 
-            if marco_msg.is_error:
-                self.logger.error('topo message error: %s' % marco_msg.errstr)
+            if topo_msg.is_error:
+                self.logger.error('topo message error: %s' % topo_msg.errstr)
                 return
 
-            if self.control_uuid == marco_msg.uuid:
+            if topo_msg.is_marco and self.control_uuid == topo_msg.uuid:
                 self.logger.debug('already POLOed this endpoint; ignoring')
                 return
 
             # @todo: add some security here so not just anyone can shutdown the root node
-            self.control_uuid = marco_msg.uuid
-            self.control_ep = marco_msg.endpoint
+            self.control_uuid = topo_msg.uuid
+            self.control_ep = topo_msg.endpoint
 
             self.control_socket = self.ctx.socket(DEALER)
             self.control_socket.connect(self.control_ep.connect_uri(EndpntSpec.CONTROL))
@@ -179,10 +179,10 @@ class Node(ServiceMixin):
 
             if self.role.__class__ == Metric:
                 # collector died, notify root
-                self.recovery = MetricSOS(self.ctx, self.control_ep, self.endpoint, self.uuid)
+                self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
             elif self.role.__class__ == Collector:
                 # root died, start election
-                self.recovery = CollectorSOS(self.ctx, self.control_ep, self.control_ep, self.uuid)
+                self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
             else:
                 raise NotImplementedError('unknown role class: %s' % self.role)
 
@@ -312,10 +312,9 @@ class Node(ServiceMixin):
 
 
 class RecoveryThread(threading.Thread):
-    def __init__(self, ctx, root_ep, ep, uuid):
+    def __init__(self, ctx, ep, uuid):
         threading.Thread.__init__(self)
         self.ctx = ctx
-        self.root_ep = root_ep
         self.ep = ep
         self.uuid = uuid
 
@@ -325,25 +324,21 @@ class RecoveryThread(threading.Thread):
 
         self.logger = getLogger('dcamp.service.node.Recovery')
 
-        self.recovery_socket = self.ctx.socket(DEALER)
-        self.recovery_socket.connect(self.root_ep.connect_uri(EndpntSpec.CONTROL))
-
     def run(self):
         self.start_time = now_msecs()
         try:
             self.result = self._run()
         except ZMQError:
-            # nothing to do with exceptions; just catch and continue to the __stop() cleanup call
+            # nothing to do with exceptions; just catch and continue to the _cleanup() call
             pass
-        self.__stop()
+        self._cleanup()
         self.stop_time = now_msecs()
-
-    def __stop(self):
-        self.recovery_socket.close()
-        del self.recovery_socket
 
     def _run(self):
         raise NotImplementedError('subclass must implement _run()')
+
+    def _cleanup(self):
+        raise NotImplementedError('subclass must implement _cleanup()')
 
 
 class CollectorSOS(RecoveryThread):
@@ -351,9 +346,26 @@ class CollectorSOS(RecoveryThread):
         self.logger.error('EEEEEEKK!!! root node died... starting an election...')
         return 'fake'
 
+    def _cleanup(self):
+        pass
+
 
 class MetricSOS(RecoveryThread):
+    def __init__(self, ctx, ep, uuid, root_ep):
+        RecoveryThread.__init__(self, ctx, ep, uuid)
+
+        self.root_ep = root_ep
+        self.recovery_socket = None
+
+    def _cleanup(self):
+        if self.recovery_socket is not None:
+            self.recovery_socket.close()
+        del self.recovery_socket
+
     def _run(self):
+        self.recovery_socket = self.ctx.socket(DEALER)
+        self.recovery_socket.connect(self.root_ep.connect_uri(EndpntSpec.CONTROL))
+
         msg = SOS(self.ep, self.uuid)
         msg.send(self.recovery_socket)
 

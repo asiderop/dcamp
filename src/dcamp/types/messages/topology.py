@@ -64,13 +64,25 @@ class TOPO(DCMsg):
 
         return TOPO(key, ep, uuid, content)
 
+    @property
+    def is_marco(self):
+        return self.key.startswith(TOPO.marco_key())
+
     @staticmethod
     def marco_key():
         return '/MARCO'
 
+    @property
+    def is_group(self):
+        return self.key.startswith(TOPO.group_key())
+
     @staticmethod
-    def group_key(group):
+    def group_key(group=''):
         return '/GROUP/' + group
+
+    @property
+    def is_recovery(self):
+        return self.key.startswith(TOPO.recovery_key())
 
     @staticmethod
     def recovery_key(msg_type=''):
