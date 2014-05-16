@@ -4,7 +4,8 @@ from zmq import ROUTER, PUB, POLLIN, Again, ZMQError  # pylint: disable-msg=E061
 
 from dcamp.service.service import ServiceMixin
 from dcamp.types.messages.common import WTF
-from dcamp.types.messages.topology import gen_uuid, MARCO, CONTROL, POLO, STOP, GROUP
+from dcamp.types.messages.control import CONTROL, STOP, POLO
+from dcamp.types.messages.topology import gen_uuid, MARCO, GROUP
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import now_secs
 

@@ -9,7 +9,8 @@ from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 from dcamp.service.service import ServiceMixin
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.messages.topology import gen_uuid, TOPO, POLO, MARCO, CONTROL, SOS
+from dcamp.types.messages.control import POLO, CONTROL, SOS
+from dcamp.types.messages.topology import gen_uuid, TOPO, MARCO
 from dcamp.util.functions import now_msecs
 
 RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity

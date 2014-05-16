@@ -7,7 +7,7 @@ from datetime import datetime
 
 from dcamp.util.decorators import prefixable
 from dcamp.types.specs import EndpntSpec
-from dcamp.types.messages.topology import ASSIGN
+from dcamp.types.messages.control import ASSIGN
 
 __all__ = [
     'TopoError',

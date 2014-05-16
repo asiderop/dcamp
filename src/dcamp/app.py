@@ -3,8 +3,8 @@ import logging
 from zmq import Context, PUB, REP, ZMQError  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-from dcamp.types.messages.topology import gen_uuid, ASSIGN, MARCO, POLO, STOP
-
+from dcamp.types.messages.control import ASSIGN, POLO, STOP
+from dcamp.types.messages.topology import gen_uuid, MARCO
 from dcamp.types.specs import EndpntSpec
 from dcamp.role.base import Base
 
