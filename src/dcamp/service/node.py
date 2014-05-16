@@ -139,6 +139,10 @@ class Node(ServiceMixin):
                 self.logger.error('topo message error: %s' % topo_msg.errstr)
                 return
 
+            if topo_msg.is_recovery:
+                self.__handle_recovery(topo_msg)
+                return
+
             if topo_msg.is_marco and self.control_uuid == topo_msg.uuid:
                 self.logger.debug('already POLOed this endpoint; ignoring')
                 return
@@ -160,33 +164,7 @@ class Node(ServiceMixin):
             message = self.role_pipe.recv_string()
             assert 'SOS' == message
 
-            if self.recovery is not None:
-                self.logger.info('already processed SOS: {}'.format(self.recovery.result))
-                if self.recovery.is_alive():
-                    # still working
-                    self.logger.debug('recovery thread still working; skipping this SOS')
-                    return
-                else:
-                    assert self.recovery.stop_time is not None
-                    elapsed = now_msecs() - self.recovery.stop_time
-
-                    if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
-                        # need to wait longer before trying again
-                        self.logger.debug('last successful attempt too recent: {}ms'.format(elapsed))
-                        return
-
-            # TODO: use real root ep instead of control_ep; how to get root from config service...
-
-            if self.role.__class__ == Metric:
-                # collector died, notify root
-                self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
-            elif self.role.__class__ == Collector:
-                # root died, start election
-                self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
-            else:
-                raise NotImplementedError('unknown role class: %s' % self.role)
-
-            self.recovery.start()
+            self.__handle_sos()
 
         elif self.control_socket in items:
             assert self.in_open_state
@@ -233,6 +211,7 @@ class Node(ServiceMixin):
 
                 self.role_thread = None
                 self.role = None
+                self.level = None
 
                 self.logger.debug('node stopped; back to BASE')
                 self.set_state(Node.BASE)
@@ -240,6 +219,55 @@ class Node(ServiceMixin):
             else:
                 self.logger.error('unknown control command: %s' % response.command)
                 return
+
+    def __handle_recovery(self, msg):
+        # TODO: need to start subscribing to new RECOVERY PUBs
+        # TODO: need to handle more PUBs that are received; use shared list with condition/lock?
+
+        if 'branch' != self.level:
+            self.logger.error('received RECOVERY message but not Collector')
+            return
+
+        if self.recovery is not None:
+            if self.recovery.is_alive():
+                # TODO: race between is_alive() and add_to_queue(); need to use lock?
+                self.recovery.add_to_queue(msg)
+                return
+
+        self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
+        self.recovery.add_to_queue(msg)
+        self.recovery.start()
+
+        # TODO: how to notify Node service of election outcome; use callback within Node service to
+        #       shutdown old Collector role and start new Root role
+
+    def __handle_sos(self):
+        if self.recovery is not None:
+            self.logger.info('already processed SOS: {}'.format(self.recovery.result))
+            if self.recovery.is_alive():
+                # still working
+                self.logger.debug('recovery thread still working; skipping this SOS')
+                return
+            else:
+                assert self.recovery.stop_time is not None
+                elapsed = now_msecs() - self.recovery.stop_time
+
+                if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
+                    # need to wait longer before trying again
+                    self.logger.debug('last successful attempt too recent: {}ms'.format(elapsed))
+                    return
+
+        if 'leaf' == self.level:
+            # collector died, notify root
+            # TODO: use real root ep instead of control_ep; how to get root from config service...
+            self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
+        elif 'branch' == self.level:
+            # root died, start election
+            self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
+        else:
+            raise NotImplementedError('unknown role class: %s' % self.role)
+
+        self.recovery.start()
 
     def __handle_assignment(self, response):
         if self.in_play_state:
