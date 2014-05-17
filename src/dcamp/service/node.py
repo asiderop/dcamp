@@ -7,13 +7,11 @@ from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
 from dcamp.service.service import ServiceMixin
-from dcamp.service.recovery import MetricSOS, CollectorSOS
+from dcamp.service.recovery import MetricSOS, CollectorSOS, RECOVERY_SILENCE_PERIOD_MS
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.messages.control import POLO, CONTROL
 from dcamp.types.messages.topology import gen_uuid, TOPO
 from dcamp.util.functions import now_msecs
-
-RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
 
 
 class Node(ServiceMixin):

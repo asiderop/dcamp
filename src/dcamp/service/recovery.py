@@ -7,6 +7,21 @@ from dcamp.types.messages.control import CONTROL, SOS
 from dcamp.util.functions import now_msecs
 from dcamp.types.specs import EndpntSpec
 
+RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
+RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before declaring new leader
+
+
+class Election(object):
+    def __init__(self, uuid, initiating_node):
+        self.uuid = uuid
+
+        self.initter = initiating_node
+        self.iwinner = None
+
+        self.result = 'pending'
+        self.init_time = now_msecs()
+        self.iwin_time = None
+
 
 class RecoveryThread(Thread):
     def __init__(self, ctx, ep, uuid):
@@ -108,15 +123,16 @@ class CollectorSOS(RecoveryThread):
         self.control_out = None
         self.control_in = None
         self.pub = None
+        self.poller = Poller()
 
         # need separate endpoint for recovery activity
         self.recovery_ep = None
 
-        self.poller = Poller()
+        self.cur_elections = []
+        self.won_elections = []
+        self.last_message_time = None
 
-    def _run(self):
-        self.logger.error('EEEEEEKK!!! root node died... starting an election...')
-
+    def __init_sockets(self):
         # we send election commands (in response to a SUB'ed message) on this socket
         self.control_out = self.ctx.socket(DEALER)
 
@@ -141,11 +157,19 @@ class CollectorSOS(RecoveryThread):
             except ZMQError as e:
                 self.logger.error('unable to connect to endpoint {}: {}'.format(c.endpoint, e))
 
+    def _run(self):
+        self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+
+        # create sockets in method called by recovery Thread instead of contructor which is called
+        # by Node service thread. this avoids 0mq termination issues as described here:
+        # http://zeromq.org/whitepapers:0mq-termination
+        self.__init_sockets()
+
         # the below loop may raise exceptions during poll() and recv(), but the parent class will
         # catch these and then call _cleanup()
 
-        election_running = True
-        while election_running:
+        self.last_message_time = now_msecs()  # just to seed the loop
+        while RECOVERY_ELECTION_WAIT_MS > (now_msecs() - self.last_message_time):
             # 1) process all messages on queue
             while True:
                 try:
@@ -158,8 +182,8 @@ class CollectorSOS(RecoveryThread):
             wakeup = now_msecs() + 1000
             items = dict(self.poller.poll(wakeup))
 
+            # 3) process all messages on socket
             if self.control_in in items:
-                # 3) process all messages on socket
                 while True:
                     try:
                         msg = CONTROL.recv(self.control_in)
@@ -167,11 +191,23 @@ class CollectorSOS(RecoveryThread):
                     except Again:
                         break
 
+        # TODO: if loop exited, time must have expired; check elections and find winner
+
         return 'fake'
 
     def __process_message(self, msg):
-        # TODO: SOS or SUB
-        pass
+
+        # TODO: handle WTF?
+
+        self.last_message_time = now_msecs()
+
+        # sos is a local detection of the root failure
+        if msg == 'SOS':
+            # TODO: check for active election or start election?
+            pass
+
+        # else, msg is CONTROL type
+        # TODO: respond to or record election status
 
     def __start_election(self):
         pass
