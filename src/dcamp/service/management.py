@@ -191,7 +191,7 @@ class Management(ServiceMixin):
         self.control_sock = self.ctx.socket(ROUTER)
         bind_addr = self.control_sock.bind_to_random_port("tcp://*")
 
-        # subtract TOPO_JOIN offset so the port calculated by the remote node matches the
+        # subtract CONTROL offset so the port calculated by the remote node matches the
         # random port to which we just bound
         ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
 

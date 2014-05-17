@@ -38,3 +38,6 @@ class Collector(RoleMixin):
 
     def get_config_service_kvdict(self):
         return self.__config_service.copy_kvdict()
+
+    def get_config_service(self):
+        return self.__config_service

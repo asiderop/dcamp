@@ -1,7 +1,7 @@
 from logging import getLogger
 import threading
 
-from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN, ZMQError  # pylint: disable-msg=E0611
+from zmq import ROUTER, DEALER, PUB, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN, ZMQError  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 from dcamp.role.root import Root
@@ -221,20 +221,26 @@ class Node(ServiceMixin):
                 return
 
     def __handle_recovery(self, msg):
-        # TODO: need to start subscribing to new RECOVERY PUBs
-        # TODO: need to handle more PUBs that are received; use shared list with condition/lock?
 
         if 'branch' != self.level:
             self.logger.error('received RECOVERY message but not Collector')
             return
 
-        if self.recovery is not None:
-            if self.recovery.is_alive():
-                # TODO: race between is_alive() and add_to_queue(); need to use lock?
-                self.recovery.add_to_queue(msg)
-                return
+        assert isinstance(self.role, Collector)
 
-        self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
+        if self.recovery is not None:
+            with self.recovery.lock:
+                if self.recovery.is_alive():
+                    self.recovery.add_to_queue(msg)
+                    return
+
+        self.recovery = CollectorSOS(
+            self.ctx,
+            self.endpoint,
+            self.uuid,
+            self.role.get_config_service()
+        )
+
         self.recovery.add_to_queue(msg)
         self.recovery.start()
 
@@ -263,7 +269,7 @@ class Node(ServiceMixin):
             self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
         elif 'branch' == self.level:
             # root died, start election
-            self.recovery = CollectorSOS(self.ctx, self.endpoint, self.uuid)
+            self.__handle_recovery('SOS')
         else:
             raise NotImplementedError('unknown role class: %s' % self.role)
 
@@ -350,17 +356,34 @@ class RecoveryThread(threading.Thread):
         self.start_time = None
         self.stop_time = None
 
+        self.lock = threading.RLock()
+        self.__msg_queue = []
+
         self.logger = getLogger('dcamp.service.node.Recovery')
 
+    def add_to_queue(self, msg):
+        with self.lock:
+            self.__msg_queue.append(msg)
+
+    def _get_from_queue(self):
+        with self.lock:
+            if len(self.__msg_queue) > 0:
+                return self.__msg_queue.pop(0)
+            return None
+
     def run(self):
-        self.start_time = now_msecs()
+        with self.lock:
+            self.start_time = now_msecs()
+
         try:
             self.result = self._run()
         except ZMQError:
             # nothing to do with exceptions; just catch and continue to the _cleanup() call
             pass
         self._cleanup()
-        self.stop_time = now_msecs()
+
+        with self.lock:
+            self.stop_time = now_msecs()
 
     def _run(self):
         raise NotImplementedError('subclass must implement _run()')
@@ -369,26 +392,12 @@ class RecoveryThread(threading.Thread):
         raise NotImplementedError('subclass must implement _cleanup()')
 
 
-class CollectorSOS(RecoveryThread):
-    def _run(self):
-        self.logger.error('EEEEEEKK!!! root node died... starting an election...')
-        return 'fake'
-
-    def _cleanup(self):
-        pass
-
-
 class MetricSOS(RecoveryThread):
     def __init__(self, ctx, ep, uuid, root_ep):
         RecoveryThread.__init__(self, ctx, ep, uuid)
 
         self.root_ep = root_ep
         self.recovery_socket = None
-
-    def _cleanup(self):
-        if self.recovery_socket is not None:
-            self.recovery_socket.close()
-        del self.recovery_socket
 
     def _run(self):
         self.recovery_socket = self.ctx.socket(DEALER)
@@ -418,3 +427,61 @@ class MetricSOS(RecoveryThread):
         else:
             self.logger.warn('root did not respond within time limit; ohmg!')
             return 'failure: no response'
+
+    def _cleanup(self):
+        if self.recovery_socket is not None:
+            self.recovery_socket.close()
+        del self.recovery_socket
+
+
+class CollectorSOS(RecoveryThread):
+    def __init__(self, ctx, ep, uuid, config_svc):
+        RecoveryThread.__init__(self, ctx, ep, uuid)
+
+        self.cfgsvc = config_svc
+
+        # three sockets to send and receive election messages; it's awkward, but election PUBs
+        # are received on the Node's SUB socket and passed to us via _get_from_queue()
+        self.control_out = None
+        self.control_in = None
+        self.pub = None
+
+        # need separate endpoint for recovery activity
+        self.recovery_ep = None
+
+    def _run(self):
+        self.logger.error('EEEEEEKK!!! root node died... starting an election...')
+
+        # we send election commands (in response to a SUB'ed message) on this socket
+        self.control_out = self.ctx.socket(DEALER)
+
+        # we receive election commands (in response to a PUB'ed message) on this socket
+        self.control_in = self.ctx.socket(ROUTER)
+        bind_addr = self.control_in.bind_to_random_port("tcp://*")
+
+        # subtract CONTROL offset so the port calculated by the remote node matches the
+        # random port to which we just bound
+        self.recovery_ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
+
+        # we send election PUBs on this socket
+        self.pub = self.ctx.socket(PUB)
+        self.pub.set_hwm(1)  # don't hold onto more than 1 pub
+
+        for c in self.cfgsvc.topo_get_all_collectors():
+            if c.endpoint == self.ep:
+                continue  # don't add ourself
+            try:
+                self.pub.connect(c.endpoint.connect_uri(EndpntSpec.BASE))
+            except ZMQError as e:
+                self.logger.error('unable to connect to endpoint {}: {}'.format(c.endpoint, e))
+
+        # TODO: add sockets to poller
+        # TODO: poll with timeout
+        # TODO: check messages on queue
+        return 'fake'
+
+    def _cleanup(self):
+        # TODO
+        self.control_out = None
+        self.control_in = None
+        self.pub = None

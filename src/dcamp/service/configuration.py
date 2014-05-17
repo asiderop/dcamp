@@ -256,6 +256,12 @@ class Configuration(ServiceMixin):
     def topo_get_collector(self, group):
         return self.__tree.get_collector(group)
 
+    def topo_get_all_collectors(self):
+        cs = []
+        for g in self.config_get_groups():
+            cs.append(self.__tree.get_collector(g))
+        return cs
+
     def topo_del_branch(self, collector):
         with self.__kvlock:
             kvlist = self.__tree.remove_collector(collector)
