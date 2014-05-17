@@ -1,7 +1,9 @@
 from logging import getLogger
 import threading
 
-from zmq import ROUTER, DEALER, PUB, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN, ZMQError  # pylint: disable-msg=E0611
+from zmq import ROUTER, DEALER, PUB, SUB, SUBSCRIBE, UNSUBSCRIBE
+from zmq import POLLIN, ZMQError, ETERM, Poller  #
+# pylint: disable-msg=E0611
 from zhelpers import zpipe
 
 from dcamp.role.root import Root
@@ -369,7 +371,7 @@ class RecoveryThread(threading.Thread):
         with self.lock:
             if len(self.__msg_queue) > 0:
                 return self.__msg_queue.pop(0)
-            return None
+            raise Again
 
     def run(self):
         with self.lock:
@@ -449,6 +451,8 @@ class CollectorSOS(RecoveryThread):
         # need separate endpoint for recovery activity
         self.recovery_ep = None
 
+        self.poller = Poller()
+
     def _run(self):
         self.logger.error('EEEEEEKK!!! root node died... starting an election...')
 
@@ -458,6 +462,7 @@ class CollectorSOS(RecoveryThread):
         # we receive election commands (in response to a PUB'ed message) on this socket
         self.control_in = self.ctx.socket(ROUTER)
         bind_addr = self.control_in.bind_to_random_port("tcp://*")
+        self.poller.register(self.control_in, POLLIN)
 
         # subtract CONTROL offset so the port calculated by the remote node matches the
         # random port to which we just bound
@@ -475,10 +480,40 @@ class CollectorSOS(RecoveryThread):
             except ZMQError as e:
                 self.logger.error('unable to connect to endpoint {}: {}'.format(c.endpoint, e))
 
-        # TODO: add sockets to poller
-        # TODO: poll with timeout
-        # TODO: check messages on queue
+        # the below loop may raise exceptions during poll() and recv(), but the parent class will
+        # catch these and then call _cleanup()
+
+        election_running = True
+        while election_running:
+            # 1) process all messages on queue
+            while True:
+                try:
+                    msg = self._get_from_queue()
+                    self.__process_message(msg)
+                except Again:
+                    break
+
+            # 2) poll (timeout after 1s)
+            wakeup = now_msecs() + 1000
+            items = dict(self.poller.poll(wakeup))
+
+            if self.control_in in items:
+                # 3) process all messages on socket
+                while True:
+                    try:
+                        msg = CONTROL.recv(self.control_in)
+                        self.__process_message(msg)
+                    except Again:
+                        break
+
         return 'fake'
+
+    def __process_message(self, msg):
+        # TODO: SOS or SUB
+        pass
+
+    def __start_election(self):
+        pass
 
     def _cleanup(self):
         # TODO
