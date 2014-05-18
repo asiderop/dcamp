@@ -6,6 +6,7 @@ from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=
 from zhelpers import zpipe
 
 from dcamp.service.configuration import Configuration
+from dcamp.types.messages.control import SOS
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.decorators import runnable
 
@@ -37,7 +38,7 @@ class RoleMixin(object):
     def __str__(self):
         return self.__class__.__name__
 
-    def __send_control(self, message):
+    def __send_control_str(self, message):
         self.__control_pipe.send_string(message)
 
     def __recv_control(self):
@@ -59,7 +60,7 @@ class RoleMixin(object):
             self.__config_service = service
 
     def sos(self):
-        self.__send_control('SOS')
+        SOS(self.__endpoint, self.__uuid).send(self.__control_pipe)
 
     def play(self):
         # start each service thread
@@ -77,12 +78,12 @@ class RoleMixin(object):
                 msg = self.__recv_control()
 
                 if 'STOP' == msg:
-                    self.__send_control('OKAY')
+                    self.__send_control_str('OKAY')
                     self.logger.debug('received STOP control command')
                     self.stop_state()
                     break
                 else:
-                    self.__send_control('WTF')
+                    self.__send_control_str('WTF')
                     self.logger.error('unknown control command: %s' % msg)
 
             except ZMQError as e:
@@ -148,7 +149,7 @@ class RoleMixin(object):
                     reply = pipe.recv_string()
                     if 'STOPPED' == reply:
                         self.logger.debug('received STOPPED control reply from %s service' % svc)
-                        svc.join(timeout=5)  # the STOPPED response should be sent right before the service exits
+                        svc.join(timeout=5)  # STOPPED response should be sent right before svc exit
                         if svc.is_alive():
                             self.logger.error('%s service is still alive; not waiting' % svc)
                         else:

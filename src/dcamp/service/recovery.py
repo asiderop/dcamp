@@ -4,16 +4,18 @@ from threading import RLock, Thread
 from zmq import ROUTER, DEALER, PUB, POLLIN, ZMQError, Poller, Again  # pylint: disable-msg=E0611
 
 from dcamp.types.messages.control import CONTROL, SOS
-from dcamp.util.functions import now_msecs
+from dcamp.types.messages.topology import RECOVERY, gen_uuid, TOPO
 from dcamp.types.specs import EndpntSpec
+from dcamp.util.functions import now_msecs
 
 RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
 RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before declaring new leader
 
 
 class Election(object):
-    def __init__(self, uuid, initiating_node):
-        self.uuid = uuid
+    def __init__(self, initiating_node):
+
+        self.uuid = gen_uuid()
 
         self.initter = initiating_node
         self.iwinner = None
@@ -128,8 +130,7 @@ class CollectorSOS(RecoveryThread):
         # need separate endpoint for recovery activity
         self.recovery_ep = None
 
-        self.cur_elections = []
-        self.won_elections = []
+        self.elections = []
         self.last_message_time = None
 
     def __init_sockets(self):
@@ -197,16 +198,37 @@ class CollectorSOS(RecoveryThread):
 
     def __process_message(self, msg):
 
-        # TODO: handle WTF?
+        if msg.is_error:
+            self.logger.error('received error message: %s' % msg)
+            return
 
-        self.last_message_time = now_msecs()
+        # expected message types:
+        #     SOS (CONTROL) : local message from Configuration service
+        #     WUTUP (TOPO) : remote message from other Collector
+        #     YO (CONTROL) : remote message from other Collector (response to WUTUP PUB)
+        #     IWIN (TOPO) : remote message from other Collector
 
-        # sos is a local detection of the root failure
-        if msg == 'SOS':
-            # TODO: check for active election or start election?
+        if isinstance(msg, TOPO):
             pass
 
+        elif isinstance(msg, CONTROL):
+            # sos is a local detection of the root failure
+            if 'sos' == msg.command:
+                assert msg.uuid == self.uuid
+                # check for active election or start new election
+                if len(self.elections) > 0:
+                    return
+                new_election = Election(self.uuid)
+                # TODO: send PUB
+
+        else:
+            self.logger.error('received unknown message: {}'.format(msg))
+
+
         # else, msg is CONTROL type
+
+
+        self.last_message_time = now_msecs()
         # TODO: respond to or record election status
 
     def __start_election(self):

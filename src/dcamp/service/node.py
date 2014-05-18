@@ -3,14 +3,14 @@ import threading
 from zmq import DEALER, SUB, SUBSCRIBE, UNSUBSCRIBE, POLLIN  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
-from dcamp.role.root import Root
 from dcamp.role.collector import Collector
 from dcamp.role.metric import Metric
-from dcamp.service.service import ServiceMixin
+from dcamp.role.root import Root
 from dcamp.service.recovery import MetricSOS, CollectorSOS, RECOVERY_SILENCE_PERIOD_MS
-from dcamp.types.specs import EndpntSpec
-from dcamp.types.messages.control import POLO, CONTROL
+from dcamp.service.service import ServiceMixin
+from dcamp.types.messages.control import POLO, CONTROL, SOS
 from dcamp.types.messages.topology import TOPO
+from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import now_msecs
 
 
@@ -157,10 +157,20 @@ class Node(ServiceMixin):
             self.open_state()
 
         elif self.role_pipe in items:
-            message = self.role_pipe.recv_string()
-            assert 'SOS' == message
+            message = SOS.recv(self.role_pipe)
 
-            self.__handle_sos()
+            if message.is_error or message.command != 'sos':
+                self.logger.error('unexpected message from Role: {}'.format(message))
+                return
+
+            if 'branch' == self.level:
+                # root died, start election
+                self.__handle_recovery(message)
+            elif 'leaf' == self.level:
+                # collector died, notify root
+                self.__handle_sos()
+            else:
+                raise NotImplementedError('unknown role class: %s' % self.role)
 
         elif self.control_socket in items:
             assert self.in_open_state
@@ -222,8 +232,6 @@ class Node(ServiceMixin):
             self.logger.error('received RECOVERY message but not Collector')
             return
 
-        assert isinstance(self.role, Collector)
-
         if self.recovery is not None:
             with self.recovery.lock:
                 if self.recovery.is_alive():
@@ -244,31 +252,29 @@ class Node(ServiceMixin):
         #       shutdown old Collector role and start new Root role
 
     def __handle_sos(self):
+        assert 'leaf' == self.level
+
         if self.recovery is not None:
+            # TODO: move this logic into the recovery class?
+            # TODO: use locking to ensure SOSs are not missed
             self.logger.info('already processed SOS: {}'.format(self.recovery.result))
+
             if self.recovery.is_alive():
                 # still working
                 self.logger.debug('recovery thread still working; skipping this SOS')
                 return
+
             else:
                 assert self.recovery.stop_time is not None
                 elapsed = now_msecs() - self.recovery.stop_time
 
                 if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
                     # need to wait longer before trying again
-                    self.logger.debug('last successful attempt too recent: {}ms'.format(elapsed))
+                    self.logger.warn('last successful SOS attempt too recent: {}ms'.format(elapsed))
                     return
 
-        if 'leaf' == self.level:
-            # collector died, notify root
-            # TODO: use real root ep instead of control_ep; how to get root from config service...
-            self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
-        elif 'branch' == self.level:
-            # root died, start election
-            self.__handle_recovery('SOS')
-        else:
-            raise NotImplementedError('unknown role class: %s' % self.role)
-
+        # TODO: use real root ep instead of control_ep; how to get from config service...
+        self.recovery = MetricSOS(self.ctx, self.endpoint, self.uuid, self.control_ep)
         self.recovery.start()
 
     def __handle_assignment(self, response):
