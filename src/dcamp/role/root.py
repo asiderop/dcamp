@@ -14,17 +14,15 @@ class Root(RoleMixin):
             self,
             control_pipe,
             local_ep,
+            local_uuid,
             config_file,
     ):
+        RoleMixin.__init__(self, control_pipe, local_ep, local_uuid)
 
-        RoleMixin.__init__(self, control_pipe)
+        ### add services (order matters)
 
-        ### add services
-
-        config_service = self._add_service(
+        self._add_service(
             Configuration,
-            None,         # config service, None for config service (obviously)
-            local_ep,     # our endpoint
             None,         # parent endpoint--root should use cli endpoint as parent / #42
             'root',       # node's level
             None,         # node's group
@@ -32,7 +30,6 @@ class Root(RoleMixin):
             config_file,  # configuration file, only for root node
         )
 
-        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
-        self._add_service(Management,   config_service, local_ep                     )
-        self._add_service(Filter,       config_service, local_ep, None,      'root'  )
-        self._add_service(Aggregation,  config_service, local_ep, None,      'root'  )
+        self._add_service(Management)
+        self._add_service(Filter, None, 'root')
+        self._add_service(Aggregation, None, 'root')

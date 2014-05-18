@@ -297,6 +297,7 @@ class Node(ServiceMixin):
             self.role = Root(
                 peer,
                 self.endpoint,
+                self.uuid,
                 response['config-file'],
             )
 
@@ -314,6 +315,7 @@ class Node(ServiceMixin):
                 self.role = Collector(
                     peer,
                     self.endpoint,
+                    self.uuid,
                     response['parent'],
                     response['group'],
                 )
@@ -322,6 +324,7 @@ class Node(ServiceMixin):
                 self.role = Metric(
                     peer,
                     self.endpoint,
+                    self.uuid,
                     response['parent'],
                     response['group'],
                 )

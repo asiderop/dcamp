@@ -1,18 +1,33 @@
 from logging import getLogger
 from time import sleep
+from uuid import UUID
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=E0611
 from zhelpers import zpipe
 
+from dcamp.service.configuration import Configuration
+from dcamp.types.specs import EndpntSpec
 from dcamp.util.decorators import runnable
 
 
 @runnable
 class RoleMixin(object):
-    def __init__(self,
-                 pipe):
+    def __init__(
+            self,
+            pipe,
+            ep,
+            uuid,
+    ):
         self.ctx = Context.instance()
         self.__control_pipe = pipe
+
+        assert isinstance(ep, EndpntSpec)
+        self.__endpoint = ep
+
+        assert isinstance(uuid, UUID)
+        self.__uuid = uuid
+
+        self.__config_service = None
 
         self.logger = getLogger('dcamp.role.%s' % self)
 
@@ -28,11 +43,20 @@ class RoleMixin(object):
     def __recv_control(self):
         return self.__control_pipe.recv_string()
 
+    def get_config_service(self):
+        return self.__config_service
+
+    def get_config_service_kvdict(self):
+        assert self.__config_service is not None
+        return self.__config_service.copy_kvdict()
+
     def _add_service(self, cls, *args, **kwargs):
         pipe, peer = zpipe(self.ctx)  # create control socket pair
-        service = cls(peer, *args, **kwargs)  # create service, passing peer socket
+        # create service, passing local values along with rest of given args
+        service = cls(peer, self.__endpoint, self.__uuid, self.__config_service, *args, **kwargs)
         self.__services[pipe] = service  # add to our dict, using pipe socket as key
-        return service
+        if Configuration == cls:
+            self.__config_service = service
 
     def sos(self):
         self.__send_control('SOS')

@@ -14,17 +14,16 @@ class Collector(RoleMixin):
             self,
             control_pipe,
             local_ep,
+            local_uuid,
             parent_ep,
             group,
     ):
-        RoleMixin.__init__(self, control_pipe)
+        RoleMixin.__init__(self, control_pipe, local_ep, local_uuid)
 
         ### add services
 
-        self.__config_service = self._add_service(
+        self._add_service(
             Configuration,
-            None,         # config service, None for config service (obviously)
-            local_ep,     # our endpoint
             parent_ep,    # parent endpoint, root/collector node
             'branch',     # node's level
             group,        # node's group
@@ -32,12 +31,5 @@ class Collector(RoleMixin):
             None,         # configuration file, only for root node
         )
 
-        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
-        self._add_service(Filter,       self.__config_service, local_ep, parent_ep, 'branch')
-        self._add_service(Aggregation,  self.__config_service, local_ep, parent_ep, 'branch')
-
-    def get_config_service_kvdict(self):
-        return self.__config_service.copy_kvdict()
-
-    def get_config_service(self):
-        return self.__config_service
+        self._add_service(Filter, parent_ep, 'branch')
+        self._add_service(Aggregation, parent_ep, 'branch')

@@ -101,7 +101,7 @@ class App:
         pipe, peer = zpipe(self.ctx)
 
         try:
-            role = Base(peer, self.args.address)
+            role = Base(peer, self.args.address, gen_uuid())
             peer = None  # closed by peer
         except ZMQError as e:
             self.logger.debug('exception while starting base role:', exc_info=True)

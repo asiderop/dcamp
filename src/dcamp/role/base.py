@@ -10,9 +10,9 @@ class Base(RoleMixin):
     def __init__(
             self,
             control_pipe,
-            local_ep
+            local_ep,
+            local_uuid,
     ):
-        RoleMixin.__init__(self, control_pipe)
+        RoleMixin.__init__(self, control_pipe, local_ep, local_uuid)
 
-        #                (ServiceClass, config-service, local-ep, parent-ep, level   )
-        self._add_service(Node,         None,           local_ep                     )
+        self._add_service(Node)
