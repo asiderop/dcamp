@@ -157,9 +157,10 @@ class Node(ServiceMixin):
             self.open_state()
 
         elif self.role_pipe in items:
+            # SOS.recv() guarantees either WTF or SOS message
             message = SOS.recv(self.role_pipe)
 
-            if message.is_error or message.command != 'sos':
+            if message.is_error:
                 self.logger.error('unexpected message from Role: {}'.format(message))
                 return
 

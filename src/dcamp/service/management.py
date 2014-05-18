@@ -125,10 +125,10 @@ class Management(ServiceMixin):
             self.logger.error(errstr)
             repmsg = WTF(0, errstr)
 
-        elif msg.command in ['polo', 'sos']:
+        elif msg.is_polo or msg.is_sos:
             remote = self.cfgsvc.topo_get_node(msg.endpoint)
 
-            if 'polo' == msg.command:
+            if msg.is_polo:
                 if remote is None:
                     repmsg = self.__assign(msg)
 
@@ -143,7 +143,7 @@ class Management(ServiceMixin):
                 else:
                     repmsg = WTF(0, 'too chatty; already POLOed')
 
-            elif 'sos' == msg.command:
+            elif msg.is_sos:
                 if remote is None:
                     repmsg = WTF(0, 'I know not you!')
 

@@ -80,6 +80,10 @@ class TOPO(DCMsg):
     def group_key(group=''):
         return '/GROUP/' + group
 
+    ##################
+    # Recovery Methods
+    ##
+
     @property
     def is_recovery(self):
         return self.key.startswith(TOPO.recovery_key())
@@ -87,6 +91,17 @@ class TOPO(DCMsg):
     @staticmethod
     def recovery_key(msg_type=''):
         return '/RECOVERY/' + msg_type
+
+    def __is_recovery_msg_type(self, msg_type):
+        return self.is_recovery and msg_type == self.key[len(TOPO.recovery_key()):]
+
+    @property
+    def is_wutup(self):
+        return self.__is_recovery_msg_type('wutup')
+
+    @property
+    def is_iwin(self):
+        return self.__is_recovery_msg_type('iwin')
 
 
 class MARCO(TOPO):
@@ -106,6 +121,8 @@ class GROUP(TOPO):
 
 
 class RECOVERY(TOPO):
+    KEYS = ['wutup', 'iwin']
     def __init__(self, msg_type, endpoint, uuid, content=None):
+        assert msg_type in RECOVERY.KEYS
         key = TOPO.recovery_key(msg_type)
         TOPO.__init__(self, key, endpoint, uuid, content)
