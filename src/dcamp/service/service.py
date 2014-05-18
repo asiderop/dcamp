@@ -1,18 +1,30 @@
 from logging import getLogger
 from threading import Thread
+from uuid import UUID
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=E0611
 
+from dcamp.service.configuration import Configuration
+from dcamp.types.specs import EndpntSpec
 from dcamp.util.decorators import runnable
+from dcamp.util.functions import isInstance_orNone
 
 
 @runnable
 class ServiceMixin(Thread):
-    def __init__(self, pipe, config_svc):
+    def __init__(self, pipe, local_ep, local_uuid, config_svc):
         Thread.__init__(self)
         self.ctx = Context.instance()
         self.__control_pipe = pipe
-        self.__config_svc = config_svc
+
+        assert isinstance(local_ep, EndpntSpec)
+        self.__endpoint = local_ep
+
+        assert isinstance(local_uuid, UUID)
+        self.__uuid = local_uuid
+
+        assert isInstance_orNone(config_svc, Configuration)
+        self.__cfgsvc = config_svc
 
         self.logger = getLogger('dcamp.service.%s' % self)
 
@@ -23,6 +35,18 @@ class ServiceMixin(Thread):
 
     def __str__(self):
         return self.__class__.__name__
+
+    @property
+    def cfgsvc(self):
+        return self.__cfgsvc
+
+    @property
+    def endpoint(self):
+        return self.__endpoint
+
+    @property
+    def uuid(self):
+        return self.__uuid
 
     def __send_control(self, message):
         self.__control_pipe.send_string(message)

@@ -21,18 +21,14 @@ class Management(ServiceMixin):
     def __init__(
             self,
             control_pipe,
+            local_ep,
+            local_uuid,
             config_svc,
-            local_ep
     ):
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
-        ServiceMixin.__init__(self, control_pipe, config_svc)
-        assert isinstance(local_ep, EndpntSpec)
-
-        # TODO: config service is basically a replication service with two use-cases: config and topo;
+        # TODO: config service is basically a replication service with 2 use-cases: config and topo;
         #       this design can probably be cleaned up quite a bit.
-        self.cfgsvc = config_svc
-        self.endpoint = local_ep
-        self.uuid = gen_uuid()
 
         self.cfgsvc.topo_set_root(self.endpoint, self.uuid)
 

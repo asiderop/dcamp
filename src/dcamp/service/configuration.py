@@ -21,28 +21,25 @@ class Configuration(ServiceMixin):
     def __init__(
             self,
             control_pipe,  # control pipe for shutting down service
-            config_svc,  # obviously, this must be None
             local_ep,  # this is us
+            local_uuid,  # this is also us
+            config_svc,  # obviously, this must be None
             parent_ep,  # from where we receive config updates/snapshots
             level,
             group,
             sos_func,  # call when our parent stops sending HUGZ
             config_state=None,  # should only be given for root level
     ):
-        ServiceMixin.__init__(self, control_pipe, config_svc)
-
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
         assert config_svc is None
+
+        assert isinstance(parent_ep, (EndpntSpec, type(None)))
+        self.parent = parent_ep
 
         assert level in ['root', 'branch', 'leaf']
         self.level = level
 
         self.group = group
-
-        assert isinstance(parent_ep, (EndpntSpec, type(None)))
-        self.parent = parent_ep
-
-        assert isinstance(local_ep, EndpntSpec)
-        self.endpoint = local_ep
 
         if self.level in ['branch', 'leaf']:
             assert isinstance(sos_func, MethodType)

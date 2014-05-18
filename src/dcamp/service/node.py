@@ -10,7 +10,7 @@ from dcamp.service.service import ServiceMixin
 from dcamp.service.recovery import MetricSOS, CollectorSOS, RECOVERY_SILENCE_PERIOD_MS
 from dcamp.types.specs import EndpntSpec
 from dcamp.types.messages.control import POLO, CONTROL
-from dcamp.types.messages.topology import gen_uuid, TOPO
+from dcamp.types.messages.topology import TOPO
 from dcamp.util.functions import now_msecs
 
 
@@ -34,15 +34,13 @@ class Node(ServiceMixin):
     def __init__(
             self,
             control_pipe,
+            local_ep,
+            local_uuid,
             config_svc,  # must be None
-            local_ep
     ):
-
-        ServiceMixin.__init__(self, control_pipe, config_svc)
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
         assert config_svc is None
 
-        self.endpoint = local_ep
-        self.uuid = gen_uuid()
         self.polo_msg = POLO(self.endpoint, self.uuid)
 
         ####

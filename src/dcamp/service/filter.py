@@ -13,20 +13,19 @@ class Filter(ServiceMixin):
     def __init__(
             self,
             control_pipe,
-            config_svc,
             local_ep,
+            local_uuid,
+            config_svc,
             parent_ep,
             level
     ):
-        ServiceMixin.__init__(self, control_pipe, config_svc)
-        assert level in ['root', 'branch', 'leaf']
-        assert isinstance(parent_ep, (EndpntSpec, type(None)))
-        assert isinstance(local_ep, EndpntSpec)
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
-        self.level = level
-        self.cfgsvc = config_svc
+        assert isinstance(parent_ep, (EndpntSpec, type(None)))
         self.parent = parent_ep
-        self.endpoint = local_ep
+
+        assert level in ['root', 'branch', 'leaf']
+        self.level = level
 
         # { config-name: (metric-spec, cached-list }
         self.metric_specs = {}

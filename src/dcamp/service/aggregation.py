@@ -9,21 +9,19 @@ class Aggregation(ServiceMixin):
     def __init__(
             self,
             control_pipe,
-            config_svc,
             local_ep,
+            local_uuid,
+            config_svc,
             parent_ep,
             level
     ):
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
-        ServiceMixin.__init__(self, control_pipe, config_svc)
-        assert level in ['root', 'branch']
         assert isinstance(parent_ep, (EndpntSpec, type(None)))
-        assert isinstance(local_ep, EndpntSpec)
-
-        self.level = level
-        self.config_service = config_svc
         self.parent = parent_ep
-        self.endpoint = local_ep
+
+        assert level in ['root', 'branch']
+        self.level = level
 
         (self.sub_cnt, self.push_cnt) = (0, 0)
 

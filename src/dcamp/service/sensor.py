@@ -12,14 +12,11 @@ class Sensor(ServiceMixin):
     def __init__(
             self,
             control_pipe,
+            local_ep,
+            local_uuid,
             config_svc,
-            local_ep
     ):
-
-        ServiceMixin.__init__(self, control_pipe, config_svc)
-
-        self.cfgsvc = config_svc
-        self.endpoint = local_ep
+        ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
         # goal: sort by next collection time
         self.metric_specs = []
