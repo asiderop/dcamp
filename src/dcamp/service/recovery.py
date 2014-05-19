@@ -10,7 +10,8 @@ from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import now_msecs, isInstance_orNone
 
 RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
-RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before declaring new leader
+RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before confirming new leader
+RECOVERY_IWIN_WAIT_MS = 5 * 1000  # wait five seconds before declaring victory
 
 
 class Election(object):
@@ -27,16 +28,16 @@ class Election(object):
             # creating new election
             self.elec_uuid = gen_uuid()
             self.wutup_time = None
+            self.result = None
         else:
             # tracking existing election from WUTUP
             self.elec_uuid = election_uuid
             self.wutup_time = now_msecs()
+            self.result = 'pending'
 
         self.iwin_ep = None
         self.iwin_uuid = None
         self.iwin_time = None
-
-        self.result = 'pending'  # pending, won, lost
 
     def __hash__(self):
         return self.elec_uuid
@@ -47,15 +48,18 @@ class Election(object):
     def wutup(self, from_ep, from_uuid):
         assert from_ep == self.node_ep and from_uuid == self.node_uuid
         self.wutup_time = now_msecs()
+        self.result = 'pending'
         return RECOVERY('wutup', from_ep, from_uuid, content=self.elec_uuid)
 
     def iwin(self, from_ep, from_uuid):
         assert from_uuid >= self.node_uuid
         self.iwin_time = now_msecs()
+        self.result = 'won'
         return RECOVERY('iwin', from_ep, from_uuid, content=self.elec_uuid)
 
     def yo(self, from_ep, from_uuid):
         assert from_uuid > self.node_uuid
+        self.result = 'lost'
         return YO(from_ep, from_uuid, self.elec_uuid)
 
 
@@ -167,6 +171,7 @@ class CollectorSOS(RecoveryThread):
         # { election-uuid : Election }
         self.elections = {}
         self.last_message_time = None
+        self.elected_leader = None
 
     def __init_sockets(self):
         # we send election commands (in response to a SUB'ed message) on this socket
@@ -201,36 +206,67 @@ class CollectorSOS(RecoveryThread):
         # http://zeromq.org/whitepapers:0mq-termination
         self.__init_sockets()
 
-        # the below loop may raise exceptions during poll() and recv(), but the parent class will
-        # catch these and then call _cleanup()
+        # we can only exit once a leader has been elected
+        while self.elected_leader is None:
 
-        self.last_message_time = now_msecs()  # just to seed the loop
-        while RECOVERY_ELECTION_WAIT_MS > (now_msecs() - self.last_message_time):
-            # 1) process all messages on queue
-            while True:
-                try:
-                    msg = self._get_from_queue()
-                    self.__process_message(msg)
-                except Again:
-                    break
+            # the below loop may raise exceptions during poll() and recv(), but the parent class
+            # will catch these and then call _cleanup()
 
-            # 2) poll (timeout after 1s)
-            wakeup = now_msecs() + 1000
-            items = dict(self.poller.poll(wakeup))
-
-            # 3) process all messages on socket
-            if self.control_in in items:
+            self.last_message_time = now_msecs()  # just to seed the loop
+            while RECOVERY_ELECTION_WAIT_MS > (now_msecs() - self.last_message_time):
+                # 1) process all messages on queue
                 while True:
                     try:
-                        msg = CONTROL.recv(self.control_in)
+                        msg = self._get_from_queue()
                         self.__process_message(msg)
                     except Again:
                         break
 
-        # TODO: if loop exited, time must have expired; check elections and find winner
-        # TODO: winner is election with most recent stop_time and "won" result
+                # 2) poll (timeout after 1s)
+                wakeup = now_msecs() + 1000
+                items = dict(self.poller.poll(wakeup))
 
-        return 'fake'
+                # 3) process all messages on socket
+                if self.control_in in items:
+                    while True:
+                        try:
+                            msg = CONTROL.recv(self.control_in)
+                            self.__process_message(msg)
+                        except Again:
+                            break
+
+                # 4) check if won any self-started elections
+                for elect in self.elections.values():
+                    if elect.node_uuid != self.uuid:
+                        continue
+                    if elect.result != 'pending':
+                        continue
+                    if RECOVERY_IWIN_WAIT_MS > (now_msecs() - elect.wutup_time):
+                        self.last_message_time = now_msecs()
+                        elect.iwin(self.endpoint, self.uuid).send(self.pub)
+
+            # if loop exited, time expired; check elections and find winner or start new election
+            elected = self.__tally_results()
+            if elected is None:
+                self.__start_election()
+            else:
+                self.elected_leader = elected
+
+
+        return 'success'
+
+    def __tally_results(self):
+        # winner is election with most recent stop_time and "won" result
+        # TODO: is time enough to determine winner? even if older winner has higher uuid?
+        winner = None
+        for elect in self.elections.values():
+            if elect.result == 'won':
+                if winner is None:
+                    winner = elect
+                else:
+                    winner = max(elect, winner, key=lambda e: e.iwin_time)
+
+        return winner
 
     def __process_message(self, msg):
 
@@ -250,8 +286,6 @@ class CollectorSOS(RecoveryThread):
             self.logger.error('received error: {}'.format(msg))
             return
 
-        # TODO: respond to or record election status
-
         if isinstance(msg, TOPO):
             if msg.is_recovery:
                 if msg.is_wutup:
@@ -262,8 +296,9 @@ class CollectorSOS(RecoveryThread):
                     elect = Election(msg.endpoint, msg.uuid, msg.content)
                     self.elections[elect.elec_uuid] = elect
 
-                    yo = elect.yo(self.endpoint, self.uuid)
-                    yo.send(self.control_out)
+                    if self.uuid > elect.elec_uuid:
+                        elect.yo(self.endpoint, self.uuid).send(self.control_out)
+                    return
 
                 elif msg.is_iwin:
                     # record winner
@@ -278,6 +313,14 @@ class CollectorSOS(RecoveryThread):
                     elect = self.elections[msg.content]
                     elect.iwin(msg.endpoint, msg.uuid)
 
+                    if self.uuid > elect.elec_uuid:
+                        # another node thinks they should be root, but we have higher uuid; here
+                        # comes the bully...
+                        # TODO: optimize to not start a new election if already winning another;
+                        #       re-use logic in #4 of _run() loop
+                        self.__start_election()
+                    return
+
         elif isinstance(msg, CONTROL):
             if msg.is_sos:
                 # sos is a local detection of the root failure
@@ -287,25 +330,35 @@ class CollectorSOS(RecoveryThread):
                 if len(self.elections) > 0:
                     return  # if any elections, we're done here
 
-                self.last_message_time = now_msecs()
-
-                elect = Election(self.endpoint, self.uuid)
-                self.elections[elect.elec_uuid] = elect
-                wutup = elect.wutup(self.endpoint, self.uuid)
-                wutup.send(self.pub)
+                self.__start_election()
+                return
 
             elif msg.is_yo:
                 elect_uuid = msg.properties['elect-uuid']
+
                 if elect_uuid not in self.elections:
                     self.logger.error('received YO for unknown election; ignoring')
                     return
 
-                self.last_message_time = now_msecs()
                 elect = self.elections[elect_uuid]
+
+                if elect.node_uuid != self.uuid:
+                    self.logger.error('received YO for unowned election; ignoring')
+                    return
+
+                self.last_message_time = now_msecs()
                 elect.yo(msg.endpoint, msg.uuid)
+                return
 
         self.logger.error('unexpected message: {}'.format(msg))
         return
+
+    def __start_election(self):
+        self.last_message_time = now_msecs()
+
+        elect = Election(self.endpoint, self.uuid)
+        self.elections[elect.elec_uuid] = elect
+        elect.wutup(self.endpoint, self.uuid).send(self.pub)
 
     def _cleanup(self):
         if self.control_out is not None:
