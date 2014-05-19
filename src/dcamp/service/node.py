@@ -258,6 +258,7 @@ class Node(ServiceMixin):
         if self.recovery is not None:
             # TODO: move this logic into the recovery class?
             # TODO: use locking to ensure SOSs are not missed
+            # TODO: see __handle_recovery() for example...maybe just combine?
             self.logger.info('already processed SOS: {}'.format(self.recovery.result))
 
             if self.recovery.is_alive():

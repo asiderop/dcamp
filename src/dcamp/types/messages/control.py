@@ -130,5 +130,10 @@ class SOS(CONTROL):
 
 
 class YO(CONTROL):
-    def __init__(self, endpoint, uuid):
-        CONTROL.__init__(self, command='yo', endpoint=endpoint, uuid=uuid)
+    def __init__(self, endpoint, uuid, elect_uuid):
+
+        props = {
+            'election-uuid': elect_uuid,
+        }
+
+        CONTROL.__init__(self, command='yo', endpoint=endpoint, uuid=uuid, properties=props)

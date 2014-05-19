@@ -1,35 +1,69 @@
 from logging import getLogger
 from threading import RLock, Thread
+from uuid import UUID
 
 from zmq import ROUTER, DEALER, PUB, POLLIN, ZMQError, Poller, Again  # pylint: disable-msg=E0611
 
-from dcamp.types.messages.control import CONTROL, SOS
+from dcamp.types.messages.control import CONTROL, SOS, YO
 from dcamp.types.messages.topology import RECOVERY, gen_uuid, TOPO
 from dcamp.types.specs import EndpntSpec
-from dcamp.util.functions import now_msecs
+from dcamp.util.functions import now_msecs, isInstance_orNone
 
 RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
 RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before declaring new leader
 
 
 class Election(object):
-    def __init__(self, initiating_node):
+    def __init__(self, node_ep, node_uuid, election_uuid=None):
 
-        self.uuid = gen_uuid()
+        assert isinstance(node_ep, EndpntSpec)
+        self.node_ep = node_ep
 
-        self.initter = initiating_node
-        self.iwinner = None
+        assert isinstance(node_uuid, UUID)
+        self.node_uuid = node_uuid
 
-        self.result = 'pending'
-        self.init_time = now_msecs()
+        assert isInstance_orNone(node_uuid, UUID)
+        if election_uuid is None:
+            # creating new election
+            self.elec_uuid = gen_uuid()
+            self.wutup_time = None
+        else:
+            # tracking existing election from WUTUP
+            self.elec_uuid = election_uuid
+            self.wutup_time = now_msecs()
+
+        self.iwin_ep = None
+        self.iwin_uuid = None
         self.iwin_time = None
+
+        self.result = 'pending'  # pending, won, lost
+
+    def __hash__(self):
+        return self.elec_uuid
+
+    def __eq__(self, other):
+        return isinstance(other, Election) and self.elec_uuid == other.elec_uuid
+
+    def wutup(self, from_ep, from_uuid):
+        assert from_ep == self.node_ep and from_uuid == self.node_uuid
+        self.wutup_time = now_msecs()
+        return RECOVERY('wutup', from_ep, from_uuid, content=self.elec_uuid)
+
+    def iwin(self, from_ep, from_uuid):
+        assert from_uuid >= self.node_uuid
+        self.iwin_time = now_msecs()
+        return RECOVERY('iwin', from_ep, from_uuid, content=self.elec_uuid)
+
+    def yo(self, from_ep, from_uuid):
+        assert from_uuid > self.node_uuid
+        return YO(from_ep, from_uuid, self.elec_uuid)
 
 
 class RecoveryThread(Thread):
     def __init__(self, ctx, ep, uuid):
         Thread.__init__(self)
         self.ctx = ctx
-        self.ep = ep
+        self.endpoint = ep
         self.uuid = uuid
 
         self.result = 'pending'
@@ -83,7 +117,7 @@ class MetricSOS(RecoveryThread):
         self.recovery_socket = self.ctx.socket(DEALER)
         self.recovery_socket.connect(self.root_ep.connect_uri(EndpntSpec.CONTROL))
 
-        msg = SOS(self.ep, self.uuid)
+        msg = SOS(self.endpoint, self.uuid)
         msg.send(self.recovery_socket)
 
         self.logger.error('group collector node died; contacting Root...')
@@ -130,7 +164,8 @@ class CollectorSOS(RecoveryThread):
         # need separate endpoint for recovery activity
         self.recovery_ep = None
 
-        self.elections = []
+        # { election-uuid : Election }
+        self.elections = {}
         self.last_message_time = None
 
     def __init_sockets(self):
@@ -151,7 +186,7 @@ class CollectorSOS(RecoveryThread):
         self.pub.set_hwm(1)  # don't hold onto more than 1 pub
 
         for c in self.cfgsvc.topo_get_all_collectors():
-            if c.endpoint == self.ep:
+            if c.endpoint == self.endpoint:
                 continue  # don't add ourself
             try:
                 self.pub.connect(c.endpoint.connect_uri(EndpntSpec.BASE))
@@ -193,49 +228,94 @@ class CollectorSOS(RecoveryThread):
                         break
 
         # TODO: if loop exited, time must have expired; check elections and find winner
+        # TODO: winner is election with most recent stop_time and "won" result
 
         return 'fake'
 
     def __process_message(self, msg):
 
-        if msg.is_error:
-            self.logger.error('received error message: %s' % msg)
-            return
-
-        # expected message types:
+        # Expected Message Types:
         #     SOS (CONTROL) : local message from Configuration service
         #     WUTUP (TOPO) : remote message from other Collector
         #     YO (CONTROL) : remote message from other Collector (response to WUTUP PUB)
         #     IWIN (TOPO) : remote message from other Collector
+        #
+        # +   SOS will come from the shared message queue since this is a local message from the
+        #     Configuration service.
+        # +   WUTUP and IWIN will also come from the shared message queue  since these are received
+        #     on the SUB socket owned by the Node service.
+        # +   YO will come directly on the control_in socket
 
-        if isinstance(msg, TOPO):
-            pass
+        if msg.is_error:
+            self.logger.error('received error: {}'.format(msg))
+            return
 
-        elif isinstance(msg, CONTROL):
-            # sos is a local detection of the root failure
-            if 'sos' == msg.command:
-                assert msg.uuid == self.uuid
-                # check for active election or start new election
-                if len(self.elections) > 0:
-                    return
-                new_election = Election(self.uuid)
-                # TODO: send PUB
-
-        else:
-            self.logger.error('received unknown message: {}'.format(msg))
-
-
-        # else, msg is CONTROL type
-
-
-        self.last_message_time = now_msecs()
         # TODO: respond to or record election status
 
-    def __start_election(self):
-        pass
+        if isinstance(msg, TOPO):
+            if msg.is_recovery:
+                if msg.is_wutup:
+                    # track existing election
+
+                    self.last_message_time = now_msecs()
+
+                    elect = Election(msg.endpoint, msg.uuid, msg.content)
+                    self.elections[elect.elec_uuid] = elect
+
+                    yo = elect.yo(self.endpoint, self.uuid)
+                    yo.send(self.control_out)
+
+                elif msg.is_iwin:
+                    # record winner
+
+                    self.last_message_time = now_msecs()
+
+                    if msg.content not in self.elections:
+                        self.logger.warn('received IWIN for unknown election')
+                        elect = Election(msg.endpoint, msg.uuid, msg.content)
+                        self.elections[elect.elec_uuid] = elect
+
+                    elect = self.elections[msg.content]
+                    elect.iwin(msg.endpoint, msg.uuid)
+
+        elif isinstance(msg, CONTROL):
+            if msg.is_sos:
+                # sos is a local detection of the root failure
+                assert msg.uuid == self.uuid
+
+                # check for active election or start new election
+                if len(self.elections) > 0:
+                    return  # if any elections, we're done here
+
+                self.last_message_time = now_msecs()
+
+                elect = Election(self.endpoint, self.uuid)
+                self.elections[elect.elec_uuid] = elect
+                wutup = elect.wutup(self.endpoint, self.uuid)
+                wutup.send(self.pub)
+
+            elif msg.is_yo:
+                elect_uuid = msg.properties['elect-uuid']
+                if elect_uuid not in self.elections:
+                    self.logger.error('received YO for unknown election; ignoring')
+                    return
+
+                self.last_message_time = now_msecs()
+                elect = self.elections[elect_uuid]
+                elect.yo(msg.endpoint, msg.uuid)
+
+        self.logger.error('unexpected message: {}'.format(msg))
+        return
 
     def _cleanup(self):
-        # TODO
-        self.control_out = None
-        self.control_in = None
-        self.pub = None
+        if self.control_out is not None:
+            self.control_out.close()
+        del self.control_out
+
+        if self.control_in is not None:
+            self.control_in.close()
+        del self.control_in
+
+        if self.pub is not None:
+            self.pub.close()
+        del self.pub
