@@ -227,10 +227,6 @@ class Configuration(ServiceMixin):
     #####
     # BEGIN topo tree access methods
 
-    def topo_print(self):
-        with self.__kvlock:
-            self.__tree.print()
-
     def topo_get_size(self):
         return len(self.__tree)
 
@@ -256,7 +252,9 @@ class Configuration(ServiceMixin):
     def topo_get_all_collectors(self):
         cs = []
         for g in self.config_get_groups():
-            cs.append(self.__tree.get_collector(g))
+            c = self.__tree.get_collector(g)
+            if c is not None:
+                cs.append(c)
         return cs
 
     def topo_del_branch(self, collector):
@@ -432,6 +430,8 @@ class Configuration(ServiceMixin):
         with self.__kvlock:
             for (k, (v, s)) in sorted(self.__kvdict.items()):
                 self.logger.debug('({0:0{width}d}) {1}: {2}'.format(s, k, v, width=width))
+
+        self.__tree.print()
 
         if self.update_sub is not None:
             self.update_sub.close()

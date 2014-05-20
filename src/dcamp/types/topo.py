@@ -228,7 +228,7 @@ class TopoTreeMixin(object):
                 v.children = old.children
 
                 self.__nodes[v.endpoint] = v
-                self.__collectors[v.endpoint] = v
+                self.__collectors[v.group] = v
                 return True
 
             else:
@@ -298,7 +298,7 @@ class TopoTreeMixin(object):
 
         kvlist = []
 
-        if node.endpoint not in self.__collectors:
+        if node.group not in self.__collectors:
             self.logger.error('node {} is not in collectors list'.format(node))
             return kvlist
 
@@ -312,7 +312,7 @@ class TopoTreeMixin(object):
 
         # and lastly remove node from the tree
         del self.__nodes[node.endpoint]
-        del self.__collectors[node.endpoint]
+        del self.__collectors[node.group]
         kvlist.append((node.get_key(), None))
 
         # return kv updates

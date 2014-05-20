@@ -238,6 +238,12 @@ class Node(ServiceMixin):
                 if self.recovery.is_alive():
                     self.recovery.add_to_queue(msg)
                     return
+                else:
+                    elapsed = now_msecs() - self.recovery.stop_time
+                    if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
+                        # need to wait longer before trying again
+                        self.logger.warn('last successful SOS attempt too recent: {}ms'.format(elapsed))
+                        return
 
         self.recovery = CollectorSOS(
             self.ctx,

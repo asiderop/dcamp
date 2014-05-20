@@ -77,8 +77,6 @@ class Management(ServiceMixin):
         self.logger.debug("%d pubs; %d reqs; %d reps" %
                           (self.pubcnt, self.reqcnt, self.repcnt))
 
-        self.cfgsvc.topo_print()
-
         self.join_socket.close()
         del self.join_socket
 

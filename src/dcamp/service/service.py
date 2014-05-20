@@ -4,10 +4,8 @@ from uuid import UUID
 
 from zmq import Context, Poller, POLLIN, ZMQError, ETERM  # pylint: disable-msg=E0611
 
-from dcamp.service.configuration import Configuration
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.decorators import runnable
-from dcamp.util.functions import isInstance_orNone
 
 
 @runnable
@@ -23,7 +21,6 @@ class ServiceMixin(Thread):
         assert isinstance(local_uuid, UUID)
         self.__uuid = local_uuid
 
-        assert isInstance_orNone(config_svc, Configuration)
         self.__cfgsvc = config_svc
 
         self.logger = getLogger('dcamp.service.%s' % self)
@@ -90,8 +87,8 @@ class ServiceMixin(Thread):
         self.run_state()
 
         # wait for configuration service to init
-        if self.__config_svc is not None:
-            self.__config_svc.wait_for_gogo()
+        if self.__cfgsvc is not None:
+            self.__cfgsvc.wait_for_gogo()
 
         while self.in_running_state:
             try:

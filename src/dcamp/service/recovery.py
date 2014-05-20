@@ -35,9 +35,19 @@ class Election(object):
             self.wutup_time = now_msecs()
             self.result = 'pending'
 
+        self.iwin_time = None
         self.iwin_ep = None
         self.iwin_uuid = None
-        self.iwin_time = None
+
+    def __str__(self):
+        return 'Election({}, result={}, start={}, end={}, winner={}:{})'.format(
+            self.elec_uuid,
+            self.result,
+            self.wutup_time,
+            self.iwin_time,
+            self.iwin_ep,
+            self.iwin_uuid,
+        )
 
     def __hash__(self):
         return self.elec_uuid
@@ -54,6 +64,8 @@ class Election(object):
     def iwin(self, from_ep, from_uuid):
         assert from_uuid >= self.node_uuid
         self.iwin_time = now_msecs()
+        self.iwin_ep = from_ep
+        self.iwin_uuid = from_uuid
         self.result = 'won'
         return RECOVERY('iwin', from_ep, from_uuid, content=self.elec_uuid)
 
@@ -192,8 +204,10 @@ class CollectorSOS(RecoveryThread):
 
         for c in self.cfgsvc.topo_get_all_collectors():
             if c.endpoint == self.endpoint:
+                self.logger.debug('skipping adding self in election')
                 continue  # don't add ourself
             try:
+                self.logger.debug('connecting to {} for election'.format(c))
                 self.pub.connect(c.endpoint.connect_uri(EndpntSpec.BASE))
             except ZMQError as e:
                 self.logger.error('unable to connect to endpoint {}: {}'.format(c.endpoint, e))
@@ -213,7 +227,7 @@ class CollectorSOS(RecoveryThread):
             # will catch these and then call _cleanup()
 
             self.last_message_time = now_msecs()  # just to seed the loop
-            while RECOVERY_ELECTION_WAIT_MS > (now_msecs() - self.last_message_time):
+            while (now_msecs() - self.last_message_time) < RECOVERY_ELECTION_WAIT_MS:
                 # 1) process all messages on queue
                 while True:
                     try:
@@ -223,8 +237,7 @@ class CollectorSOS(RecoveryThread):
                         break
 
                 # 2) poll (timeout after 1s)
-                wakeup = now_msecs() + 1000
-                items = dict(self.poller.poll(wakeup))
+                items = dict(self.poller.poll(timeout=1000))
 
                 # 3) process all messages on socket
                 if self.control_in in items:
@@ -241,17 +254,18 @@ class CollectorSOS(RecoveryThread):
                         continue
                     if elect.result != 'pending':
                         continue
-                    if RECOVERY_IWIN_WAIT_MS > (now_msecs() - elect.wutup_time):
+                    if (now_msecs() - elect.wutup_time) > RECOVERY_IWIN_WAIT_MS:
                         self.last_message_time = now_msecs()
                         elect.iwin(self.endpoint, self.uuid).send(self.pub)
 
             # if loop exited, time expired; check elections and find winner or start new election
             elected = self.__tally_results()
             if elected is None:
+                self.logger.error('timed out waiting leader; starting new election')
                 self.__start_election()
             else:
+                self.logger.info('new leader elected: {}'.format(elected))
                 self.elected_leader = elected
-
 
         return 'success'
 
@@ -372,3 +386,5 @@ class CollectorSOS(RecoveryThread):
         if self.pub is not None:
             self.pub.close()
         del self.pub
+
+        self.logger.debug(str(self.elections))
