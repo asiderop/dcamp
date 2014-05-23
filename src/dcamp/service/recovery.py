@@ -1,5 +1,6 @@
 from logging import getLogger
 from threading import RLock, Thread
+from time import sleep
 from uuid import UUID
 
 from zmq import ROUTER, DEALER, PUB, POLLIN, ZMQError, Poller, Again  # pylint: disable-msg=E0611
@@ -59,7 +60,7 @@ class Election(object):
         assert from_ep == self.node_ep and from_uuid == self.node_uuid
         self.wutup_time = now_msecs()
         self.result = 'pending'
-        return RECOVERY('wutup', from_ep, from_uuid, content=self.elec_uuid)
+        return RECOVERY('wutup', from_ep, from_uuid, content=str(self.elec_uuid))
 
     def iwin(self, from_ep, from_uuid):
         assert from_uuid >= self.node_uuid
@@ -67,7 +68,7 @@ class Election(object):
         self.iwin_ep = from_ep
         self.iwin_uuid = from_uuid
         self.result = 'won'
-        return RECOVERY('iwin', from_ep, from_uuid, content=self.elec_uuid)
+        return RECOVERY('iwin', from_ep, from_uuid, content=str(self.elec_uuid))
 
     def yo(self, from_ep, from_uuid):
         assert from_uuid > self.node_uuid
@@ -197,10 +198,10 @@ class CollectorSOS(RecoveryThread):
         # subtract CONTROL offset so the port calculated by the remote node matches the
         # random port to which we just bound
         self.recovery_ep = EndpntSpec("localhost", bind_addr - EndpntSpec.CONTROL)
+        self.logger.debug('binding recovery socket to {}'.format(self.recovery_ep))
 
         # we send election PUBs on this socket
         self.pub = self.ctx.socket(PUB)
-        self.pub.set_hwm(1)  # don't hold onto more than 1 pub
 
         for c in self.cfgsvc.topo_get_all_collectors():
             if c.endpoint == self.endpoint:
@@ -261,7 +262,7 @@ class CollectorSOS(RecoveryThread):
             # if loop exited, time expired; check elections and find winner or start new election
             elected = self.__tally_results()
             if elected is None:
-                self.logger.error('timed out waiting leader; starting new election')
+                self.logger.error('timed out waiting for leader; starting new election')
                 self.__start_election()
             else:
                 self.logger.info('new leader elected: {}'.format(elected))
@@ -307,10 +308,11 @@ class CollectorSOS(RecoveryThread):
 
                     self.last_message_time = now_msecs()
 
-                    elect = Election(msg.endpoint, msg.uuid, msg.content)
+                    elect_uuid = UUID(msg.content)
+                    elect = Election(msg.endpoint, msg.uuid, elect_uuid)
                     self.elections[elect.elec_uuid] = elect
 
-                    if self.uuid > elect.elec_uuid:
+                    if self.uuid > elect.node_uuid:
                         elect.yo(self.endpoint, self.uuid).send(self.control_out)
                     return
 
@@ -319,15 +321,16 @@ class CollectorSOS(RecoveryThread):
 
                     self.last_message_time = now_msecs()
 
-                    if msg.content not in self.elections:
+                    elect_uuid = UUID(msg.content)
+                    if elect_uuid not in self.elections:
                         self.logger.warn('received IWIN for unknown election')
-                        elect = Election(msg.endpoint, msg.uuid, msg.content)
-                        self.elections[elect.elec_uuid] = elect
+                        elect = Election(msg.endpoint, msg.uuid, elect_uuid)
+                        self.elections[elect_uuid] = elect
 
-                    elect = self.elections[msg.content]
+                    elect = self.elections[elect_uuid]
                     elect.iwin(msg.endpoint, msg.uuid)
 
-                    if self.uuid > elect.elec_uuid:
+                    if self.uuid > elect.node_uuid:
                         # another node thinks they should be root, but we have higher uuid; here
                         # comes the bully...
                         # TODO: optimize to not start a new election if already winning another;
@@ -348,7 +351,7 @@ class CollectorSOS(RecoveryThread):
                 return
 
             elif msg.is_yo:
-                elect_uuid = msg.properties['elect-uuid']
+                elect_uuid = UUID(msg.properties['election-uuid'])
 
                 if elect_uuid not in self.elections:
                     self.logger.error('received YO for unknown election; ignoring')

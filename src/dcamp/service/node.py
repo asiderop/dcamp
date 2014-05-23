@@ -201,7 +201,7 @@ class Node(ServiceMixin):
                 self.logger.debug('received STOP OKAY from %s role' % self.role)
 
                 if 'branch' == self.level:
-                    self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.recovery_key())
+                    self.topo_socket.setsockopt_string(UNSUBSCRIBE, TOPO.recovery_key())
                 if self.group is not None:
                     self.topo_socket.setsockopt_string(UNSUBSCRIBE, TOPO.group_key(self.group))
 
@@ -239,8 +239,9 @@ class Node(ServiceMixin):
                     self.recovery.add_to_queue(msg)
                     return
                 else:
+                    if self.recovery.result == 'success':
                     elapsed = now_msecs() - self.recovery.stop_time
-                    if self.recovery.result == 'success' and elapsed < RECOVERY_SILENCE_PERIOD_MS:
+                        if elapsed < RECOVERY_SILENCE_PERIOD_MS:
                         # need to wait longer before trying again
                         self.logger.warn('last successful SOS attempt too recent: {}ms'.format(elapsed))
                         return

@@ -133,7 +133,7 @@ class YO(CONTROL):
     def __init__(self, endpoint, uuid, elect_uuid):
 
         props = {
-            'election-uuid': elect_uuid,
+            'election-uuid': str(elect_uuid),
         }
 
         CONTROL.__init__(self, command='yo', endpoint=endpoint, uuid=uuid, properties=props)

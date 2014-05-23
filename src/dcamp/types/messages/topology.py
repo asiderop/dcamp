@@ -26,7 +26,7 @@ class TOPO(DCMsg):
         assert isinstance(key, str)
         assert isinstance(ep, EndpntSpec)
         assert isinstance(uuid, UUID)
-        assert isInstance_orNone(content, (int, str, UUID))
+        assert isInstance_orNone(content, (int, str))
 
         self.key = key
         self.endpoint = ep
