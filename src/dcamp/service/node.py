@@ -51,7 +51,10 @@ class Node(ServiceMixin):
 
         # @todo these sockets need a better naming convention.
         self.topo_socket = self.ctx.socket(SUB)
+        self.logger.debug('adding filter: "{}"'.format(TOPO.marco_key()))
         self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
+        # TODO: not working???
+        self.topo_socket.setsockopt_string(SUBSCRIBE, '/')
         self.topo_socket.bind(self.topo_endpoint)
 
         self.recovery = None
@@ -240,11 +243,11 @@ class Node(ServiceMixin):
                     return
                 else:
                     if self.recovery.result == 'success':
-                    elapsed = now_msecs() - self.recovery.stop_time
+                        elapsed = now_msecs() - self.recovery.stop_time
                         if elapsed < RECOVERY_SILENCE_PERIOD_MS:
-                        # need to wait longer before trying again
-                        self.logger.warn('last successful SOS attempt too recent: {}ms'.format(elapsed))
-                        return
+                            # need to wait longer before trying again
+                            self.logger.warn('last successful SOS attempt too recent: {}ms'.format(elapsed))
+                            return
 
         self.recovery = CollectorSOS(
             self.ctx,
