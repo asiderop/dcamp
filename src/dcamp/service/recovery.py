@@ -57,7 +57,7 @@ class Election(object):
         return isinstance(other, Election) and self.elec_uuid == other.elec_uuid
 
     def wutup(self, from_ep, from_uuid):
-        assert from_ep == self.node_ep and from_uuid == self.node_uuid
+        assert from_uuid == self.node_uuid
         self.wutup_time = now_msecs()
         self.result = 'pending'
         return RECOVERY('wutup', from_ep, from_uuid, content=str(self.elec_uuid))
@@ -313,7 +313,12 @@ class CollectorSOS(RecoveryThread):
                     self.elections[elect.elec_uuid] = elect
 
                     if self.uuid > elect.node_uuid:
+                        peer_ep = msg.endpoint.connect_uri(EndpntSpec.CONTROL)
+                        self.control_out.connect(peer_ep)
+                        self.logger.debug('sending YO response to {}'.format(peer_ep))
+                        sleep(0.1)  # dumb, but works; give socket time to connect
                         elect.yo(self.endpoint, self.uuid).send(self.control_out)
+                        self.control_out.disconnect(peer_ep)
                     return
 
                 elif msg.is_iwin:
@@ -375,7 +380,8 @@ class CollectorSOS(RecoveryThread):
 
         elect = Election(self.endpoint, self.uuid)
         self.elections[elect.elec_uuid] = elect
-        elect.wutup(self.endpoint, self.uuid).send(self.pub)
+        # send recovery endpoint so replies are sent to us instead of Node service
+        elect.wutup(self.recovery_ep, self.uuid).send(self.pub)
 
     def _cleanup(self):
         if self.control_out is not None:
