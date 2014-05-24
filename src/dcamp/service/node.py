@@ -53,8 +53,6 @@ class Node(ServiceMixin):
         self.topo_socket = self.ctx.socket(SUB)
         self.logger.debug('adding filter: "{}"'.format(TOPO.marco_key()))
         self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.marco_key())
-        # TODO: not working???
-        self.topo_socket.setsockopt_string(SUBSCRIBE, '/')
         self.topo_socket.bind(self.topo_endpoint)
 
         self.recovery = None
@@ -204,8 +202,10 @@ class Node(ServiceMixin):
                 self.logger.debug('received STOP OKAY from %s role' % self.role)
 
                 if 'branch' == self.level:
+                    self.logger.debug('removing filter: "{}"'.format(TOPO.recovery_key()))
                     self.topo_socket.setsockopt_string(UNSUBSCRIBE, TOPO.recovery_key())
                 if self.group is not None:
+                    self.logger.debug('removing filter: "{}"'.format(TOPO.group_key(self.group)))
                     self.topo_socket.setsockopt_string(UNSUBSCRIBE, TOPO.group_key(self.group))
 
                 self.role_pipe.close()
@@ -323,9 +323,11 @@ class Node(ServiceMixin):
 
             self.group = response['group']
 
+            self.logger.debug('adding filter: "{}"'.format(TOPO.group_key(response['group'])))
             self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.group_key(response['group']))
 
             if 'branch' == level:
+                self.logger.debug('adding filter: "{}"'.format(TOPO.recovery_key()))
                 self.topo_socket.setsockopt_string(SUBSCRIBE, TOPO.recovery_key())
 
                 self.role = Collector(
