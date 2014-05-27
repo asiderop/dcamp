@@ -208,8 +208,9 @@ class CollectorSOS(RecoveryThread):
                 self.logger.debug('skipping adding self in election')
                 continue  # don't add ourself
             try:
-                self.logger.debug('connecting to {} for election'.format(c))
                 self.pub.connect(c.endpoint.connect_uri(EndpntSpec.BASE))
+                self.logger.debug('connecting to {} for election'.format(c))
+                sleep(0.1)  # dumb, but works; give socket time to connect
             except ZMQError as e:
                 self.logger.error('unable to connect to endpoint {}: {}'.format(c.endpoint, e))
 
