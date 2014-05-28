@@ -15,9 +15,6 @@ from dcamp.util.functions import now_msecs
 
 
 class Node(ServiceMixin):
-    """
-    @todo: need to timeout if the req fails / issue #28
-    """
 
     BASE = 0
     BASE_OPEN = 1
