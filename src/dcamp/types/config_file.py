@@ -111,7 +111,16 @@ class ConfigFileMixin(ConfigParser):
             if 'param' in self[name]:
                 param = self[name]['param']
 
-            result[name] = MetricSpec(name, rate, threshold, detail, param)
+            aggr = None
+            if 'aggregate' in self[name]:
+                aggr = self[name]['aggregate']
+
+            valid_aggr = (None, 'max', 'min', 'average', 'sum')
+            if aggr not in valid_aggr:
+                self.__eprint('aggregation value "%s" not valid for "%s" metric; choose: %s' %
+                              (aggr, name, valid_aggr))
+
+            result[name] = MetricSpec(name, rate, threshold, detail, param, aggr)
 
         self.metrics = result
 
