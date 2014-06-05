@@ -228,11 +228,120 @@ class DataRate(Data):
         return self.__the_rate(given)
 
 
+class DataAggregate(Data):
+    def __init__(self, source, properties, time=None, value=None, base_value=None):
+        Data.__init__(self, source, properties, time, value, base_value)
+        assert self.m_type != 'HUGZ'
+        assert 'aggr-id' in properties
+        assert 'is-final' in properties
+
+        # { EndpntSpec : Data }
+        self._nodes = {}
+
+        if self['is-final']:
+            assert value is not None
+        else:
+            assert value is None and base_value is None
+
+    def add_sample(self, msg):
+        assert not self['is-final']
+        # TODO: check the new msg matches previous ones
+        self._nodes[msg.source] = msg
+
+    def _aggregate(self):
+        assert len(self._nodes) > 0
+        if not self['is-final']:
+            self._do_aggregation()
+            self['is-final'] = True
+            self['node-cnt'] = len(self._nodes)
+
+    def _do_aggregation(self):
+        raise NotImplementedError('subclass must implement')
+
+
+class DataAggregateSum(DataAggregate, DataBasic):
+
+    def _do_aggregation(self):
+        self.value = 0
+        self.base_value = 0
+
+        # add all samples together
+        for msg in self._nodes.values():
+            self.value += msg.value,
+            self.base_value += msg.base_value,
+
+
+class DataAggregateMax(DataAggregate, DataBasic):
+    def _do_aggregation(self):
+        self.value = 0
+        self.base_value = 0
+
+        msg_zero = None
+        msg_max = None
+        calc_max = 0
+
+        # find largest sample (doing calculation with empty sample)
+        for msg in self._nodes.values():
+            if msg_zero is None:
+                # create fake "zero" message for calculation purposes
+                msg_zero = msg.__class__(msg.source, msg.properties, 0, 0, 0)
+
+            calc = abs(msg.calculate(msg_zero))
+            if calc > calc_max:
+                msg_max = msg
+
+        self.value = msg_max.value
+        self.base_value = msg_max.base_value
+
+
+class DataAggregateMin(DataAggregate, DataBasic):
+    def _do_aggregation(self):
+        self.value = 0
+        self.base_value = 0
+
+        msg_zero = None
+        msg_min = None
+        calc_min = 0
+
+        # find largest sample (doing calculation with empty sample)
+        for msg in self._nodes.values():
+            if msg_zero is None:
+                # create fake "zero" message for calculation purposes
+                msg_zero = msg.__class__(msg.source, msg.properties, 0, 0, 0)
+
+            calc = abs(msg.calculate(msg_zero))
+            if calc < calc_min:
+                msg_min = msg
+
+        self.value = msg_min.value
+        self.base_value = msg_min.base_value
+
+
+class DataAggregateAvg(DataAggregate, DataAverage):
+
+    def _do_aggregation(self):
+        self.value = 0
+        self.base_value = 0
+
+        for msg in self._nodes.values():
+            self.value += msg.value,
+            self.base_value += msg.base_value,
+
+        self.value /= len(self._nodes)
+        self.base_value /= len(self._nodes)
+
+
 _MTYPES = {
     'HUGZ': DataHugz,
+
     'basic': DataBasic,
     'delta': DataDelta,
     'rate': DataRate,
     'average': DataAverage,
     'percent': DataPercent,
+
+    'aggregate-sum': DataAggregateSum,
+    'aggregate-max': DataAggregateMax,
+    'aggregate-min': DataAggregateMin,
+    'aggregate-avg': DataAggregateAvg,
 }
