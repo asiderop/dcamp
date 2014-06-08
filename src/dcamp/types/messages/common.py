@@ -63,18 +63,32 @@ class DCMsg(object):
         raise NotImplementedError('subclass must implement method')
 
     @staticmethod
-    def _encode_int(val):
+    def _encode_float(val):
+        if val is None:
+            return b''
+        # pack as 8-byte float using network order
+        return pack('!d', val)
+
+    @staticmethod
+    def _decode_float(buffer):
+        if len(buffer) == 0:
+            return None
+        # unpack as 8-byte float using network order
+        return unpack('!d', buffer)[0]
+
+    @staticmethod
+    def _encode_uint(val):
         if val is None:
             return b''
         # pack as 8-byte int using network order
-        return pack('!q', val)
+        return pack('!Q', val)
 
     @staticmethod
-    def _decode_int(buffer):
+    def _decode_uint(buffer):
         if len(buffer) == 0:
             return None
         # unpack as 8-byte int using network order
-        return unpack('!q', buffer)[0]
+        return unpack('!Q', buffer)[0]
 
     @staticmethod
     def _encode_blob(val):
@@ -244,7 +258,7 @@ class WTF(DCMsg):
     @property
     def frames(self):
         return [
-            DCMsg._encode_int(self.errcode),
+            DCMsg._encode_uint(self.errcode),
             self.errstr.encode(),
         ]
 
@@ -256,7 +270,7 @@ class WTF(DCMsg):
         if len(msg) not in [1, 2]:
             raise ValueError('wrong number of frames')
 
-        code = DCMsg._decode_int(msg[0])
+        code = DCMsg._decode_uint(msg[0])
         errstr = ''
         if len(msg) == 2:
             errstr = msg[1].decode()

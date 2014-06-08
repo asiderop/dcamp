@@ -28,7 +28,7 @@ class CONFIG(DCMsg, _PROPS):
     def frames(self):
         return [
             self.key.encode(),
-            self._encode_int(self.sequence),
+            self._encode_uint(self.sequence),
             self._encode_uuid(self.uuid),
             self._encode_dict(self.properties),
             self._encode_blob(self.value),
@@ -43,7 +43,7 @@ class CONFIG(DCMsg, _PROPS):
             raise ValueError('wrong number of frames')
 
         key = msg[0].decode()
-        seq = DCMsg._decode_int(msg[1])
+        seq = DCMsg._decode_uint(msg[1])
         uuid = DCMsg._decode_uuid(msg[2])
         props = _PROPS._decode_dict(msg[3])
         val = DCMsg._decode_blob(msg[4])

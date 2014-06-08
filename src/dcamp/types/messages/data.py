@@ -3,13 +3,15 @@ from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import isInstance_orNone, now_msecs
 
 __all__ = [
+    'Data',
+
     'DataHugz',
+
     'DataBasic',
     'DataDelta',
     'DataRate',
     'DataAverage',
     'DataPercent',
-    'Data',
 ]
 
 
@@ -33,6 +35,7 @@ class Data(DCMsg, _PROPS):
         _PROPS.__init__(self, properties)
 
         assert isinstance(source, EndpntSpec)
+        self.source = source
 
         # validate given type
         assert 'type' in properties, 'missing metric "type" key'
@@ -42,16 +45,29 @@ class Data(DCMsg, _PROPS):
         assert isinstance(self, _MTYPES[self.m_type])
 
         assert isInstance_orNone(time, int)
-        assert isInstance_orNone(value, int)
-        assert isInstance_orNone(base_value, int)
+        self.time = time
+
+        if isinstance(value, int):
+            value = float(value)
+        assert isInstance_orNone(value, float)
+        self.value = value
+
+        if isinstance(base_value, int):
+            base_value = float(base_value)
+        assert isInstance_orNone(base_value, float)
+        self.base_value = base_value
 
         # TODO: add more verifications of parameters based on given m_type
 
-        self.source = source
+    def __eq__(self, other):
+        if not isinstance(self, self.__class__):
+            return False
+        this = (self.source, self.properties, self.time, self.value, self.base_value)
+        that = (other.source, other.properties, other.time, other.value, other.base_value)
+        return this == that
 
-        self.time = time
-        self.value = value
-        self.base_value = base_value
+    def __ne__(self, other):
+        return self != other
 
     @property
     def m_type(self):
@@ -102,19 +118,19 @@ class Data(DCMsg, _PROPS):
         raise NotImplementedError('sub-class implementation missing')
 
     def __str__(self):
-        return '%s -- %s @ %d = %d' % (self.source, self.detail, self.time, self.value)
+        return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time, self.value)
 
     def log_str(self):
-        return '%d\t%s\t%s\t%d' % (self.time, self.source, self.detail, self.value)
+        return '%d\t%s\t%s\t%.2f' % (self.time, self.source, self.detail, self.value)
 
     @property
     def frames(self):
         return [
             self.source.encode(),
             self._encode_dict(self.properties),
-            self._encode_int(self.time),
-            self._encode_int(self.value),
-            self._encode_int(self.base_value),
+            self._encode_uint(self.time),
+            self._encode_float(self.value),
+            self._encode_float(self.base_value),
         ]
 
     @classmethod
@@ -134,14 +150,14 @@ class Data(DCMsg, _PROPS):
 
         real_class = _MTYPES[props['type']]
 
-        time = DCMsg._decode_int(msg[2])
+        time = DCMsg._decode_uint(msg[2])
 
         # HUGZ have a special/minimal constructor
         if real_class == DataHugz:
             return real_class(source, time)
 
-        value = DCMsg._decode_int(msg[3])
-        base_value = DCMsg._decode_int(msg[4])
+        value = DCMsg._decode_float(msg[3])
+        base_value = DCMsg._decode_float(msg[4])
 
         return real_class(source, props, time, value, base_value)
 
@@ -170,7 +186,7 @@ class DataHugz(Data):
 
 class DataBasic(Data):
     def _calculate(self, given=None):
-        return float(self.value)
+        return self.value
 
     @property
     def suffix(self):
@@ -179,7 +195,7 @@ class DataBasic(Data):
 
 class DataDelta(Data):
     def _calculate(self, given):
-        return float(given.value - self.value)
+        return given.value - self.value
 
     @property
     def suffix(self):
@@ -188,37 +204,37 @@ class DataDelta(Data):
 
 class DataAverage(Data):
     def __str__(self):
-        return '%s / %d' % (Data.__str__(self), self.base_value)
+        return '%s / %.2f' % (Data.__str__(self), self.base_value)
 
     def log_str(self):
-        return '%s\t%d' % (Data.log_str(self), self.base_value)
+        return '%s\t%.2f' % (Data.log_str(self), self.base_value)
 
     @property
     def suffix(self):
         return 'average'
 
     def _calculate(self, given):
-        return float((given.value - self.value) / (given.base_value - self.base_value))
+        return (given.value - self.value) / (given.base_value - self.base_value)
 
 
 class DataPercent(Data):
     def __str__(self):
-        return '%s / %d' % (Data.__str__(self), self.base_value)
+        return '%s / %.2f' % (Data.__str__(self), self.base_value)
 
     def log_str(self):
-        return '%s\t%d' % (Data.log_str(self), self.base_value)
+        return '%s\t%.2f' % (Data.log_str(self), self.base_value)
 
     @property
     def suffix(self):
         return '%'
 
     def _calculate(self, given):
-        return float((given.value - self.value) / (given.base_value - self.base_value)) * 100.0
+        return ((given.value - self.value) / (given.base_value - self.base_value)) * 100.0
 
 
 class DataRate(Data):
     def __the_rate(self, given):
-        return float((given.value - self.value) / (given.time - self.time) * 1e3)
+        return ((given.value - self.value) / (given.time - self.time)) * 1e3
 
     @property
     def suffix(self):
