@@ -12,6 +12,11 @@ __all__ = [
     'DataRate',
     'DataAverage',
     'DataPercent',
+
+    'DataAggregateSum',
+    'DataAggregateMax',
+    'DataAggregateMin',
+    'DataAggregateAvg',
 ]
 
 
@@ -247,104 +252,107 @@ class DataRate(Data):
 class DataAggregate(Data):
     def __init__(self, source, properties, time=None, value=None, base_value=None):
         Data.__init__(self, source, properties, time, value, base_value)
-        assert self.m_type != 'HUGZ'
+        assert self.m_type.startswith('aggregate')
         assert 'aggr-id' in properties
-        assert 'is-final' in properties
+        assert base_value is None
 
-        # { EndpntSpec : Data }
-        self._nodes = {}
+        # { EndpntSpec : [ Data, ... ] }
+        self._samples_cache = {}
 
-        if self['is-final']:
+        if 'is-final' in properties:
+            assert 'samples-type' in properties
+            assert self['is-final']
             assert value is not None
         else:
-            assert value is None and base_value is None
+            self['is-final'] = False
+            self['samples-type'] = None
+            assert value is None
 
     def add_sample(self, msg):
         assert not self['is-final']
-        # TODO: check the new msg matches previous ones
-        self._nodes[msg.source] = msg
 
-    def _aggregate(self):
-        assert len(self._nodes) > 0
-        if not self['is-final']:
-            self._do_aggregation()
-            self['is-final'] = True
-            self['node-cnt'] = len(self._nodes)
+        if self['samples-type'] is None:
+            assert msg.m_type != 'HUGZ'
+            self['samples-type'] = msg.m_type
+        else:
+            assert msg.m_type == self['samples-type']
 
-    def _do_aggregation(self):
-        raise NotImplementedError('subclass must implement')
+        if msg.source not in self._samples_cache:
+            # add empty list to dict
+            self._samples_cache[msg.source] = []
 
+        # cache at most two samples, keeping the first and last
+        cache = self._samples_cache[msg.source]
+        if len(cache) < 2:
+            cache.append(msg)
+        else:
+            assert msg.time > cache[1].time
+            cache[1] = msg
+            assert cache[1].time > cache[0].time
 
-class DataAggregateSum(DataAggregate, DataBasic):
+    def aggregate(self):
 
-    def _do_aggregation(self):
-        self.value = 0
-        self.base_value = 0
+        if self['is-final']:
+            return self.value
 
-        # add all samples together
-        for msg in self._nodes.values():
-            self.value += msg.value,
-            self.base_value += msg.base_value,
+        source = None
+        value = None
 
+        op = self.m_type[len('aggregate-'):]
 
-class DataAggregateMax(DataAggregate, DataBasic):
-    def _do_aggregation(self):
-        self.value = 0
-        self.base_value = 0
+        node_cnt = 0
+        # find largest sample (doing calculation)
+        for (node, cache) in self._samples_cache.items():
+            if len(cache) < 2:
+                continue
+            node_cnt += 1
+            calc = cache[0].calculate(cache[1])
 
-        msg_zero = None
-        msg_max = None
-        calc_max = 0
+            if value is None:
+                value = calc
+            elif op in ('sum', 'avg'):
+                value += calc
+                source = self.source
+            elif op == 'min':
+                if calc < value:
+                    value = calc
+                    source = node
+            elif op == 'max':
+                if calc > value:
+                    value = calc
+                    source = node
+            else:
+                raise NotImplementedError('unknown aggregation type: {}'.format(op))
 
-        # find largest sample (doing calculation with empty sample)
-        for msg in self._nodes.values():
-            if msg_zero is None:
-                # create fake "zero" message for calculation purposes
-                msg_zero = msg.__class__(msg.source, msg.properties, 0, 0, 0)
+        if node_cnt < 1:
+            self.logger.error('not enough samples to aggregate')
+            return None
 
-            calc = abs(msg.calculate(msg_zero))
-            if calc > calc_max:
-                msg_max = msg
+        if op == 'avg':
+            value /= node_cnt
 
-        self.value = msg_max.value
-        self.base_value = msg_max.base_value
+        self.value = value
+        self['node-cnt'] = node_cnt
+        self['aggr-source'] = source
 
-
-class DataAggregateMin(DataAggregate, DataBasic):
-    def _do_aggregation(self):
-        self.value = 0
-        self.base_value = 0
-
-        msg_zero = None
-        msg_min = None
-        calc_min = 0
-
-        # find largest sample (doing calculation with empty sample)
-        for msg in self._nodes.values():
-            if msg_zero is None:
-                # create fake "zero" message for calculation purposes
-                msg_zero = msg.__class__(msg.source, msg.properties, 0, 0, 0)
-
-            calc = abs(msg.calculate(msg_zero))
-            if calc < calc_min:
-                msg_min = msg
-
-        self.value = msg_min.value
-        self.base_value = msg_min.base_value
+        self['is-final'] = True
+        return self.value
 
 
-class DataAggregateAvg(DataAggregate, DataAverage):
+class DataAggregateSum(DataAggregate):
+    pass
 
-    def _do_aggregation(self):
-        self.value = 0
-        self.base_value = 0
 
-        for msg in self._nodes.values():
-            self.value += msg.value,
-            self.base_value += msg.base_value,
+class DataAggregateMax(DataAggregate):
+    pass
 
-        self.value /= len(self._nodes)
-        self.base_value /= len(self._nodes)
+
+class DataAggregateMin(DataAggregate):
+    pass
+
+
+class DataAggregateAvg(DataAggregate):
+    pass
 
 
 _MTYPES = {
