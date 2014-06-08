@@ -82,7 +82,7 @@ class TestAggregateData(TestCase):
                 base_value=8),
         ]
 
-        self.sum_aggr = DataAggregateSum(
+        self.sum_aggr = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',
@@ -97,7 +97,7 @@ class TestAggregateData(TestCase):
             value=221.0,
         )
 
-        self.avg_aggr = DataAggregateAvg(
+        self.avg_aggr = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-avg',
@@ -125,7 +125,7 @@ class TestAggregateData(TestCase):
         self.assertEqual(self.sum_aggr, Data.from_msg(self.sum_aggr.frames, None))
 
     def test_max(self):
-        a = DataAggregateMax(
+        a = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-max',
@@ -137,7 +137,7 @@ class TestAggregateData(TestCase):
         self.assertEqual(a.aggregate(), 120.0)
 
     def test_min(self):
-        a = DataAggregateMin(
+        a = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-min',
@@ -150,7 +150,7 @@ class TestAggregateData(TestCase):
 
     def test_avg(self):
 
-        a = DataAggregateAvg(
+        a = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-avg',
@@ -165,7 +165,7 @@ class TestAggregateData(TestCase):
 
     def test_sum(self):
 
-        a = DataAggregateSum(
+        a = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',
@@ -174,7 +174,7 @@ class TestAggregateData(TestCase):
             time=self.time1,
         )
 
-        pre_sum = DataAggregateSum(
+        pre_sum = DataAggregate(
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',

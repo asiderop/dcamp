@@ -13,10 +13,7 @@ __all__ = [
     'DataAverage',
     'DataPercent',
 
-    'DataAggregateSum',
-    'DataAggregateMax',
-    'DataAggregateMin',
-    'DataAggregateAvg',
+    'DataAggregate',
 ]
 
 
@@ -339,22 +336,6 @@ class DataAggregate(Data):
         return self.value
 
 
-class DataAggregateSum(DataAggregate):
-    pass
-
-
-class DataAggregateMax(DataAggregate):
-    pass
-
-
-class DataAggregateMin(DataAggregate):
-    pass
-
-
-class DataAggregateAvg(DataAggregate):
-    pass
-
-
 _MTYPES = {
     'HUGZ': DataHugz,
 
@@ -364,8 +345,9 @@ _MTYPES = {
     'average': DataAverage,
     'percent': DataPercent,
 
-    'aggregate-sum': DataAggregateSum,
-    'aggregate-max': DataAggregateMax,
-    'aggregate-min': DataAggregateMin,
-    'aggregate-avg': DataAggregateAvg,
+    'aggregate-sum': DataAggregate,
+    'aggregate-max': DataAggregate,
+    'aggregate-min': DataAggregate,
+    'aggregate-avg': DataAggregate,
 }
+
