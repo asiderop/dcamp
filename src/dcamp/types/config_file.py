@@ -115,7 +115,7 @@ class ConfigFileMixin(ConfigParser):
             if 'aggregate' in self[name]:
                 aggr = self[name]['aggregate']
 
-            valid_aggr = (None, 'max', 'min', 'average', 'sum')
+            valid_aggr = (None, 'max', 'min', 'avg', 'sum')
             if aggr not in valid_aggr:
                 self.__eprint('aggregation value "%s" not valid for "%s" metric; choose: %s' %
                               (aggr, name, valid_aggr))

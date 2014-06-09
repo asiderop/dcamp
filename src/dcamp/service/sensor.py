@@ -19,7 +19,7 @@ class Sensor(ServiceMixin):
         ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
         # goal: sort by next collection time
-        self.metric_specs = []
+        self.metric_collections = []
         self.metric_seqid = -1
 
         self.push_cnt = 0
@@ -33,7 +33,7 @@ class Sensor(ServiceMixin):
     def _cleanup(self):
         # service exiting; return some status info and cleanup
         self.logger.debug("%d pushes; metrics = [%s]" %
-                          (self.push_cnt, self.metric_specs))
+                          (self.push_cnt, self.metric_collections))
 
         self.metrics_socket.close()
         del self.metrics_socket
@@ -57,13 +57,13 @@ class Sensor(ServiceMixin):
 
     def __collect_and_push_metrics(self):
 
-        if len(self.metric_specs) == 0:
+        if len(self.metric_collections) == 0:
             self.next_collection = now_secs() + 5
             return
 
         collected = []
         while True:
-            collection = self.metric_specs.pop(0)
+            collection = self.metric_collections.pop(0)
             assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
 
             (msg, collection) = self.__process(collection)
@@ -72,43 +72,43 @@ class Sensor(ServiceMixin):
                 self.push_cnt += 1
             collected.append(collection)
 
-            if len(self.metric_specs) == 0:
+            if len(self.metric_collections) == 0:
                 # no more work
                 break
 
-            if self.metric_specs[0].epoch > now_secs():
+            if self.metric_collections[0].epoch > now_secs():
                 # no more work scheduled
                 break
 
         # add the collected metrics back into our list
-        self.metric_specs = sorted(self.metric_specs + collected)
+        self.metric_collections = sorted(self.metric_collections + collected)
         # set the new collection wakeup
-        self.next_collection = self.metric_specs[0].epoch
+        self.next_collection = self.metric_collections[0].epoch
 
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
         if seq > self.metric_seqid:
 
-            new_specs = []
+            old_specs = []
 
             # add all old metric specs, continue with its next collection time
-            for collection in self.metric_specs:
+            for collection in self.metric_collections:
                 if collection.spec in specs:
-                    new_specs.append(collection)
+                    old_specs.append(collection)
                     specs.remove(collection.spec)
 
             # add all new metric specs, starting collection now
             new_specs = [MetricCollection(0, elem, None) for elem in specs]
 
-            self.metric_specs = sorted(new_specs)
+            self.metric_collections = sorted(old_specs + new_specs)
             self.metric_seqid = seq
 
-            self.logger.debug('new metric specs: %s' % self.metric_specs)
+            self.logger.debug('new metric specs: %s' % self.metric_collections)
 
             # reset next collection wakeup with new values
-            if len(self.metric_specs) > 0:
-                self.next_collection = self.metric_specs[0].epoch
+            if len(self.metric_collections) > 0:
+                self.next_collection = self.metric_collections[0].epoch
             else:
                 # check for new metric specs every five seconds
                 self.next_collection = now_secs() + 5

@@ -182,8 +182,7 @@ class Filter(ServiceMixin):
     def __check_config_for_metric_updates(self):
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
         if seq > self.metric_seqid:
-            # TODO: instead of clearing the list, try to keep old specs that have not
-            #       changed?
+            # TODO: instead of clearing the list, try to keep old specs (and cached data)
             self.metric_specs = {}
             for s in specs:
                 self.metric_specs[s.config_name] = (s, [])
