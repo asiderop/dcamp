@@ -92,7 +92,7 @@ class TestAggregateData(TestCase):
                 'samples-type': 'average',
                 'node-cnt': 3,
                 'aggr-source': EndpntSpec('local', 9096),
-                },
+            },
             time=self.time1,
             value=221.0,
         )
@@ -107,7 +107,7 @@ class TestAggregateData(TestCase):
                 'samples-type': 'average',
                 'node-cnt': 3,
                 'aggr-source': EndpntSpec('local', 9096),
-                },
+            },
             time=self.time1,
             value=(221 / 3),
         )
@@ -131,10 +131,9 @@ class TestAggregateData(TestCase):
                 'type': 'aggregate-max',
                 'aggr-id': 'min-aggr',
             },
-            time=self.time1 + 500,
         )
         self.add_samples(a)
-        self.assertEqual(a.aggregate(), 120.0)
+        self.assertEqual(a.aggregate(self.time1 + 500), 120.0)
 
     def test_min(self):
         a = DataAggregate(
@@ -143,10 +142,9 @@ class TestAggregateData(TestCase):
                 'type': 'aggregate-min',
                 'aggr-id': 'max-aggr',
             },
-            time=1384321782000,
         )
         self.add_samples(a)
-        self.assertEqual(a.aggregate(), 1)
+        self.assertEqual(a.aggregate(1384321782000), 1)
 
     def test_avg(self):
 
@@ -156,11 +154,10 @@ class TestAggregateData(TestCase):
                 'type': 'aggregate-avg',
                 'aggr-id': 'avg-aggr',
             },
-            time=self.time1,
         )
 
         self.add_samples(a)
-        a.aggregate()
+        a.aggregate(time=self.time1)
         self.assertEqual(a.value, self.avg_aggr.value)
 
     def test_sum(self):
@@ -171,7 +168,6 @@ class TestAggregateData(TestCase):
                 'type': 'aggregate-sum',
                 'aggr-id': 'sum-aggr',
             },
-            time=self.time1,
         )
 
         pre_sum = DataAggregate(
@@ -180,13 +176,19 @@ class TestAggregateData(TestCase):
                 'type': 'aggregate-sum',
                 'aggr-id': 'sum-aggr',
             },
-            time=self.time1,
         )
 
         self.assertEqual(a, pre_sum)
 
         self.add_samples(a)
-        a.aggregate()
+        a.aggregate(self.time1)
+        self.assertEqual(a, self.sum_aggr)
+
+        a.reset()
+        pre_sum['samples-type'] = 'average'
+        self.assertEqual(a, pre_sum)
+
+        self.sum_aggr.reset()
         self.assertEqual(a, self.sum_aggr)
 
 if __name__ == '__main__':

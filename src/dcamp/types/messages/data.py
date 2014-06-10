@@ -257,13 +257,17 @@ class DataAggregate(Data):
         self._samples_cache = {}
 
         if 'is-final' in properties:
-            assert 'samples-type' in properties
             assert self['is-final']
+            assert 'samples-type' in properties
+            assert 'node-cnt' in properties
+            assert 'aggr-source' in properties
             assert value is not None
+            assert time is not None
         else:
             self['is-final'] = False
             self['samples-type'] = None
             assert value is None
+            assert time is None
 
     def add_sample(self, msg):
         assert not self['is-final']
@@ -287,7 +291,24 @@ class DataAggregate(Data):
             cache[1] = msg
             assert cache[1].time > cache[0].time
 
-    def aggregate(self):
+    def reset(self):
+        # clear properties state
+        del(self['node-cnt'])
+        del(self['aggr-source'])
+        self['is-final'] = False
+
+        # clear samples (only keep last sample)
+        for (node, cache) in self._samples_cache.items():
+            if len(cache) == 2:
+                cache.pop(0)
+            assert len(cache) == 1
+
+        # clear time, value, base_value
+        self.value = None
+        self.base_value = None
+        self.time = None
+
+    def aggregate(self, time):
 
         if self['is-final']:
             return self.value
@@ -328,6 +349,7 @@ class DataAggregate(Data):
         if op == 'avg':
             value /= node_cnt
 
+        self.time = time
         self.value = value
         self['node-cnt'] = node_cnt
         self['aggr-source'] = source

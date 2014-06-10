@@ -182,6 +182,9 @@ class _PROPS(object):
     def __setitem__(self, k, v):
         self.properties[k] = v
 
+    def __delitem__(self, k):
+        del(self.properties[k])
+
     def get(self, k, default=None):
         return self.properties.get(k, default)
 
