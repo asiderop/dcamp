@@ -133,43 +133,45 @@ class Aggregation(ServiceMixin):
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
-        if seq > self.metric_seqid:
+        if seq <= self.metric_seqid:
+            self.logger.debug('no new metric specs: {} <= {}'.format(seq, self.metric_seqid))
+            return
 
-            collections = []
-            aggregations = {}
+        collections = []
+        aggregations = {}
 
-            # add all old collections, saving their aggregated metrics
-            for c in self.metric_collections:
-                if c.spec in specs:
-                    collections.append(c)
-                    aggregations[c.config_name] = self.metric_aggregations[c.config_name]
-                    specs.remove(c.spec)
-
-            # add all new metric specs, using now+period for collection/aggregation time
-            now = now_secs()
-            for s in specs:
-                if s.aggr is None:
-                    # skip metrics without aggregation configured
-                    continue
-
-                c = MetricCollection(now + s.rate, s, None)
+        # add all old collections, saving their aggregated metrics
+        for c in self.metric_collections:
+            if c.spec in specs:
                 collections.append(c)
-                props = {
-                    'aggr-id': self.cfgsvc.group,
-                    'type': 'aggregate-' + s.aggr,
-                }
-                aggregations[c.spec.config_name] = data.DataAggregate(self.endpoint, props)
+                aggregations[c.config_name] = self.metric_aggregations[c.config_name]
+                specs.remove(c.spec)
 
-            self.metric_collections = sorted(collections)
-            self.metric_aggregations = aggregations
-            assert len(self.metric_aggregations) == len(self.metric_collections)
-            self.metric_seqid = seq
+        # add all new metric specs, using now+period for collection/aggregation time
+        now = now_secs()
+        for s in specs:
+            if s.aggr is None:
+                # skip metrics without aggregation configured
+                continue
 
-            self.logger.debug('new metric specs: %s' % self.metric_collections)
+            c = MetricCollection(now + s.rate, s, None)
+            collections.append(c)
+            props = {
+                'aggr-id': self.cfgsvc.group,
+                'type': 'aggregate-' + s.aggr,
+            }
+            aggregations[c.spec.config_name] = data.DataAggregate(self.endpoint, props)
 
-            # reset next collection wakeup with new values
-            if len(self.metric_collections) > 0:
-                self.next_collection = self.metric_collections[0].epoch
-            else:
-                # check for new metric specs every five seconds
-                self.next_collection = now_secs() + 5
+        self.metric_collections = sorted(collections)
+        self.metric_aggregations = aggregations
+        assert len(self.metric_aggregations) == len(self.metric_collections)
+        self.metric_seqid = seq
+
+        self.logger.debug('new metric specs: %s' % self.metric_collections)
+
+        # reset next collection wakeup with new values
+        if len(self.metric_collections) > 0:
+            self.next_collection = self.metric_collections[0].epoch
+        else:
+            # check for new metric specs every five seconds
+            self.next_collection = now_secs() + 5

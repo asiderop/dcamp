@@ -181,14 +181,16 @@ class Filter(ServiceMixin):
 
     def __check_config_for_metric_updates(self):
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
-        if seq > self.metric_seqid:
-            # TODO: instead of clearing the list, try to keep old specs (and cached data)
-            self.metric_specs = {}
-            for s in specs:
-                self.metric_specs[s.config_name] = (s, [])
-            self.metric_seqid = seq
-            self.logger.debug('new metric specs: {}'.format(self.metric_specs))
-            # XXX: trigger new metric setup
+        if seq <= self.metric_seqid:
+            return
+
+        # TODO: instead of clearing the list, try to keep old specs (and cached data)
+        self.metric_specs = {}
+        for s in specs:
+            self.metric_specs[s.config_name] = (s, [])
+        self.metric_seqid = seq
+        self.logger.debug('new metric specs: {}'.format(self.metric_specs))
+        # XXX: trigger new metric setup
 
     def __get_next_wakeup(self):
         """ @returns next wakeup time (as msecs delta) """

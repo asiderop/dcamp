@@ -99,11 +99,9 @@ class ConfigFileMixin(ConfigParser):
 
                 if threshold.is_timed:
                     if threshold.value < rate:
-                        self.__eprint('time-based threshold shorter than sample rate: %s'
-                                      % name)
+                        self.__eprint('time-based threshold shorter than sample rate: %s' % name)
                     elif threshold.value % rate != 0:
-                        self.__eprint('time-based threshold indivisible by sample rate: %s'
-                                      % name)
+                        self.__eprint('time-based threshold indivisible by sample rate: %s' % name)
 
             detail = self[name]['metric']
 
@@ -119,6 +117,9 @@ class ConfigFileMixin(ConfigParser):
             if aggr not in valid_aggr:
                 self.__eprint('aggregation value "%s" not valid for "%s" metric; choose: %s' %
                               (aggr, name, valid_aggr))
+
+            if aggr is not None and threshold is not None:
+                self.__eprint('aggregation cannot be configured along with threshold: %s' % name)
 
             result[name] = MetricSpec(name, rate, threshold, detail, param, aggr)
 

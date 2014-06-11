@@ -88,30 +88,31 @@ class Sensor(ServiceMixin):
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
-        if seq > self.metric_seqid:
+        if seq <= self.metric_seqid:
+            return
 
-            old_specs = []
+        old_specs = []
 
-            # add all old metric specs, continue with its next collection time
-            for collection in self.metric_collections:
-                if collection.spec in specs:
-                    old_specs.append(collection)
-                    specs.remove(collection.spec)
+        # add all old metric specs, continue with its next collection time
+        for collection in self.metric_collections:
+            if collection.spec in specs:
+                old_specs.append(collection)
+                specs.remove(collection.spec)
 
-            # add all new metric specs, starting collection now
-            new_specs = [MetricCollection(0, elem, None) for elem in specs]
+        # add all new metric specs, starting collection now
+        new_specs = [MetricCollection(0, elem, None) for elem in specs]
 
-            self.metric_collections = sorted(old_specs + new_specs)
-            self.metric_seqid = seq
+        self.metric_collections = sorted(old_specs + new_specs)
+        self.metric_seqid = seq
 
-            self.logger.debug('new metric specs: %s' % self.metric_collections)
+        self.logger.debug('new metric specs: %s' % self.metric_collections)
 
-            # reset next collection wakeup with new values
-            if len(self.metric_collections) > 0:
-                self.next_collection = self.metric_collections[0].epoch
-            else:
-                # check for new metric specs every five seconds
-                self.next_collection = now_secs() + 5
+        # reset next collection wakeup with new values
+        if len(self.metric_collections) > 0:
+            self.next_collection = self.metric_collections[0].epoch
+        else:
+            # check for new metric specs every five seconds
+            self.next_collection = now_secs() + 5
 
     def __process(self, collection):
         """ returns tuple of (data-msg, metric-collection) """
