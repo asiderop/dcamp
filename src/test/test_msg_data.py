@@ -179,6 +179,8 @@ class TestAggregateData(TestCase):
         )
 
         self.assertEqual(a, pre_sum)
+        self.assertIsNone(a.aggregate(self.time1))
+        self.assertEqual(a, pre_sum)
 
         self.add_samples(a)
         a.aggregate(self.time1)

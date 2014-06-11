@@ -26,8 +26,11 @@ class Aggregation(ServiceMixin):
 
         (self.sub_cnt, self.push_cnt) = (0, 0)
 
-        self.metric_specs = []
+        # { config-name: aggregate-metric }
+        self.metric_aggregations = {}
+        self.metric_collections = []  # sorted by next collection time
         self.metric_seqid = -1
+        self.next_aggregation = now_secs() + 5  # units: seconds
 
         # sub data from child(ren) ...
         self.sub = self.ctx.socket(SUB)
@@ -42,11 +45,11 @@ class Aggregation(ServiceMixin):
     def _pre_poll(self):
         self.__check_config_for_metric_updates()
 
-        if self.next_collection <= now_secs():
-            self.__collect_and_push_metrics()
+        if self.next_aggregation <= now_secs():
+            self.__aggregate_and_push_metrics()
 
-        # next_collection is in secs; subtract current msecs to get next wakeup epoch
-        wakeup = max(0, (self.next_collection * 1e3) - now_msecs())
+        # next_aggregation is in secs; subtract current msecs to get next wakeup epoch
+        wakeup = max(0, (self.next_aggregation * 1e3) - now_msecs())
         self.logger.debug('next wakeup in %dms' % wakeup)
         self.poller_timer = wakeup
 
@@ -59,11 +62,24 @@ class Aggregation(ServiceMixin):
                     break
 
                 self.sub_cnt += 1
-
-                # TODO: store sample for aggregation
-
                 msg.send(self.push)
                 self.push_cnt += 1
+
+                # if unknown metric, just drop it
+                if msg.config_seqid != self.metric_seqid:
+                    self.logger.warn('unknown config seq-id (%d); dropping data'
+                                     % msg.config_seqid)
+                    continue
+
+                # lookup aggregation using given message's configuration name
+                aggr_data = self.metric_aggregations.get(msg.config_name, None)
+
+                if aggr_data is None:
+                    # unknown metric OR aggregation not configured
+                    continue
+
+                # store sample for later aggregation
+                aggr_data.add_sample(msg)
 
     def _cleanup(self):
 
@@ -77,67 +93,83 @@ class Aggregation(ServiceMixin):
 
         ServiceMixin._cleanup(self)
 
-    def __collect_and_push_metrics(self):
+    def __aggregate_and_push_metrics(self):
 
-        if len(self.metric_specs) == 0:
-            self.next_collection = now_secs() + 5
+        if len(self.metric_collections) == 0:
+            self.next_aggregation = now_secs() + 5
             return
 
-        collected = []
+        aggregated = []
         while True:
-            collection = self.metric_specs.pop(0)
-            assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
+            now_s = now_secs()
+            # pop first item from dict using collection list order
+            collection = self.metric_collections.pop(0)
+            assert collection.epoch <= now_s, 'next metric is not scheduled for collection'
+            assert collection.config_name in self.metric_aggregations
 
-            (msg, collection) = self.__process(collection)
-            if msg is not None:
-                msg.send(self.metrics_socket)
+            aggr_data = self.metric_aggregations[collection.config_name]
+            if aggr_data.aggregate(now_s) is not None:
+                aggr_data.send(self.push)
                 self.push_cnt += 1
-            collected.append(collection)
 
-            if len(self.metric_specs) == 0:
+            # reset aggregation for the next period
+            aggr_data.reset()
+            # update collection spec with next epoch
+            aggregated.append(MetricCollection(now_s + collection.spec.rate, collection.spec, None))
+
+            if len(self.metric_collections) == 0:
                 # no more work
                 break
 
-            if self.metric_specs[0].epoch > now_secs():
+            if self.metric_collections[0].epoch > now_secs():
                 # no more work scheduled
                 break
 
-        # add the collected metrics back into our list
-        self.metric_specs = sorted(self.metric_specs + collected)
+        # add the aggregated metrics back into our list
+        self.metric_collections = sorted(self.metric_collections + aggregated)
         # set the new collection wakeup
-        self.next_collection = self.metric_specs[0].epoch
+        self.next_aggregation = self.metric_collections[0].epoch
 
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
         (specs, seq) = self.cfgsvc.config_get_metric_specs()
         if seq > self.metric_seqid:
 
-            new_specs = []
+            collections = []
+            aggregations = {}
 
-            # add all old metric specs, continue with its next collection time
-            for collection in self.metric_specs:
-                if collection.spec in specs:
-                    new_specs.append(collection)
-                    specs.remove(collection.spec)
+            # add all old collections, saving their aggregated metrics
+            for c in self.metric_collections:
+                if c.spec in specs:
+                    collections.append(c)
+                    aggregations[c.config_name] = self.metric_aggregations[c.config_name]
+                    specs.remove(c.spec)
 
-            # add all new metric specs, starting collection now
-            new_specs = [MetricCollection(0, elem, None) for elem in specs]
+            # add all new metric specs, using now+period for collection/aggregation time
+            now = now_secs()
+            for s in specs:
+                if s.aggr is None:
+                    # skip metrics without aggregation configured
+                    continue
 
-            self.metric_specs = sorted(new_specs)
+                c = MetricCollection(now + s.rate, s, None)
+                collections.append(c)
+                props = {
+                    'aggr-id': self.cfgsvc.group,
+                    'type': 'aggregate-' + s.aggr,
+                }
+                aggregations[c.spec.config_name] = data.DataAggregate(self.endpoint, props)
+
+            self.metric_collections = sorted(collections)
+            self.metric_aggregations = aggregations
+            assert len(self.metric_aggregations) == len(self.metric_collections)
             self.metric_seqid = seq
 
-            self.logger.debug('new metric specs: %s' % self.metric_specs)
+            self.logger.debug('new metric specs: %s' % self.metric_collections)
 
             # reset next collection wakeup with new values
-            if len(self.metric_specs) > 0:
-                self.next_collection = self.metric_specs[0].epoch
+            if len(self.metric_collections) > 0:
+                self.next_collection = self.metric_collections[0].epoch
             else:
                 # check for new metric specs every five seconds
                 self.next_collection = now_secs() + 5
-
-    def __process(self, collection):
-        """ returns tuple of (data-msg, metric-collection) """
-
-        # TODO: calculate aggregation
-
-        return self, collection
