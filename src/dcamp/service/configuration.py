@@ -316,11 +316,24 @@ class Configuration(ServiceMixin):
     def config_get_metric_specs(self, group=None):
         assert self._is_gogo()
 
+        # root needs all metrics
+        if self.level == 'root':
+            s = -1
+            m = []
+
+            for g in self.config_get_groups():
+                (gm, gs) = self.get('/CONFIG/%s/metrics' % g, [])
+                s = max(gs, s)
+                m.extend(gm)
+
+            return m, s
+
+        # otherwise, just return this group's metrics
         if group is None:
             group = self.group
 
         # return tuple = (spec-list, seq-id) or (None, -1)
-        return self.get('/CONFIG/%s/metrics' % group, (None, -1))
+        return self.get('/CONFIG/%s/metrics' % group, [])
 
     def config_get_endpoints(self, group=None):
         assert self._is_gogo()
@@ -335,7 +348,7 @@ class Configuration(ServiceMixin):
             return []
 
     def config_get_groups(self):
-        regex = re.compile('/CONFIG/(\w+)/.+')
+        regex = re.compile('/CONFIG/(\w+)/endpoints')
         gs = set()
         with self.__kvlock:
             for key in self.__kvdict:
