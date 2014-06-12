@@ -193,5 +193,63 @@ class TestAggregateData(TestCase):
         self.sum_aggr.reset()
         self.assertEqual(a, self.sum_aggr)
 
+    def test_aggr_of_aggr(self):
+        a = DataAggregate(
+            EndpntSpec('local', 9097),
+            {
+                'type': 'aggregate-sum',
+                'aggr-id': 'sum-aggr',
+            },
+        )
+
+        b = DataAggregate(
+            EndpntSpec('local', 9097),
+            {
+                'type': 'aggregate-sum',
+                'aggr-id': 'sum-aggr',
+            },
+        )
+
+        c = DataAggregate(
+            EndpntSpec('local', 9098),
+            {
+                'type': 'aggregate-sum',
+                'aggr-id': 'sum-aggr',
+            },
+        )
+
+        d = DataAggregate(
+            EndpntSpec('local', 9098),
+            {
+                'type': 'aggregate-sum',
+                'aggr-id': 'sum-aggr',
+            },
+        )
+
+        self.add_samples(a)
+        self.add_samples(b)
+        self.add_samples(c)
+        self.add_samples(d)
+
+        a.aggregate(self.time1)
+        b.aggregate(self.time2)
+        c.aggregate(self.time1)
+        d.aggregate(self.time2)
+
+        sum_of_sums = DataAggregate(
+            EndpntSpec('local', 9099),
+            {
+                'type': 'aggregate-sum',
+                'aggr-id': 'sum-aggr-x2',
+            },
+        )
+
+        sum_of_sums.add_sample(a)
+        sum_of_sums.add_sample(b)
+        sum_of_sums.add_sample(c)
+        sum_of_sums.add_sample(d)
+        self.assertEqual(sum_of_sums.aggregate(self.time2), 442.0)
+
+
 if __name__ == '__main__':
     main()

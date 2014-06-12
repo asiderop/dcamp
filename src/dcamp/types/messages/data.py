@@ -246,9 +246,9 @@ class DataRate(Data):
         return self.__the_rate(given)
 
 
-class DataAggregate(Data):
+class DataAggregate(DataBasic):
     def __init__(self, source, properties, time=None, value=None, base_value=None):
-        Data.__init__(self, source, properties, time, value, base_value)
+        DataBasic.__init__(self, source, properties, time, value, base_value)
         assert self.m_type.startswith('aggregate')
         assert 'aggr-id' in properties
         assert base_value is None
