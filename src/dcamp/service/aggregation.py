@@ -105,9 +105,9 @@ class Aggregation(ServiceMixin):
             # pop first item from dict using collection list order
             collection = self.metric_collections.pop(0)
             assert collection.epoch <= now_s, 'next metric is not scheduled for collection'
-            assert collection.config_name in self.metric_aggregations
+            assert collection.spec.config_name in self.metric_aggregations
 
-            aggr_data = self.metric_aggregations[collection.config_name]
+            aggr_data = self.metric_aggregations[collection.spec.config_name]
             if aggr_data.aggregate(now_s) is not None:
                 aggr_data.send(self.push)
                 self.push_cnt += 1
@@ -172,7 +172,7 @@ class Aggregation(ServiceMixin):
 
         # reset next collection wakeup with new values
         if len(self.metric_collections) > 0:
-            self.next_collection = self.metric_collections[0].epoch
+            self.next_aggregation = self.metric_collections[0].epoch
         else:
             # check for new metric specs every five seconds
-            self.next_collection = now_secs() + 5
+            self.next_aggregation = now_secs() + 5
