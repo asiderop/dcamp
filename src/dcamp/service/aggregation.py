@@ -160,11 +160,12 @@ class Aggregation(ServiceMixin):
                 'aggr-id': self.cfgsvc.group,
                 'type': 'aggregate-' + s.aggr,
             }
+            assert c.spec.config_name not in aggregations
             aggregations[c.spec.config_name] = data.DataAggregate(self.endpoint, props)
 
+        assert len(aggregations) == len(collections)
         self.metric_collections = sorted(collections)
         self.metric_aggregations = aggregations
-        assert len(self.metric_aggregations) == len(self.metric_collections)
         self.metric_seqid = seq
 
         self.logger.debug('new metric specs: %s' % self.metric_collections)

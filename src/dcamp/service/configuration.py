@@ -319,12 +319,12 @@ class Configuration(ServiceMixin):
         # root needs all metrics
         if self.level == 'root':
             s = -1
-            m = []
+            m = set()  # returning unique set of metrics from all groups
 
             for g in self.config_get_groups():
                 (gm, gs) = self.get('/CONFIG/%s/metrics' % g, [])
                 s = max(gs, s)
-                m.extend(gm)
+                m.update(gm)
 
             return m, s
 
