@@ -65,6 +65,10 @@ class Aggregation(ServiceMixin):
                 msg.send(self.push)
                 self.push_cnt += 1
 
+                if msg.is_hugz:
+                    # noted. moving on...
+                    continue
+
                 # if unknown metric, just drop it
                 if msg.config_seqid != self.metric_seqid:
                     self.logger.warn('unknown config seq-id (%d); dropping data'
