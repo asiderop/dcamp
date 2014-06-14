@@ -147,6 +147,11 @@ class Aggregation(ServiceMixin):
                 aggregations[c.config_name] = self.metric_aggregations[c.config_name]
                 specs.remove(c.spec)
 
+        if self.level == 'root':
+            aggr_id = 'ROOT'
+        else:
+            aggr_id = self.cfgsvc.group
+
         # add all new metric specs, using now+period for collection/aggregation time
         now = now_secs()
         for s in specs:
@@ -157,7 +162,10 @@ class Aggregation(ServiceMixin):
             c = MetricCollection(now + s.rate, s, None)
             collections.append(c)
             props = {
-                'aggr-id': self.cfgsvc.group,
+                'detail': c.spec.detail,
+                'config-name': c.spec.config_name,
+                'config-seqid': self.metric_seqid,
+                'aggr-id': aggr_id,
                 'type': 'aggregate-' + s.aggr,
             }
             assert c.spec.config_name not in aggregations

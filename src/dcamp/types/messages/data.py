@@ -1,6 +1,6 @@
-from dcamp.types.messages.common import DCMsg, _PROPS
+from dcamp.types.messages.common import DCMsg, _PROPS, dev_mode
 from dcamp.types.specs import EndpntSpec
-from dcamp.util.functions import isInstance_orNone, now_msecs
+from dcamp.util.functions import isInstance_orNone, now_msecs, get_logger_from_caller
 
 __all__ = [
     'Data',
@@ -39,8 +39,13 @@ class Data(DCMsg, _PROPS):
         assert isinstance(source, EndpntSpec)
         self.source = source
 
-        # validate given type
-        assert 'type' in properties, 'missing metric "type" key'
+        # validate properties
+        req_props = ['type', 'detail', 'config-name', 'config-seqid']
+        if self.is_hugz:
+            req_props = ['type']
+        for p in req_props:
+            assert p in properties, 'missing metric "{}" key'.format(p)
+
         assert self.m_type in _MTYPES.keys(), 'given metric "type" not valid'
 
         # validate class was constructed with type-appropriate sub-class
@@ -293,8 +298,11 @@ class DataAggregate(DataBasic):
 
     def reset(self):
         # clear properties state
-        del(self['node-cnt'])
-        del(self['aggr-source'])
+        for p in ('node-cnt', 'aggr-source'):
+            try:
+                del(self[p])
+            except KeyError:
+                continue
         self['is-final'] = False
 
         # clear samples (only keep last sample)
@@ -343,7 +351,10 @@ class DataAggregate(DataBasic):
                 raise NotImplementedError('unknown aggregation type: {}'.format(op))
 
         if node_cnt < 1:
-            self.logger.error('not enough samples to aggregate')
+            logger = self.logger
+            if dev_mode:
+                logger = get_logger_from_caller(self.logger)
+            logger.error('{}: not enough samples to aggregate'.format(self['aggr-id']))
             return None
 
         if op == 'avg':
