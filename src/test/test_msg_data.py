@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from logging import getLogger
 
 from unittest import TestCase, main
 
@@ -7,22 +8,29 @@ from dcamp.types.messages.data import *
 
 
 class TestData(TestCase):
+    logger = getLogger('dcamp.test.messages.data')
+
     def setUp(self):
         self.time = 1384321742000
         self.d1 = DataAverage(
             EndpntSpec('local', 9090),
-            {'type': 'average'},
+            {
+                'type': 'average',
+                'detail': 'test-data',
+                'config-name': 'avg-d1',
+                'config-seqid': 0,
+            },
             time=self.time,
             value=182,
             base_value=2,
         )
 
     def test_log_str(self):
-        expected = '%d\tlocal:9090\tNone\t182.00\t2.00' % self.time
+        expected = '%d\tlocal:9090\ttest-data\t182.00\t2.00' % self.time
         self.assertEqual(expected, self.d1.log_str())
 
     def test_str(self):
-        expected = 'local:9090 -- None @ %d = 182.00 / 2.00' % self.time
+        expected = 'local:9090 -- test-data @ %d = 182.00 / 2.00' % self.time
         self.assertEqual(expected, str(self.d1))
 
     def test_marshal(self):
@@ -30,6 +38,8 @@ class TestData(TestCase):
 
 
 class TestAggregateData(TestCase):
+    logger = getLogger('dcamp.test.messages.data')
+
     def setUp(self):
         self.time1 = 1384321742000
         self.time2 = 1384321842000
@@ -38,13 +48,23 @@ class TestAggregateData(TestCase):
             # calc: 100
             DataAverage(
                 EndpntSpec('local', 9091),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d1',
+                    'config-seqid': 0,
+                },
                 time=self.time1,
                 value=182,
                 base_value=2),
             DataAverage(
                 EndpntSpec('local', 9091),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d1',
+                    'config-seqid': 0,
+                },
                 time=self.time2,
                 value=282,
                 base_value=3),
@@ -54,13 +74,23 @@ class TestAggregateData(TestCase):
             # calc: 1
             DataAverage(
                 EndpntSpec('local', 9092),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d2',
+                    'config-seqid': 0,
+                },
                 time=self.time1,
                 value=490,
                 base_value=5),
             DataAverage(
                 EndpntSpec('local', 9092),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d2',
+                    'config-seqid': 0,
+                },
                 time=self.time2,
                 value=491,
                 base_value=6),
@@ -70,13 +100,23 @@ class TestAggregateData(TestCase):
             # calc: 120
             DataAverage(
                 EndpntSpec('local', 9093),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d3',
+                    'config-seqid': 0,
+                },
                 time=self.time1,
                 value=69,
                 base_value=3),
             DataAverage(
                 EndpntSpec('local', 9093),
-                {'type': 'average'},
+                {
+                    'type': 'average',
+                    'detail': 'test-aggr-data',
+                    'config-name': 'avg-d3',
+                    'config-seqid': 0,
+                },
                 time=self.time2,
                 value=669,
                 base_value=8),
@@ -86,7 +126,10 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',
-                'aggr-id': 'sum-aggr',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-sum',
+                'config-seqid': 0,
+                'aggr-id': 'aggr-sum',
 
                 'is-final': True,
                 'samples-type': 'average',
@@ -101,7 +144,10 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-avg',
-                'aggr-id': 'avg-aggr',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-avg',
+                'config-seqid': 0,
+                'aggr-id': 'aggr-avg',
 
                 'is-final': True,
                 'samples-type': 'average',
@@ -129,6 +175,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-max',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-a',
+                'config-seqid': 0,
                 'aggr-id': 'min-aggr',
             },
         )
@@ -140,6 +189,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-min',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-a',
+                'config-seqid': 0,
                 'aggr-id': 'max-aggr',
             },
         )
@@ -152,6 +204,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-avg',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-sum',
+                'config-seqid': 0,
                 'aggr-id': 'avg-aggr',
             },
         )
@@ -166,7 +221,10 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',
-                'aggr-id': 'sum-aggr',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-sum',
+                'config-seqid': 0,
+                'aggr-id': 'aggr-sum',
             },
         )
 
@@ -174,7 +232,10 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9096),
             {
                 'type': 'aggregate-sum',
-                'aggr-id': 'sum-aggr',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-sum',
+                'config-seqid': 0,
+                'aggr-id': 'aggr-sum',
             },
         )
 
@@ -198,6 +259,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9097),
             {
                 'type': 'aggregate-sum',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-a',
+                'config-seqid': 0,
                 'aggr-id': 'sum-aggr',
             },
         )
@@ -206,6 +270,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9097),
             {
                 'type': 'aggregate-sum',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-b',
+                'config-seqid': 0,
                 'aggr-id': 'sum-aggr',
             },
         )
@@ -214,6 +281,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9098),
             {
                 'type': 'aggregate-sum',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-c',
+                'config-seqid': 0,
                 'aggr-id': 'sum-aggr',
             },
         )
@@ -222,6 +292,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9098),
             {
                 'type': 'aggregate-sum',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-d',
+                'config-seqid': 0,
                 'aggr-id': 'sum-aggr',
             },
         )
@@ -240,6 +313,9 @@ class TestAggregateData(TestCase):
             EndpntSpec('local', 9099),
             {
                 'type': 'aggregate-sum',
+                'detail': 'test-aggr-data',
+                'config-name': 'aggr-sum-sums',
+                'config-seqid': 0,
                 'aggr-id': 'sum-aggr-x2',
             },
         )
