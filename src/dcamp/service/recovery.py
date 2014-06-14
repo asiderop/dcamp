@@ -78,7 +78,7 @@ class Election(object):
 
 class RecoveryThread(Thread):
     def __init__(self, ctx, ep, uuid):
-        Thread.__init__(self, name=self.__class__.__qualname__)
+        Thread.__init__(self, name='dcamp.service.node.{}'.format(self.__class__.__name__))
         self.ctx = ctx
         self.endpoint = ep
         self.uuid = uuid
