@@ -356,6 +356,8 @@ class Node(ServiceMixin):
         self.poller.register(self.role_pipe, POLLIN)
 
         self.logger.debug('starting Role: %s' % self.role)
-        self.role_thread = threading.Thread(target=self.role.play)
+        self.role_thread = threading.Thread(
+            target=self.role.play,
+            name=self.role.__class__.__qualname__)
         self.role_thread.start()
         self.set_state(Node.PLAY)

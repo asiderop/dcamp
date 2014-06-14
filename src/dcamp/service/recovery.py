@@ -78,7 +78,7 @@ class Election(object):
 
 class RecoveryThread(Thread):
     def __init__(self, ctx, ep, uuid):
-        Thread.__init__(self)
+        Thread.__init__(self, name=self.__class__.__qualname__)
         self.ctx = ctx
         self.endpoint = ep
         self.uuid = uuid

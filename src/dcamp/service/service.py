@@ -11,7 +11,7 @@ from dcamp.util.decorators import runnable
 @runnable
 class ServiceMixin(Thread):
     def __init__(self, pipe, local_ep, local_uuid, config_svc):
-        Thread.__init__(self)
+        Thread.__init__(self, name=self.__class__.__qualname__)
         self.ctx = Context.instance()
         self.__control_pipe = pipe
 
