@@ -221,10 +221,14 @@ class DataAverage(Data):
         return 'average'
 
     def _calculate(self, given):
-        return (given.value - self.value) / (given.base_value - self.base_value)
+        numerator = given.value - self.value
+        denominator = given.base_value - self.base_value
+        if 0 == denominator:
+            return 0.0
+        return numerator / denominator
 
 
-class DataPercent(Data):
+class DataPercent(DataAverage):
     def __str__(self):
         return '%s / %.2f' % (Data.__str__(self), self.base_value)
 
@@ -236,12 +240,16 @@ class DataPercent(Data):
         return '%'
 
     def _calculate(self, given):
-        return ((given.value - self.value) / (given.base_value - self.base_value)) * 100.0
+        return super()._calculate(given) * 100.0
 
 
 class DataRate(Data):
     def __the_rate(self, given):
-        return ((given.value - self.value) / (given.time - self.time)) * 1e3
+        numerator = given.value - self.value
+        denominator = given.time - self.time
+        if 0 == denominator:
+            return 0.0
+        return (numerator / denominator) * 1e3
 
     @property
     def suffix(self):
