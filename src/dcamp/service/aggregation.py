@@ -151,7 +151,7 @@ class Aggregation(ServiceMixin):
         for c in self.metric_collections:
             if c.spec in specs:
                 collections.append(c)
-                aggregations[c.config_name] = self.metric_aggregations[c.config_name]
+                aggregations[c.spec.config_name] = self.metric_aggregations[c.spec.config_name]
                 specs.remove(c.spec)
 
         if self.level == 'root':
@@ -166,17 +166,31 @@ class Aggregation(ServiceMixin):
                 # skip metrics without aggregation configured
                 continue
 
-            c = MetricCollection(now + s.rate, s, None)
+            # root needs "config-aggr" so as to only aggregate aggregated messages; the same would
+            # apply to higher-level branch nodes, when those are implemented...
+            cname = s.config_name
+            aggr_cname = cname + '-aggr'
+            if 'root' == self.level:
+                cname = aggr_cname
+
+            # create new spec with updated config_name
+            s = s._replace(config_name=cname)
+            c = MetricCollection(
+                epoch=now + s.rate,
+                spec=s,
+                p=None)
+
             collections.append(c)
+
             props = {
                 'detail': c.spec.detail,
-                'config-name': c.spec.config_name,
+                'config-name': aggr_cname,  # message always uses aggregated config name
                 'config-seqid': seqid,  # use new seqid
                 'aggr-id': aggr_id,
                 'type': 'aggregate-' + s.aggr,
             }
-            assert c.spec.config_name not in aggregations
-            aggregations[c.spec.config_name] = data.DataAggregate(self.endpoint, props)
+            assert cname not in aggregations
+            aggregations[cname] = data.DataAggregate(self.endpoint, props)
 
         assert len(aggregations) == len(collections)
         self.metric_collections = sorted(collections)
