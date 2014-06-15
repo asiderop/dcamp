@@ -7,6 +7,20 @@ from dcamp.types.specs import EndpntSpec
 from dcamp.types.messages.data import *
 
 
+class TestHugz(TestCase):
+    def setUp(self):
+        self.time = 1384321742000
+        self.h = DataHugz(EndpntSpec('local', 9090), self.time)
+
+    def test_print(self):
+        expected = 'local:9090 -- HUGZ @ %d' % self.time
+        self.assertEqual(expected, str(self.h))
+
+    def test_log_str(self):
+        expected = '%d\tlocal:9090\tHUGZ' % self.time
+        self.assertEqual(expected, self.h.log_str())
+
+
 class TestData(TestCase):
     logger = getLogger('dcamp.test.messages.data')
 
@@ -30,7 +44,7 @@ class TestData(TestCase):
         self.assertEqual(expected, self.d1.log_str())
 
     def test_str(self):
-        expected = 'local:9090 -- test-data @ %d = 182.00 / 2.00' % self.time
+        expected = 'local:9090 -- test-data [0] @ %d = 182.00 / 2.00' % self.time
         self.assertEqual(expected, str(self.d1))
 
     def test_marshal(self):

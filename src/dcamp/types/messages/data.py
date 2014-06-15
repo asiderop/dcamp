@@ -125,7 +125,11 @@ class Data(DCMsg, _PROPS):
         raise NotImplementedError('sub-class implementation missing')
 
     def __str__(self):
-        return '%s -- %s @ %d = %.2f' % (self.source, self.detail, self.time, self.value)
+        return '%s -- %s [%d] @ %d = %.2f' % (self.source,
+                                              self.detail,
+                                              self.config_seqid,
+                                              self.time,
+                                              self.value)
 
     def log_str(self):
         return '%d\t%s\t%s\t%.2f' % (self.time, self.source, self.detail, self.value)
