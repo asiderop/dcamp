@@ -395,4 +395,3 @@ _MTYPES = {
     'aggregate-min': DataAggregate,
     'aggregate-avg': DataAggregate,
 }
-

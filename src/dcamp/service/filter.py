@@ -104,17 +104,13 @@ class Filter(ServiceMixin):
 
                 self.data_file.write(msg.log_str() + '\n')
 
-                if msg.is_hugz:
-                    # noted. moving on...
-                    self.logger.debug('received hug.')
-                    continue
-
                 # process message (i.e. do the filtering) and then forward to parent
                 if self.level in ['branch', 'leaf']:
                     # if unknown metric, just drop it
-                    if msg.config_seqid != self.metric_seqid:
+                    if msg.config_seqid not in range(self.metric_seqid + 1):
                         self.logger.warn('unknown config seq-id (%d); dropping data'
                                          % msg.config_seqid)
+                        self.logger.debug('dropped: <{}>'.format(msg))
                         continue
 
                     # if non-local data, just send it off to the parent

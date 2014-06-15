@@ -60,20 +60,23 @@ class Aggregation(ServiceMixin):
                     msg = data.Data.recv(self.sub)
                 except Again:
                     break
-
                 self.sub_cnt += 1
-                msg.send(self.push)
-                self.push_cnt += 1
 
                 if msg.is_hugz:
                     # noted. moving on...
+                    self.logger.debug('received hug.')
                     continue
 
                 # if unknown metric, just drop it
-                if msg.config_seqid != self.metric_seqid:
+                if msg.config_seqid not in range(self.metric_seqid + 1):
                     self.logger.warn('unknown config seq-id (%d); dropping data'
                                      % msg.config_seqid)
+                    self.logger.debug('dropped: <{}>'.format(msg))
                     continue
+
+                # only push metrics we know about
+                msg.send(self.push)
+                self.push_cnt += 1
 
                 # lookup aggregation using given message's configuration name
                 aggr_data = self.metric_aggregations.get(msg.config_name, None)
@@ -136,9 +139,9 @@ class Aggregation(ServiceMixin):
 
     def __check_config_for_metric_updates(self):
         # TODO: optimize this to only check the seq-id
-        (specs, seq) = self.cfgsvc.config_get_metric_specs()
-        if seq <= self.metric_seqid:
-            self.logger.debug('no new metric specs: {} <= {}'.format(seq, self.metric_seqid))
+        (specs, seqid) = self.cfgsvc.config_get_metric_specs()
+        if seqid <= self.metric_seqid:
+            self.logger.debug('no new metric specs: {} <= {}'.format(seqid, self.metric_seqid))
             return
 
         collections = []
@@ -168,7 +171,7 @@ class Aggregation(ServiceMixin):
             props = {
                 'detail': c.spec.detail,
                 'config-name': c.spec.config_name,
-                'config-seqid': self.metric_seqid,
+                'config-seqid': seqid,  # use new seqid
                 'aggr-id': aggr_id,
                 'type': 'aggregate-' + s.aggr,
             }
@@ -178,7 +181,7 @@ class Aggregation(ServiceMixin):
         assert len(aggregations) == len(collections)
         self.metric_collections = sorted(collections)
         self.metric_aggregations = aggregations
-        self.metric_seqid = seq
+        self.metric_seqid = seqid
 
         self.logger.debug('new metric specs: %s' % self.metric_collections)
 
