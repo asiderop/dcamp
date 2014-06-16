@@ -141,7 +141,7 @@ class Data(DCMsg, _PROPS):
         logstr = '{}'.format(self.time)
         for p in props.keys():
             v = props[p]
-            if p in ('value', 'base'):
+            if p in ('value', 'base') and v is not None:
                 logstr += ' {}={:.2f}'.format(p, v)
             else:
                 logstr += ' {}={}'.format(p, v)
