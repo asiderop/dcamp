@@ -139,8 +139,12 @@ class Data(DCMsg, _PROPS):
         }
         props.update(self.properties)
         logstr = '{}'.format(self.time)
-        for (k, v) in props.items():
-            logstr += ' {}={}'.format(k, v)
+        for p in props.keys():
+            v = props[p]
+            if p in ('value', 'base'):
+                logstr += ' {}={:.2f}'.format(p, v)
+            else:
+                logstr += ' {}={}'.format(p, v)
         return logstr
 
     @property
@@ -365,7 +369,7 @@ class DataAggregate(DataBasic):
             calc = cache[0].calculate(cache[1])
 
             if op in ('sum', 'avg'):
-            if value is None:
+                if value is None:
                     value = 0
 
                 value += calc
@@ -375,16 +379,16 @@ class DataAggregate(DataBasic):
                 if value is None:
                     value = calc
                     source = node
-            elif op == 'min':
-                if calc < value:
-                    value = calc
-                    source = node
-            elif op == 'max':
-                if calc > value:
-                    value = calc
-                    source = node
-            else:
-                raise NotImplementedError('unknown aggregation type: {}'.format(op))
+                elif op == 'min':
+                    if calc < value:
+                        value = calc
+                        source = node
+                elif op == 'max':
+                    if calc > value:
+                        value = calc
+                        source = node
+                else:
+                    raise NotImplementedError('unknown aggregation type: {}'.format(op))
 
         if node_cnt < 1:
             logger = self.logger

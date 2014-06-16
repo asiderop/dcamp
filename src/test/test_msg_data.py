@@ -17,8 +17,7 @@ class TestHugz(TestCase):
         self.assertEqual(expected, str(self.h))
 
     def test_log_str(self):
-        expected = '%d\tlocal:9090\tHUGZ' % self.time
-        self.assertEqual(expected, self.h.log_str())
+        self.assertRaises(NotImplementedError, self.h.log_str)
 
 
 class TestData(TestCase):
@@ -38,10 +37,6 @@ class TestData(TestCase):
             value=182,
             base_value=2,
         )
-
-    def test_log_str(self):
-        expected = '%d\tlocal:9090\ttest-data\t182.00\t2.00' % self.time
-        self.assertEqual(expected, self.d1.log_str())
 
     def test_str(self):
         expected = 'local:9090 -- test-data [0] @ %d = 182.00 / 2.00' % self.time
