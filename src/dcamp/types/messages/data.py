@@ -132,7 +132,16 @@ class Data(DCMsg, _PROPS):
                                               self.value)
 
     def log_str(self):
-        return '%d\t%s\t%s\t%.2f' % (self.time, self.source, self.detail, self.value)
+        props = {
+            'source': self.source,
+            'value': self.value,
+            'base': self.base_value,
+        }
+        props.update(self.properties)
+        logstr = '{}'.format(self.time)
+        for (k, v) in props.items():
+            logstr += ' {}={}'.format(k, v)
+        return logstr
 
     @property
     def frames(self):
@@ -192,7 +201,7 @@ class DataHugz(Data):
         return '%s -- HUGZ @ %d' % (str(self.source), self.time)
 
     def log_str(self):
-        return '%d\t%s\t%s' % (self.time, self.source, self.m_type)
+        raise NotImplementedError('HUGZ has no log value')
 
 
 class DataBasic(Data):
@@ -217,9 +226,6 @@ class DataAverage(Data):
     def __str__(self):
         return '%s / %.2f' % (Data.__str__(self), self.base_value)
 
-    def log_str(self):
-        return '%s\t%.2f' % (Data.log_str(self), self.base_value)
-
     @property
     def suffix(self):
         return 'average'
@@ -235,9 +241,6 @@ class DataAverage(Data):
 class DataPercent(DataAverage):
     def __str__(self):
         return '%s / %.2f' % (Data.__str__(self), self.base_value)
-
-    def log_str(self):
-        return '%s\t%.2f' % (Data.log_str(self), self.base_value)
 
     @property
     def suffix(self):
