@@ -364,11 +364,17 @@ class DataAggregate(DataBasic):
             node_cnt += 1
             calc = cache[0].calculate(cache[1])
 
+            if op in ('sum', 'avg'):
             if value is None:
-                value = calc
-            elif op in ('sum', 'avg'):
+                    value = 0
+
                 value += calc
                 source = self.source
+
+            else:
+                if value is None:
+                    value = calc
+                    source = node
             elif op == 'min':
                 if calc < value:
                     value = calc
