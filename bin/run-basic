@@ -8,7 +8,8 @@ XTERM='xterm -r'
 
 ROOT=localhost:55500
 COLLECTOR=localhost:55700
-METRIC=localhost:55730
+METRIC1=localhost:55730
+METRIC2=localhost:55760
 
 USAGE="usage: `basename $0` [-x|-l] <base-r|base-c|base-m|start|stop>"
 
@@ -60,18 +61,33 @@ case "$1" in
 		fi
 		;;
 
-	base-m)
+	base-m1)
 		MODS="--debug-module dcamp.service.Node --debug-module dcamp.service.Configuration"
 		MODS="--debug-module dcamp.service.Node"
 		MODS="-d"
-		LOG=$BASEDIR/debug/base-m.log
+		LOG=$BASEDIR/debug/base-m1.log
 		if [ $X -eq 0 ]; then
-			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC 2>&1 | tee $LOG" &
+			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC1 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
-			$DCAMP $MODS base -a $METRIC > $LOG 2>&1 &
+			$DCAMP $MODS base -a $METRIC1 > $LOG 2>&1 &
 			echo $!
 		else
-			$DCAMP $MODS base -a $METRIC
+			$DCAMP $MODS base -a $METRIC1
+		fi
+		;;
+
+	base-m2)
+		MODS="--debug-module dcamp.service.Node --debug-module dcamp.service.Configuration"
+		MODS="--debug-module dcamp.service.Node"
+		MODS="-d"
+		LOG=$BASEDIR/debug/base-m2.log
+		if [ $X -eq 0 ]; then
+			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC2 2>&1 | tee $LOG" &
+		elif [ $L -eq 0 ]; then
+			$DCAMP $MODS base -a $METRIC2 > $LOG 2>&1 &
+			echo $!
+		else
+			$DCAMP $MODS base -a $METRIC2
 		fi
 		;;
 
