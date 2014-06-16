@@ -108,21 +108,23 @@ class Aggregation(ServiceMixin):
 
         aggregated = []
         while True:
-            now_s = now_secs()
             # pop first item from dict using collection list order
             collection = self.metric_collections.pop(0)
-            assert collection.epoch <= now_s, 'next metric is not scheduled for collection'
+            assert collection.epoch <= now_secs(), 'next metric is not scheduled for collection'
             assert collection.spec.config_name in self.metric_aggregations
 
             aggr_data = self.metric_aggregations[collection.spec.config_name]
-            if aggr_data.aggregate(now_s) is not None:
+            if aggr_data.aggregate(now_msecs()) is not None:
                 aggr_data.send(self.push)
                 self.push_cnt += 1
 
             # reset aggregation for the next period
             aggr_data.reset()
+
             # update collection spec with next epoch
-            aggregated.append(MetricCollection(now_s + collection.spec.rate, collection.spec, None))
+            aggregated.append(MetricCollection(now_secs() + collection.spec.rate,
+                                               collection.spec,
+                                               None))
 
             if len(self.metric_collections) == 0:
                 # no more work
