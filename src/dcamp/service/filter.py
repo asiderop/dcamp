@@ -114,7 +114,7 @@ class Filter(ServiceMixin):
                         continue
 
                     # if non-local data, just send it off to the parent
-                    if msg.source != self.endpoint:
+                    if msg.source != self.endpoint or msg.config_name.endswith('-aggr'):
                         assert (self.level in ['branch'])
                         msg.send(self.pubs_socket)
                         self.pubs_cnt += 1

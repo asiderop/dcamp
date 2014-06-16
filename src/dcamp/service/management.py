@@ -28,7 +28,7 @@ class Management(ServiceMixin):
         ServiceMixin.__init__(self, control_pipe, local_ep, local_uuid, config_svc)
 
         # TODO: config service is basically a replication service with 2 use-cases: config and topo;
-        #       this design can probably be cleaned up quite a bit.
+        #       this design can probably be cleaned up quite a bit. Issue #67
 
         self.cfgsvc.topo_set_root(self.endpoint, self.uuid)
 
@@ -172,7 +172,7 @@ class Management(ServiceMixin):
         self.logger.debug('%d nodes in group %s stopped' % (num, stop_group))
 
     def __stop_all_nodes(self):
-        size = self.cfgsvc.topo_size() - 1  # don't count this (root) node
+        size = self.cfgsvc.topo_get_size() - 1  # don't count this (root) node
         self.logger.debug('attempting to stop {} nodes'.format(size))
         num = self.__stop_nodes(size)
         self.logger.debug('{} nodes stopped'.format(num))
