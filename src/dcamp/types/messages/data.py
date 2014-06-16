@@ -267,10 +267,25 @@ class DataRate(Data):
 
 
 class DataAggregate(DataBasic):
+    """
+    aggregated metrics properties
+
+    ALWAYS SET
+    ---------------
+        is-final     : bool, whether the metric is aggregated and complete
+        aggr-group   : str, group of nodes which were aggregated
+
+    FINALLY SET (is-final==true)
+    --------------
+        aggr-source  : EndpntSpec, aggregation source (Metric for max/min, Collector for sum/avg
+        node-cnt     : int, number of nodes included in aggregation
+        samples-type : str, type of metric being aggregated
+
+    """
     def __init__(self, source, properties, time=None, value=None, base_value=None):
         DataBasic.__init__(self, source, properties, time, value, base_value)
         assert self.m_type.startswith('aggregate')
-        assert 'aggr-id' in properties
+        assert 'aggr-group' in properties
         assert base_value is None
 
         # { EndpntSpec : [ Data, ... ] }
@@ -278,9 +293,9 @@ class DataAggregate(DataBasic):
 
         if 'is-final' in properties:
             assert self['is-final']
-            assert 'samples-type' in properties
-            assert 'node-cnt' in properties
             assert 'aggr-source' in properties
+            assert 'node-cnt' in properties
+            assert 'samples-type' in properties
             assert value is not None
             assert time is not None
         else:
@@ -369,7 +384,7 @@ class DataAggregate(DataBasic):
             logger = self.logger
             if dev_mode:
                 logger = get_logger_from_caller(self.logger)
-            logger.error('{}: not enough samples to aggregate'.format(self['aggr-id']))
+            logger.error('{}: not enough samples to aggregate'.format(self['aggr-group']))
             return None
 
         if op == 'avg':

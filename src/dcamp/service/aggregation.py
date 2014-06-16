@@ -157,9 +157,9 @@ class Aggregation(ServiceMixin):
                 specs.remove(c.spec)
 
         if self.level == 'root':
-            aggr_id = 'ROOT'
+            aggr_group = 'ROOT'
         else:
-            aggr_id = self.cfgsvc.group
+            aggr_group = self.cfgsvc.group
 
         # add all new metric specs, using now+period for collection/aggregation time
         now = now_secs()
@@ -188,7 +188,7 @@ class Aggregation(ServiceMixin):
                 'detail': c.spec.detail,
                 'config-name': aggr_cname,  # message always uses aggregated config name
                 'config-seqid': seqid,  # use new seqid
-                'aggr-id': aggr_id,
+                'aggr-group': aggr_group,
                 'type': 'aggregate-' + s.aggr,
             }
             assert cname not in aggregations

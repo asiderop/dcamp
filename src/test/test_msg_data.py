@@ -143,7 +143,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-sum',
                 'config-seqid': 0,
-                'aggr-id': 'aggr-sum',
+                'aggr-group': 'aggr-sum',
 
                 'is-final': True,
                 'samples-type': 'average',
@@ -161,7 +161,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-avg',
                 'config-seqid': 0,
-                'aggr-id': 'aggr-avg',
+                'aggr-group': 'aggr-avg',
 
                 'is-final': True,
                 'samples-type': 'average',
@@ -192,7 +192,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-a',
                 'config-seqid': 0,
-                'aggr-id': 'min-aggr',
+                'aggr-group': 'min-aggr',
             },
         )
         self.add_samples(a)
@@ -206,7 +206,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-a',
                 'config-seqid': 0,
-                'aggr-id': 'max-aggr',
+                'aggr-group': 'max-aggr',
             },
         )
         self.add_samples(a)
@@ -221,7 +221,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-sum',
                 'config-seqid': 0,
-                'aggr-id': 'avg-aggr',
+                'aggr-group': 'avg-aggr',
             },
         )
 
@@ -238,7 +238,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-sum',
                 'config-seqid': 0,
-                'aggr-id': 'aggr-sum',
+                'aggr-group': 'aggr-sum',
             },
         )
 
@@ -249,7 +249,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-sum',
                 'config-seqid': 0,
-                'aggr-id': 'aggr-sum',
+                'aggr-group': 'aggr-sum',
             },
         )
 
@@ -276,7 +276,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-a',
                 'config-seqid': 0,
-                'aggr-id': 'sum-aggr',
+                'aggr-group': 'sum-aggr',
             },
         )
 
@@ -287,7 +287,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-b',
                 'config-seqid': 0,
-                'aggr-id': 'sum-aggr',
+                'aggr-group': 'sum-aggr',
             },
         )
 
@@ -298,7 +298,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-c',
                 'config-seqid': 0,
-                'aggr-id': 'sum-aggr',
+                'aggr-group': 'sum-aggr',
             },
         )
 
@@ -309,7 +309,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-d',
                 'config-seqid': 0,
-                'aggr-id': 'sum-aggr',
+                'aggr-group': 'sum-aggr',
             },
         )
 
@@ -330,7 +330,7 @@ class TestAggregateData(TestCase):
                 'detail': 'test-aggr-data',
                 'config-name': 'aggr-sum-sums',
                 'config-seqid': 0,
-                'aggr-id': 'sum-aggr-x2',
+                'aggr-group': 'sum-aggr-x2',
             },
         )
 
