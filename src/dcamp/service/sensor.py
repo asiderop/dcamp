@@ -142,12 +142,11 @@ class Sensor(ServiceMixin):
             base_value = int(sum(cpu_times) * 1e2)
 
         elif 'MEMORY' == detail:
-            props['type'] = 'percent'
-            message = data.DataPercent
+            props['type'] = 'basic'
+            message = data.DataBasic
 
             vmem = psutil.virtual_memory()
             value = vmem.total - vmem.available
-            base_value = vmem.total
 
         elif 'DISK' == detail:
             props['type'] = 'rate'

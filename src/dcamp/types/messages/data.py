@@ -209,8 +209,8 @@ class DataHugz(Data):
 
 
 class DataBasic(Data):
-    def _calculate(self, given=None):
-        return self.value
+    def _calculate(self, given):
+        return given.value
 
     @property
     def suffix(self):

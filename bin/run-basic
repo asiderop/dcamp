@@ -3,6 +3,7 @@
 # alias runall='./bin/run-basic -x base-r; ./bin/run-basic -x base-c; ./bin/run-basic start; sleep 5; ./bin/run-basic -x base-m'
 
 BASEDIR=`dirname $0`/..
+PIDS=$BASEDIR/bin/.pids
 DCAMP=$BASEDIR/bin/dcamp
 XTERM='xterm -r'
 
@@ -11,7 +12,7 @@ COLLECTOR=localhost:55700
 METRIC1=localhost:55730
 METRIC2=localhost:55760
 
-USAGE="usage: `basename $0` [-x|-l] <base-r|base-c|base-m|start|stop>"
+USAGE="usage: `basename $0` [-x|-l] <base-r|base-c|base-m|start|stop|kill>"
 
 if [ $# -lt 1 ]; then
 	echo $USAGE
@@ -41,7 +42,7 @@ case "$1" in
 			$XTERM -geometry 131x50+0+0 -T root -e "$DCAMP $MODS base -a $ROOT 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
 			$DCAMP $MODS base -a $ROOT > $LOG 2>&1 &
-			echo $!
+			echo $! >> $PIDS
 		else
 			$DCAMP $MODS base -a $ROOT
 		fi
@@ -55,7 +56,7 @@ case "$1" in
 			$XTERM -geometry 131x50+0+350 -T collector -e "$DCAMP $MODS base -a $COLLECTOR 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
 			$DCAMP $MODS base -a $COLLECTOR > $LOG 2>&1 &
-			echo $!
+			echo $! >> $PIDS
 		else
 			$DCAMP $MODS base -a $COLLECTOR
 		fi
@@ -70,7 +71,7 @@ case "$1" in
 			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC1 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
 			$DCAMP $MODS base -a $METRIC1 > $LOG 2>&1 &
-			echo $!
+			echo $! >> $PIDS
 		else
 			$DCAMP $MODS base -a $METRIC1
 		fi
@@ -85,20 +86,29 @@ case "$1" in
 			$XTERM -geometry 147x76-0+0 -T metric -e "$DCAMP $MODS base -a $METRIC2 2>&1 | tee $LOG" &
 		elif [ $L -eq 0 ]; then
 			$DCAMP $MODS base -a $METRIC2 > $LOG 2>&1 &
-			echo $!
+			echo $! >> $PIDS
 		else
 			$DCAMP $MODS base -a $METRIC2
 		fi
 		;;
 
 	start)
-		$DCAMP -d root -f $BASEDIR/dcamp.cfg --start -a $ROOT
+		$DCAMP root -f $BASEDIR/dcamp.cfg --start -a $ROOT
 		;;
 
 	stop)
-		$DCAMP -d root -f $BASEDIR/dcamp.cfg --stop -a $ROOT
+		$DCAMP root -f $BASEDIR/dcamp.cfg --stop -a $ROOT
 		;;
 	
+	kill)
+		if [ -e $PIDS ]; then
+			pids=`cat $PIDS | tr "\\n" " "`
+			echo "kill $pids"
+			kill $pids
+			rm $PIDS
+		fi
+		;;
+
 	*)
 		echo $USAGE
 		exit 65
