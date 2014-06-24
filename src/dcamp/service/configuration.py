@@ -311,7 +311,7 @@ class Configuration(ServiceMixin):
     def config_get_hb_int(self):
         if self._is_gogo():
             return self['/CONFIG/global/heartbeat']
-        return 5  # default hb interval until init is complete
+        return 60  # default hb interval until init is complete
 
     def config_get_metric_specs(self, group=None):
         assert self._is_gogo()

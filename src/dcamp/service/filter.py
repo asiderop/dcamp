@@ -51,8 +51,7 @@ class Filter(ServiceMixin):
             self.pubs_socket = self.ctx.socket(PUB)
             self.pubs_socket.connect(self.parent.connect_uri(EndpntSpec.DATA_EXTERNAL))
 
-        self.hug_int = 5  # units: seconds
-        self.next_hug = now_secs() + self.hug_int  # units: seconds
+        self.next_hug = now_secs()  # units: seconds
         self.last_pub = now_secs()  # units: seconds
 
     def _cleanup(self):
@@ -193,7 +192,7 @@ class Filter(ServiceMixin):
         assert (self.level in ['branch', 'leaf'])
 
         # reset hugz using last pub time
-        self.next_hug = self.last_pub + self.hug_int
+        self.next_hug = self.last_pub + self.cfgsvc.config_get_hb_int()
 
         # next_hug is in secs; subtract current msecs to get next wakeup
         val = max(0, (self.next_hug * 1e3) - now_msecs())

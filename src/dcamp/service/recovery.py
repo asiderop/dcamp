@@ -10,9 +10,9 @@ from dcamp.types.messages.topology import RECOVERY, gen_uuid, TOPO
 from dcamp.types.specs import EndpntSpec
 from dcamp.util.functions import now_msecs, isInstance_orNone
 
-RECOVERY_SILENCE_PERIOD_MS = 60 * 1000  # wait a full minute before retrying recovery activity
-RECOVERY_ELECTION_WAIT_MS = 15 * 1000  # wait fifteen seconds before confirming new leader
-RECOVERY_IWIN_WAIT_MS = 5 * 1000  # wait five seconds before declaring victory
+RECOVERY_SILENCE_PERIOD_MS = 5 * 60 * 1000  # wait five minutes before retrying recovery activity
+RECOVERY_ELECTION_WAIT_MS = 30 * 1000  # wait thirty seconds before confirming new leader
+RECOVERY_IWIN_WAIT_MS = 10 * 1000  # wait ten seconds before declaring victory
 
 
 class Election(object):

@@ -28,7 +28,7 @@ class Sensor(ServiceMixin):
         self.metrics_socket = self.ctx.socket(PUSH)
         self.metrics_socket.connect(self.endpoint.connect_uri(EndpntSpec.DATA_INTERNAL, 'inproc'))
 
-        self.next_collection = now_secs() + 5  # units: seconds
+        self.next_collection = now_secs()  # units: seconds
 
     def _cleanup(self):
         # service exiting; return some status info and cleanup
@@ -58,7 +58,8 @@ class Sensor(ServiceMixin):
     def __collect_and_push_metrics(self):
 
         if len(self.metric_collections) == 0:
-            self.next_collection = now_secs() + 5
+            # check for new metric specs every hb-interval seconds
+            self.next_collection = now_secs() + self.cfgsvc.config_get_hb_int()
             return
 
         collected = []
@@ -111,8 +112,8 @@ class Sensor(ServiceMixin):
         if len(self.metric_collections) > 0:
             self.next_collection = self.metric_collections[0].epoch
         else:
-            # check for new metric specs every five seconds
-            self.next_collection = now_secs() + 5
+            # check for new metric specs every hb-interval seconds
+            self.next_collection = now_secs() + self.cfgsvc.config_get_hb_int()
 
     def __process(self, collection):
         """ returns tuple of (data-msg, metric-collection) """

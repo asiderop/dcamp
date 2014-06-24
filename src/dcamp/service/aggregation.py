@@ -30,7 +30,7 @@ class Aggregation(ServiceMixin):
         self.metric_aggregations = {}
         self.metric_collections = []  # sorted by next collection time
         self.metric_seqid = -1
-        self.next_aggregation = now_secs() + 5  # units: seconds
+        self.next_aggregation = now_secs()  # units: seconds
 
         # sub data from child(ren) ...
         self.sub = self.ctx.socket(SUB)
@@ -103,7 +103,8 @@ class Aggregation(ServiceMixin):
     def __aggregate_and_push_metrics(self):
 
         if len(self.metric_collections) == 0:
-            self.next_aggregation = now_secs() + 5
+            # check for new metric specs every hb-interval seconds
+            self.next_aggregation = now_secs() + self.cfgsvc.config_get_hb_int()
             return
 
         aggregated = []
@@ -203,5 +204,5 @@ class Aggregation(ServiceMixin):
         if len(self.metric_collections) > 0:
             self.next_aggregation = self.metric_collections[0].epoch
         else:
-            # check for new metric specs every five seconds
-            self.next_aggregation = now_secs() + 5
+            # check for new metric specs every hb-interval seconds
+            self.next_aggregation = now_secs() + self.cfgsvc.config_get_hb_int()
