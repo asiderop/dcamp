@@ -100,7 +100,7 @@ class Sensor(ServiceMixin):
                 specs.remove(collection.spec)
 
         # add all new metric specs, starting collection now
-        new_specs = [MetricCollection(0, elem, None) for elem in specs]
+        new_specs = [MetricCollection(0, elem) for elem in specs]
 
         self.metric_collections = sorted(old_specs + new_specs)
         self.metric_seqid = seq
@@ -130,7 +130,6 @@ class Sensor(ServiceMixin):
         # local vars for easier access
         detail = collection.spec.detail
         param = collection.spec.param
-        p = collection.p
 
         if 'CPU' == detail:
             props['type'] = 'percent'
@@ -164,40 +163,47 @@ class Sensor(ServiceMixin):
 
         elif detail.startswith('PROC_'):
 
-            if p is None or not p.is_running():
-                p = None
-                for proc in psutil.process_iter():
-                    try:
-                        pinfo = proc.as_dict(attrs=['pid', 'name'])
-                    except psutil.NoSuchProcess:
-                        continue
-                    if pinfo['name'] == param:
-                        p = proc
-                        break
+            # get new list of processes every time in order to not miss any new
+            # processes that are started after the first collection
+            plist = []
+            for proc in psutil.process_iter():
+                try:
+                    pinfo = proc.as_dict(attrs=['pid', 'name'])
+                except psutil.NoSuchProcess:
+                    continue
+                if pinfo['name'] == param:
+                    plist.append(proc)
 
-                if p is None:
-                    c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, None)
-                    return None, c
+            if len(plist) == 0:
+                c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
+                return None, c
 
-            assert p is not None
+            assert len(plist) > 0
+            props['p-count'] = len(plist)
 
             if 'PROC_CPU' == detail:
                 props['type'] = 'percent'
                 message = data.DataPercent
 
-                # cpu_times() is accurate to two decimal points
-                proc_cpu_times = p.cpu_times()
-                glob_cpu_times = psutil.cpu_times()
-                value = int(sum(proc_cpu_times) * 1e2)
-                base_value = int(sum(glob_cpu_times) * 1e2)
+                # sum cpu times for all procs in list
+                value = 0
+                for p in plist:
+                    # cpu_times() is accurate to two decimal points
+                    proc_cpu_times = p.cpu_times()
+                    value += int(sum(proc_cpu_times) * 1e2)
+                base_value = int(sum(psutil.cpu_times()) * 1e2)
 
             elif 'PROC_MEM' == detail:
                 props['type'] = 'percent'
                 message = data.DataPercent
 
+                # sum memory info for all procs in list
+                value = 0
+                for p in plist:
+                    proc_vmem = p.memory_info()
+                    value += proc_vmem.rss
+
                 glob_vmem = psutil.virtual_memory()
-                proc_vmem = p.memory_info()
-                value = proc_vmem.rss
                 base_value = glob_vmem.total
 
             elif 'PROC_IO' == detail:
@@ -205,11 +211,15 @@ class Sensor(ServiceMixin):
                 message = data.DataRate
 
                 try:
-                    io = p.io_counters()
-                    value = io.read_bytes + io.write_bytes
-                    if value < 0:
-                        # no support for *_bytes in bsd
-                        value = 0
+                    # sum io for all procs in list
+                    value = 0
+                    for p in plist:
+                        io = p.io_counters()
+                        value += io.read_bytes + io.write_bytes
+                        if value < 0:
+                            # no support for *_bytes in bsd
+                            value = 0
+                            break
                 except AttributeError:
                     # no support for io_counters() in osx
                     value = 0
@@ -217,6 +227,7 @@ class Sensor(ServiceMixin):
         m = message(self.endpoint, props, time, value, base_value)
 
         # create new collection with next collection time
-        c = MetricCollection(now_secs() + collection.spec.rate, collection.spec, p)
+        c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
 
         return m, c
+

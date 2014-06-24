@@ -123,8 +123,7 @@ class Aggregation(ServiceMixin):
 
             # update collection spec with next epoch
             aggregated.append(MetricCollection(now_secs() + collection.spec.rate,
-                                               collection.spec,
-                                               None))
+                                               collection.spec))
 
             if len(self.metric_collections) == 0:
                 # no more work
@@ -179,8 +178,7 @@ class Aggregation(ServiceMixin):
             s = s._replace(config_name=cname)
             c = MetricCollection(
                 epoch=now + s.rate,
-                spec=s,
-                p=None)
+                spec=s)
 
             collections.append(c)
 
