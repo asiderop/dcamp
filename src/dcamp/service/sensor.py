@@ -134,7 +134,7 @@ class Sensor(ServiceMixin):
 
         if 'CPU' == detail:
             props['type'] = 'percent'
-            message = data.DataPercent
+            msg_cls = data.DataPercent
 
             # cpu_times() is accurate to two decimal points
             cpu_times = psutil.cpu_times()
@@ -143,21 +143,21 @@ class Sensor(ServiceMixin):
 
         elif 'MEMORY' == detail:
             props['type'] = 'basic'
-            message = data.DataBasic
+            msg_cls = data.DataBasic
 
             vmem = psutil.virtual_memory()
             value = vmem.total - vmem.available
 
         elif 'DISK' == detail:
             props['type'] = 'rate'
-            message = data.DataRate
+            msg_cls = data.DataRate
 
             disk = psutil.disk_io_counters()
             value = disk.read_bytes + disk.write_bytes
 
         elif 'NETWORK' == detail:
             props['type'] = 'rate'
-            message = data.DataRate
+            msg_cls = data.DataRate
 
             net = psutil.net_io_counters()
             value = net.bytes_sent + net.bytes_recv
@@ -166,69 +166,73 @@ class Sensor(ServiceMixin):
 
             # get new list of processes every time in order to not miss any new
             # processes that are started after the first collection
-            plist = []
+            pcount = 0
+            value = 0
             for proc in psutil.process_iter():
                 try:
                     pinfo = proc.as_dict(attrs=['pid', 'name'])
                 except psutil.NoSuchProcess:
                     continue
-                if pinfo['name'] == param:
-                    plist.append(proc)
 
-            if len(plist) == 0:
+                if pinfo['name'] != param:
+                    continue
+
+                pcount += 1
+                value += self.__get_proc_value(detail, proc)
+
+            if 0 == pcount:
                 c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
                 return None, c
 
-            assert len(plist) > 0
-            props['p-count'] = len(plist)
+            props['p-count'] = pcount
 
             if 'PROC_CPU' == detail:
                 props['type'] = 'percent'
-                message = data.DataPercent
-
-                # sum cpu times for all procs in list
-                value = 0
-                for p in plist:
-                    # cpu_times() is accurate to two decimal points
-                    proc_cpu_times = p.cpu_times()
-                    value += int(sum(proc_cpu_times) * 1e2)
+                msg_cls = data.DataPercent
+                # cpu_times() is accurate to two decimal points
                 base_value = int(sum(psutil.cpu_times()) * 1e2)
 
             elif 'PROC_MEM' == detail:
                 props['type'] = 'percent'
-                message = data.DataPercent
-
-                # sum memory info for all procs in list
-                value = 0
-                for p in plist:
-                    proc_vmem = p.memory_info()
-                    value += proc_vmem.rss
-
-                glob_vmem = psutil.virtual_memory()
-                base_value = glob_vmem.total
+                msg_cls = data.DataPercent
+                base_value = psutil.virtual_memory().total
 
             elif 'PROC_IO' == detail:
                 props['type'] = 'rate'
-                message = data.DataRate
+                msg_cls = data.DataRate
+            
+            else:
+                raise NotImplementedError('unknown process metric type: {}'.format(detail))
 
-                try:
-                    # sum io for all procs in list
-                    value = 0
-                    for p in plist:
-                        io = p.io_counters()
-                        value += io.read_bytes + io.write_bytes
-                        if value < 0:
-                            # no support for *_bytes in bsd
-                            value = 0
-                            break
-                except AttributeError:
-                    # no support for io_counters() in osx
-                    value = 0
 
-        m = message(self.endpoint, props, time, value, base_value)
+        else:
+            raise NotImplementedError('unknown metric type: {}'.format(detail))
+
+        m = msg_cls(self.endpoint, props, time, value, base_value)
 
         # create new collection with next collection time
         c = MetricCollection(now_secs() + collection.spec.rate, collection.spec)
 
         return m, c
+
+    def __get_proc_value(self, detail, proc):
+        if 'PROC_CPU' == detail:
+            # cpu_times() is accurate to two decimal points
+            return int(sum(proc.cpu_times()) * 1e2)
+
+        elif 'PROC_MEM' == detail:
+            return proc.memory_info().rss
+
+        elif 'PROC_IO' == detail:
+            try:
+                io = proc.io_counters()
+                value = io.read_bytes + io.write_bytes
+                if value < 0:
+                    # no support for *_bytes in bsd
+                    value = 0
+            except AttributeError:
+                # no support for io_counters() in osx
+                value = 0
+
+            return value
 
