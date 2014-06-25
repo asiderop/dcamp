@@ -15,8 +15,8 @@ from dcamp.types.specs import SerializableSpecTypes
 import dcamp.util.functions as funcs
 
 # TODO: use a new log level instead
-verbose_debug = True
-dev_mode = True
+verbose_debug = False
+dev_mode = False
 
 
 class DCMsg(object):
