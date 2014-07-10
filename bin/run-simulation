@@ -122,21 +122,22 @@ class Simulator(object):
         log('INFO: launching %d nodes' % len(self.nodes))
         for a in self.nodes:
             assert self.nodes[a] is None
-            fout = open(join(DEBUG_DIR, a + '.out'), 'w')
-            p = Popen([DCAMP, '-v', 'base', '-a', a], stdout=fout, stderr=STDOUT)
+            #fout = open(join(DEBUG_DIR, a + '.out'), 'w')
+            fout = open('/dev/null', 'w')
+            p = Popen([DCAMP, 'base', '-a', a], stdout=fout, stderr=fout)
             self.nodes[a] = (p, fout)
         self.state = 'waiting'
 
     def start(self):
         if 'waiting' != self.state:
             return
-        Popen([DCAMP, '-v', 'root', '--start', '-f', CONFIG, '-a', self.root]).wait()
+        Popen([DCAMP, '-d', 'root', '--start', '-f', CONFIG, '-a', self.root]).wait()
         self.state = 'running'
 
     def stop(self):
         if 'running' != self.state:
             return
-        Popen([DCAMP, '-v', 'root', '--stop', '-f', CONFIG, '-a', self.root]).wait()
+        Popen([DCAMP, '-d', 'root', '--stop', '-f', CONFIG, '-a', self.root]).wait()
         self.state = 'waiting'
 
     def kill(self, nodes=None):
