@@ -3,85 +3,102 @@
 from subprocess import Popen, STDOUT
 from sys import stderr
 from os.path import join, isdir, isfile
-from os import mkdir
+from os import mkdir, getenv
 from signal import SIGINT
 
 # config
-NUM_GROUPS = 3
-NODES_PER_HOST = 7
 HOSTNAMES = ['localhost']
 START_PORT = 50000
 PORTS_PER_NODE = 10
 
-HEARTBEAT = '5s'
+HEARTBEAT = '60s'
 METRICS = '''
 [proc]
-rate = 1s
+rate = 60s
 threshold = *60s
 metric = CPU
 
 [disk]
-rate = 10s
+rate = 120s
 threshold = >500000
 metric = DISK
 
 [net]
-rate = 10s
+rate = 120s
 threshold = *120s
 metric = NETWORK
 
 [mem]
-rate = 30s
+rate = 60s
 metric = MEMORY
 '''
 
 # paths
-BASE_DIR = '/Volumes/Repositories/Personal/dcamp'
+BASE_DIR = getenv('BASE_DIR', None) or (print('BASE_DIR not defined'), exit(-1))
 DCAMP = join(BASE_DIR, 'bin/dcamp')
 CONFIG = join(BASE_DIR, '.simulation.cfg')
 DEBUG_DIR = join(BASE_DIR, 'debug/')
-
 
 def log(msg):
     print(msg, file=stderr)
 
 
 class Simulator(object):
-    state = 'dead'
-    nodes = {}
-    root = None
-
     def __init__(self):
+        self.state = 'clear'
+        self.clear()
+    
+    def clear(self):
+        if self.state not in ('clear', 'dead'):
+            log('ERRR: cannot clear config while running')
+            return
+
+        self.state = 'clear'
+        self.nodes = {}
+        self.root = None
+
+    def write_config(self, args):
+        if 'clear' != self.state:
+            log('ERRR: not in clear state')
+            return
+
+        if len(args) != 2:
+            log('USAGE: config <num-groups> <nodes-per-host>')
+            return
+
+        num_groups = int(args[0])
+        nodes_per_host = int(args[1])
+
         if isfile(CONFIG):
             log("WARN: config file already exists; overwriting")
 
         for host in HOSTNAMES:
             port = START_PORT
             a = None
-            for idx in range(NODES_PER_HOST):
+            for idx in range(nodes_per_host):
                 a = '%s:%d' % (host, port)
                 self.nodes[a] = None
                 port += PORTS_PER_NODE
             self.root = a  # we'll use the last address as root
 
         with open(CONFIG, 'w') as out:
-            # root section
+            # global section
             out.write('[global]\nheartbeat = %s' % HEARTBEAT)
 
             start_address = 0
-            per_group = int(len(self.nodes) / NUM_GROUPS)
-            for idx in range(NUM_GROUPS):
+            per_group = int(len(self.nodes) / num_groups)
+            for idx in range(num_groups):
 
                 # group heading
                 out.write('\n[group%d]\n' % idx)
 
                 # group endpoint listings
                 end_address = start_address + per_group
-                if (idx+1) == NUM_GROUPS:
+                if (idx+1) == num_groups:
                     # if last group, just put the rest in here
                     end_address = len(self.nodes)
 
-                self.write_addresses(out, start_address, end_address)
+                self.__write_addresses(out, start_address, end_address)
                 log('INFO: group %d has %d nodes' % (idx, end_address - start_address))
                 start_address += per_group
 
@@ -91,8 +108,10 @@ class Simulator(object):
             # metric specs
             out.write(METRICS)
 
-    def write_addresses(self, out, start, end):
-        for address in list(self.nodes.keys())[start:end]:
+        self.state = 'dead'
+
+    def __write_addresses(self, out, start, end):
+        for address in sorted(list(self.nodes.keys()))[start:end]:
             out.write(address + '\n')
 
     def launch(self):
@@ -104,27 +123,27 @@ class Simulator(object):
         for a in self.nodes:
             assert self.nodes[a] is None
             fout = open(join(DEBUG_DIR, a + '.out'), 'w')
-            p = Popen([DCAMP, '-d', 'base', '-a', a], stdout=fout, stderr=STDOUT)
+            p = Popen([DCAMP, '-v', 'base', '-a', a], stdout=fout, stderr=STDOUT)
             self.nodes[a] = (p, fout)
-        self.state = 'ready'
+        self.state = 'waiting'
 
     def start(self):
-        if 'ready' != self.state:
+        if 'waiting' != self.state:
             return
-        Popen([DCAMP, '-d', 'root', '--start', '-f', CONFIG, '-a', self.root]).wait()
+        Popen([DCAMP, '-v', 'root', '--start', '-f', CONFIG, '-a', self.root]).wait()
         self.state = 'running'
 
     def stop(self):
         if 'running' != self.state:
             return
-        Popen([DCAMP, '-d', 'root', '--stop', '-f', CONFIG, '-a', self.root]).wait()
-        self.state = 'ready'
+        Popen([DCAMP, '-v', 'root', '--stop', '-f', CONFIG, '-a', self.root]).wait()
+        self.state = 'waiting'
 
     def kill(self, nodes=None):
-        if 'dead' == self.state:
+        if self.state in ('dead', 'clear'):
             return
 
-        if nodes is None:
+        if nodes is None or len(nodes) == 0:
             nodes = self.nodes.keys()
             self.state = 'dead'
 
@@ -144,17 +163,25 @@ class Simulator(object):
         try:
             while True:
 
-                res = input("%s. what do? [launch|start|stop|kill]: " % self.state).split()
+                res = input("%s. what do? [clear|config|launch|start|stop|kill]: " % self.state).split()
 
                 action = ''
-                args = None
+                args = []
                 if len(res) > 0:
                     action = res[0]
                 if len(res) > 1:
                     args = res[1:]
 
-                if action not in ['launch', 'start', 'stop', 'kill']:
+                if action not in ['clear', 'config', 'launch', 'start', 'stop', 'kill']:
                     log("ERRR: unknown option")
+
+                # clear config
+                if 'clear' == action:
+                    self.clear()
+
+                # write config file
+                if 'config' == action:
+                    self.write_config(args)
 
                 # launch base nodes
                 if 'launch' == action:
